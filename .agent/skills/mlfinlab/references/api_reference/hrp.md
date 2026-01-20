@@ -1,0 +1,220 @@
+# API Reference: hrp.py
+
+**Language**: Python
+
+**Source**: `portfolio_optimization/hrp.py`
+
+---
+
+## Classes
+
+### HierarchicalRiskParity
+
+This class implements the Hierarchical Risk Parity algorithm mentioned in the following paper: `López de Prado, Marcos,
+Building Diversified Portfolios that Outperform Out-of-Sample (May 23, 2016). Journal of Portfolio Management,
+2016 <https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2708678>`_; The code is reproduced with modification from his book:
+Advances in Financial Machine Learning, Chp-16
+By removing exact analytical approach to the calculation of weights and instead relying on an approximate
+machine learning based approach (hierarchical tree-clustering), Hierarchical Risk Parity produces weights which are stable to
+random shocks in the stock-market. Moreover, previous algorithms like CLA involve the inversion of covariance matrix which is
+a highly unstable operation and tends to have major impacts on the performance due to slight changes in the covariance matrix.
+By removing dependence on the inversion of covariance matrix completely, the Hierarchical Risk Parity algorithm is fast,
+robust and flexible.
+
+**Inherits from**: (none)
+
+#### Methods
+
+##### __init__(self)
+
+**Parameters**:
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| self | None | - | - |
+
+
+##### allocate(self, asset_names = None, asset_prices = None, asset_returns = None, covariance_matrix = None, distance_matrix = None, side_weights = None, linkage = 'single')
+
+Calculate asset allocations using HRP algorithm.
+
+:param asset_names: (list) A list of strings containing the asset names
+:param asset_prices: (pd.Dataframe) A dataframe of historical asset prices (daily close)
+                                    indexed by date
+:param asset_returns: (pd.Dataframe/numpy matrix) User supplied matrix of asset returns
+:param covariance_matrix: (pd.Dataframe/numpy matrix) User supplied covariance matrix of asset returns
+:param distance_matrix: (pd.Dataframe/numpy matrix) User supplied distance matrix
+:param side_weights: (pd.Series/numpy matrix) With asset_names in index and value 1 for Buy, -1 for Sell
+                                              (default 1 for all)
+:param linkage: (string) Type of linkage used for Hierarchical Clustering. Supported strings - ``single``,
+                         ``average``, ``complete``, ``ward``.
+
+**Parameters**:
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| self | None | - | - |
+| asset_names | None | None | - |
+| asset_prices | None | None | - |
+| asset_returns | None | None | - |
+| covariance_matrix | None | None | - |
+| distance_matrix | None | None | - |
+| side_weights | None | None | - |
+| linkage | None | 'single' | - |
+
+
+##### plot_clusters(self, assets)
+
+Plot a dendrogram of the hierarchical clusters.
+
+:param assets: (list) Asset names in the portfolio
+:return: (dict) Dendrogram
+
+**Parameters**:
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| self | None | - | - |
+| assets | None | - | - |
+
+
+##### _tree_clustering(distance, method = 'single')
+
+Perform the traditional heirarchical tree clustering.
+
+:param correlation: (np.array) Correlation matrix of the assets
+:param method: (str) The type of clustering to be done
+:return: (np.array) Distance matrix and clusters
+
+**Decorators**: `@staticmethod`
+
+**Parameters**:
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| distance | None | - | - |
+| method | None | 'single' | - |
+
+
+##### _quasi_diagnalization(self, num_assets, curr_index)
+
+Rearrange the assets to reorder them according to hierarchical tree clustering order.
+
+:param num_assets: (int) The total number of assets
+:param curr_index: (int) Current index
+:return: (list) The assets rearranged according to hierarchical clustering
+
+**Parameters**:
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| self | None | - | - |
+| num_assets | None | - | - |
+| curr_index | None | - | - |
+
+
+##### _get_seriated_matrix(self, assets, distance, correlation)
+
+Based on the quasi-diagnalization, reorder the original distance matrix, so that assets within
+the same cluster are grouped together.
+
+:param assets: (list) Asset names in the portfolio
+:param distance: (pd.Dataframe) Distance values between asset returns
+:param correlation: (pd.Dataframe) Correlations between asset returns
+:return: (np.array) Re-arranged distance matrix based on tree clusters
+
+**Parameters**:
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| self | None | - | - |
+| assets | None | - | - |
+| distance | None | - | - |
+| correlation | None | - | - |
+
+
+##### _build_long_short_portfolio(self, side_weights)
+
+Adjust weights according the shorting constraints specified.
+
+:param side_weights: (pd.Series/numpy matrix) With asset_names in index and value 1 for Buy, -1 for Sell
+                                              (default 1 for all)
+
+**Parameters**:
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| self | None | - | - |
+| side_weights | None | - | - |
+
+
+##### _get_inverse_variance_weights(covariance)
+
+Calculate the inverse variance weight allocations.
+
+:param covariance: (pd.Dataframe) Covariance matrix of assets
+:return: (list) Inverse variance weight values
+
+**Decorators**: `@staticmethod`
+
+**Parameters**:
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| covariance | None | - | - |
+
+
+##### _get_cluster_variance(self, covariance, cluster_indices)
+
+Calculate cluster variance.
+
+:param covariance: (pd.Dataframe) Covariance matrix of assets
+:param cluster_indices: (list) Asset indices for the cluster
+:return: (float) Variance of the cluster
+
+**Parameters**:
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| self | None | - | - |
+| covariance | None | - | - |
+| cluster_indices | None | - | - |
+
+
+##### _recursive_bisection(self, covariance, assets)
+
+Recursively assign weights to the clusters - ultimately assigning weights to the individual assets.
+
+:param covariance: (pd.Dataframe) The covariance matrix
+:param assets: (list) Asset names in the portfolio
+
+**Parameters**:
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| self | None | - | - |
+| covariance | None | - | - |
+| assets | None | - | - |
+
+
+##### _error_checks(asset_prices, asset_returns, covariance_matrix)
+
+Perform initial warning checks.
+
+:param asset_prices: (pd.DataFrame) A dataframe of historical asset prices (daily close)
+                                    indexed by date.
+:param asset_returns: (pd.DataFrame/numpy matrix) User supplied matrix of asset returns.
+:param covariance_matrix: (pd.Dataframe/numpy matrix) User supplied covariance matrix of asset returns
+
+**Decorators**: `@staticmethod`
+
+**Parameters**:
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| asset_prices | None | - | - |
+| asset_returns | None | - | - |
+| covariance_matrix | None | - | - |
+
+
+

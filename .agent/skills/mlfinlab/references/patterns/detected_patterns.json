@@ -1,0 +1,4174 @@
+[
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/backtest_statistics/backtests.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/backtest_statistics/backtests.py",
+        "class_name": "CampbellBacktesting",
+        "method_name": "_sample_random_multest",
+        "line_number": 31,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/bet_sizing/ef3m.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/bet_sizing/ef3m.py",
+        "class_name": "M2N",
+        "method_name": null,
+        "line_number": 16,
+        "evidence": [
+          "Parameterized factory method: get_moments"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 5,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/cross_validation/combinatorial.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/cross_validation/combinatorial.py",
+        "class_name": "CombinatorialPurgedKFold",
+        "method_name": null,
+        "line_number": 26,
+        "evidence": [
+          "Implements interface: KFold",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 1,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/cross_validation/cross_validation.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/cross_validation/cross_validation.py",
+        "class_name": "PurgedKFold",
+        "method_name": null,
+        "line_number": 41,
+        "evidence": [
+          "Part of strategy family with: PurgedSplit",
+          "Strategy interface method: split"
+        ],
+        "related_classes": [
+          "KFold"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/cross_validation/cross_validation.py",
+        "class_name": "PurgedSplit",
+        "method_name": null,
+        "line_number": 114,
+        "evidence": [
+          "Part of strategy family with: PurgedKFold",
+          "Strategy interface method: split"
+        ],
+        "related_classes": [
+          "KFold"
+        ]
+      }
+    ],
+    "total_classes": 2,
+    "total_functions": 2,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Strategy": 2
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/base_bars.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/base_bars.py",
+        "class_name": "BaseBars",
+        "method_name": null,
+        "line_number": 32,
+        "evidence": [
+          "Parameterized factory method: _create_bars",
+          "Parameterized factory method: _get_imbalance",
+          "Multiple factory methods: _create_bars, _get_imbalance",
+          "Inherits from: ABC"
+        ],
+        "related_classes": [
+          "ABC"
+        ]
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/base_bars.py",
+        "class_name": "BaseBars",
+        "method_name": "_extract_bars",
+        "line_number": 174,
+        "evidence": [
+          "Method uses decorators: ['abstractmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/base_bars.py",
+        "class_name": "BaseBars",
+        "method_name": null,
+        "line_number": 32,
+        "evidence": [
+          "Implements interface: ABC",
+          "Has 12 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Observer",
+        "category": "Behavioral",
+        "confidence": 0.65,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/base_bars.py",
+        "class_name": "BaseBars",
+        "method_name": "_update_high_low",
+        "line_number": 207,
+        "evidence": [
+          "Observer method detected: _update_high_low"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.6,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/base_bars.py",
+        "class_name": "BaseBars",
+        "method_name": null,
+        "line_number": 32,
+        "evidence": [
+          "Strategy base with implementations: BaseImbalanceBars, BaseRunBars"
+        ],
+        "related_classes": [
+          "ABC",
+          "BaseImbalanceBars",
+          "BaseRunBars"
+        ]
+      },
+      {
+        "pattern_type": "Command",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/base_bars.py",
+        "class_name": "BaseBars",
+        "method_name": null,
+        "line_number": 32,
+        "evidence": [
+          "Has execute method: run()",
+          "Encapsulates receiver/parameters"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "TemplateMethod",
+        "category": "Behavioral",
+        "confidence": 0.6000000000000001,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/base_bars.py",
+        "class_name": "BaseBars",
+        "method_name": null,
+        "line_number": 32,
+        "evidence": [
+          "Base class with 2 implementations",
+          "Has abstract methods: __init__, _batch_iterator"
+        ],
+        "related_classes": [
+          "BaseImbalanceBars",
+          "BaseRunBars"
+        ]
+      },
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/base_bars.py",
+        "class_name": "BaseImbalanceBars",
+        "method_name": null,
+        "line_number": 297,
+        "evidence": [
+          "Parameterized factory method: _get_expected_imbalance",
+          "Factory method: _get_exp_num_ticks",
+          "Multiple factory methods: _get_expected_imbalance, _get_exp_num_ticks",
+          "Inherits from: BaseBars"
+        ],
+        "related_classes": [
+          "BaseBars"
+        ]
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/base_bars.py",
+        "class_name": "BaseImbalanceBars",
+        "method_name": "_get_exp_num_ticks",
+        "line_number": 428,
+        "evidence": [
+          "Method uses decorators: ['abstractmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/base_bars.py",
+        "class_name": "BaseImbalanceBars",
+        "method_name": null,
+        "line_number": 297,
+        "evidence": [
+          "Implements interface: BaseBars",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/base_bars.py",
+        "class_name": "BaseImbalanceBars",
+        "method_name": null,
+        "line_number": 297,
+        "evidence": [
+          "Part of strategy family with: BaseRunBars"
+        ],
+        "related_classes": [
+          "BaseBars"
+        ]
+      },
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/base_bars.py",
+        "class_name": "BaseRunBars",
+        "method_name": null,
+        "line_number": 435,
+        "evidence": [
+          "Parameterized factory method: _get_expected_imbalance",
+          "Factory method: _get_exp_num_ticks",
+          "Multiple factory methods: _get_expected_imbalance, _get_exp_num_ticks",
+          "Inherits from: BaseBars"
+        ],
+        "related_classes": [
+          "BaseBars"
+        ]
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/base_bars.py",
+        "class_name": "BaseRunBars",
+        "method_name": "_get_exp_num_ticks",
+        "line_number": 611,
+        "evidence": [
+          "Method uses decorators: ['abstractmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/base_bars.py",
+        "class_name": "BaseRunBars",
+        "method_name": null,
+        "line_number": 435,
+        "evidence": [
+          "Implements interface: BaseBars",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/base_bars.py",
+        "class_name": "BaseRunBars",
+        "method_name": null,
+        "line_number": 435,
+        "evidence": [
+          "Part of strategy family with: BaseImbalanceBars"
+        ],
+        "related_classes": [
+          "BaseBars"
+        ]
+      }
+    ],
+    "total_classes": 3,
+    "total_functions": 1,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 3,
+      "Decorator": 3,
+      "Adapter": 3,
+      "Observer": 1,
+      "Strategy": 3,
+      "Command": 1,
+      "TemplateMethod": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/imbalance_data_structures.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/imbalance_data_structures.py",
+        "class_name": "EMAImbalanceBars",
+        "method_name": null,
+        "line_number": 33,
+        "evidence": [
+          "Part of strategy family with: ConstImbalanceBars",
+          "Strategy interface method: _get_exp_num_ticks"
+        ],
+        "related_classes": [
+          "BaseImbalanceBars"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/imbalance_data_structures.py",
+        "class_name": "ConstImbalanceBars",
+        "method_name": null,
+        "line_number": 76,
+        "evidence": [
+          "Part of strategy family with: EMAImbalanceBars",
+          "Strategy interface method: _get_exp_num_ticks"
+        ],
+        "related_classes": [
+          "BaseImbalanceBars"
+        ]
+      }
+    ],
+    "total_classes": 2,
+    "total_functions": 6,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Strategy": 2
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/run_data_structures.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/run_data_structures.py",
+        "class_name": "EMARunBars",
+        "method_name": null,
+        "line_number": 33,
+        "evidence": [
+          "Part of strategy family with: ConstRunBars",
+          "Strategy interface method: _get_exp_num_ticks"
+        ],
+        "related_classes": [
+          "BaseRunBars"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/run_data_structures.py",
+        "class_name": "ConstRunBars",
+        "method_name": null,
+        "line_number": 75,
+        "evidence": [
+          "Part of strategy family with: EMARunBars",
+          "Strategy interface method: _get_exp_num_ticks"
+        ],
+        "related_classes": [
+          "BaseRunBars"
+        ]
+      }
+    ],
+    "total_classes": 2,
+    "total_functions": 6,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Strategy": 2
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/standard_data_structures.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/standard_data_structures.py",
+        "class_name": "StandardBars",
+        "method_name": null,
+        "line_number": 27,
+        "evidence": [
+          "Implements interface: BaseBars",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 3,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/time_data_structures.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/data_structures/time_data_structures.py",
+        "class_name": "TimeBars",
+        "method_name": null,
+        "line_number": 17,
+        "evidence": [
+          "Implements interface: BaseBars",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 1,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/ensemble/sb_bagging.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/ensemble/sb_bagging.py",
+        "class_name": "SequentiallyBootstrappedBaseBagging",
+        "method_name": "__init__",
+        "line_number": 131,
+        "evidence": [
+          "Method uses decorators: ['abstractmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/ensemble/sb_bagging.py",
+        "class_name": "SequentiallyBootstrappedBaseBagging",
+        "method_name": null,
+        "line_number": 125,
+        "evidence": [
+          "Implements interface: BaseBagging",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.6,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/ensemble/sb_bagging.py",
+        "class_name": "SequentiallyBootstrappedBaseBagging",
+        "method_name": null,
+        "line_number": 125,
+        "evidence": [
+          "Strategy base with implementations: SequentiallyBootstrappedBaggingClassifier, SequentiallyBootstrappedBaggingRegressor"
+        ],
+        "related_classes": [
+          "BaseBagging",
+          "SequentiallyBootstrappedBaggingClassifier",
+          "SequentiallyBootstrappedBaggingRegressor"
+        ]
+      },
+      {
+        "pattern_type": "TemplateMethod",
+        "category": "Behavioral",
+        "confidence": 0.6000000000000001,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/ensemble/sb_bagging.py",
+        "class_name": "SequentiallyBootstrappedBaseBagging",
+        "method_name": null,
+        "line_number": 125,
+        "evidence": [
+          "Base class with 2 implementations",
+          "Has abstract methods: __init__, _fit"
+        ],
+        "related_classes": [
+          "SequentiallyBootstrappedBaggingClassifier",
+          "SequentiallyBootstrappedBaggingRegressor"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/ensemble/sb_bagging.py",
+        "class_name": "SequentiallyBootstrappedBaggingClassifier",
+        "method_name": null,
+        "line_number": 325,
+        "evidence": [
+          "Implements interface: SequentiallyBootstrappedBaseBagging",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/ensemble/sb_bagging.py",
+        "class_name": "SequentiallyBootstrappedBaggingClassifier",
+        "method_name": null,
+        "line_number": 325,
+        "evidence": [
+          "Part of strategy family with: SequentiallyBootstrappedBaggingRegressor"
+        ],
+        "related_classes": [
+          "SequentiallyBootstrappedBaseBagging",
+          "BaggingClassifier",
+          "ClassifierMixin"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/ensemble/sb_bagging.py",
+        "class_name": "SequentiallyBootstrappedBaggingRegressor",
+        "method_name": null,
+        "line_number": 466,
+        "evidence": [
+          "Implements interface: SequentiallyBootstrappedBaseBagging",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/ensemble/sb_bagging.py",
+        "class_name": "SequentiallyBootstrappedBaggingRegressor",
+        "method_name": null,
+        "line_number": 466,
+        "evidence": [
+          "Part of strategy family with: SequentiallyBootstrappedBaggingClassifier"
+        ],
+        "related_classes": [
+          "SequentiallyBootstrappedBaseBagging",
+          "BaggingRegressor",
+          "RegressorMixin"
+        ]
+      }
+    ],
+    "total_classes": 3,
+    "total_functions": 3,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 1,
+      "Adapter": 3,
+      "Strategy": 3,
+      "TemplateMethod": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/feature_importance/fingerpint.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/feature_importance/fingerpint.py",
+        "class_name": "AbstractModelFingerprint",
+        "method_name": null,
+        "line_number": 18,
+        "evidence": [
+          "Factory method: get_effects",
+          "Parameterized factory method: _get_feature_values",
+          "Parameterized factory method: _get_individual_partial_dependence",
+          "Parameterized factory method: _get_linear_effect",
+          "Parameterized factory method: _get_non_linear_effect",
+          "Parameterized factory method: _get_pairwise_effect",
+          "Parameterized factory method: _get_model_predictions",
+          "Multiple factory methods: get_effects, _get_feature_values, _get_individual_partial_dependence",
+          "Inherits from: ABC"
+        ],
+        "related_classes": [
+          "ABC"
+        ]
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/feature_importance/fingerpint.py",
+        "class_name": "AbstractModelFingerprint",
+        "method_name": "_get_model_predictions",
+        "line_number": 227,
+        "evidence": [
+          "Method uses decorators: ['abstractmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/feature_importance/fingerpint.py",
+        "class_name": "AbstractModelFingerprint",
+        "method_name": null,
+        "line_number": 18,
+        "evidence": [
+          "Implements interface: ABC",
+          "Has 11 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.6,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/feature_importance/fingerpint.py",
+        "class_name": "AbstractModelFingerprint",
+        "method_name": null,
+        "line_number": 18,
+        "evidence": [
+          "Strategy base with implementations: RegressionModelFingerprint, ClassificationModelFingerprint"
+        ],
+        "related_classes": [
+          "ABC",
+          "RegressionModelFingerprint",
+          "ClassificationModelFingerprint"
+        ]
+      },
+      {
+        "pattern_type": "TemplateMethod",
+        "category": "Behavioral",
+        "confidence": 0.6000000000000001,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/feature_importance/fingerpint.py",
+        "class_name": "AbstractModelFingerprint",
+        "method_name": null,
+        "line_number": 18,
+        "evidence": [
+          "Base class with 2 implementations",
+          "Has abstract methods: __init__, _get_feature_values"
+        ],
+        "related_classes": [
+          "RegressionModelFingerprint",
+          "ClassificationModelFingerprint"
+        ]
+      },
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.6,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/feature_importance/fingerpint.py",
+        "class_name": "RegressionModelFingerprint",
+        "method_name": null,
+        "line_number": 253,
+        "evidence": [
+          "Parameterized factory method: _get_model_predictions",
+          "Inherits from: AbstractModelFingerprint"
+        ],
+        "related_classes": [
+          "AbstractModelFingerprint"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/feature_importance/fingerpint.py",
+        "class_name": "RegressionModelFingerprint",
+        "method_name": null,
+        "line_number": 253,
+        "evidence": [
+          "Part of strategy family with: ClassificationModelFingerprint",
+          "Strategy interface method: _get_model_predictions"
+        ],
+        "related_classes": [
+          "AbstractModelFingerprint"
+        ]
+      },
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.6,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/feature_importance/fingerpint.py",
+        "class_name": "ClassificationModelFingerprint",
+        "method_name": null,
+        "line_number": 275,
+        "evidence": [
+          "Parameterized factory method: _get_model_predictions",
+          "Inherits from: AbstractModelFingerprint"
+        ],
+        "related_classes": [
+          "AbstractModelFingerprint"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/feature_importance/fingerpint.py",
+        "class_name": "ClassificationModelFingerprint",
+        "method_name": null,
+        "line_number": 275,
+        "evidence": [
+          "Part of strategy family with: RegressionModelFingerprint",
+          "Strategy interface method: _get_model_predictions"
+        ],
+        "related_classes": [
+          "AbstractModelFingerprint"
+        ]
+      }
+    ],
+    "total_classes": 3,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 3,
+      "Decorator": 1,
+      "Adapter": 1,
+      "Strategy": 3,
+      "TemplateMethod": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/features/fracdiff.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/features/fracdiff.py",
+        "class_name": "FractionalDifferentiation",
+        "method_name": null,
+        "line_number": 15,
+        "evidence": [
+          "Parameterized factory method: get_weights",
+          "Parameterized factory method: get_weights_ffd",
+          "Multiple factory methods: get_weights, get_weights_ffd"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/features/fracdiff.py",
+        "class_name": "FractionalDifferentiation",
+        "method_name": "get_weights",
+        "line_number": 22,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Command",
+        "category": "Behavioral",
+        "confidence": 0.65,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/features/fracdiff.py",
+        "class_name": "FractionalDifferentiation",
+        "method_name": null,
+        "line_number": 15,
+        "evidence": [
+          "Class name suggests Command: FractionalDifferentiation"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 5,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 1,
+      "Decorator": 1,
+      "Command": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/labeling/tail_sets.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/labeling/tail_sets.py",
+        "class_name": "TailSetLabels",
+        "method_name": "_positive_tail_set",
+        "line_number": 108,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/microstructural_features/feature_generator.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/microstructural_features/feature_generator.py",
+        "class_name": "MicrostructuralFeaturesGenerator",
+        "method_name": null,
+        "line_number": 19,
+        "evidence": [
+          "Parameterized factory method: get_features",
+          "Parameterized factory method: _get_bar_features",
+          "Parameterized factory method: _get_price_diff",
+          "Parameterized factory method: _get_log_ret",
+          "Multiple factory methods: get_features, _get_bar_features, _get_price_diff"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/microstructural_features/feature_generator.py",
+        "class_name": "MicrostructuralFeaturesGenerator",
+        "method_name": "_assert_csv",
+        "line_number": 288,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 1,
+      "Decorator": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/multi_product/etf_trick.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/multi_product/etf_trick.py",
+        "class_name": "ETFTrick",
+        "method_name": null,
+        "line_number": 12,
+        "evidence": [
+          "Parameterized factory method: _get_batch_from_csv",
+          "Parameterized factory method: get_etf_series",
+          "Multiple factory methods: _get_batch_from_csv, get_etf_series"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Observer",
+        "category": "Behavioral",
+        "confidence": 0.65,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/multi_product/etf_trick.py",
+        "class_name": "ETFTrick",
+        "method_name": "_update_cache",
+        "line_number": 191,
+        "evidence": [
+          "Observer method detected: _update_cache"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 1,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 1,
+      "Observer": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/bah.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Observer",
+        "category": "Behavioral",
+        "confidence": 0.65,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/bah.py",
+        "class_name": "BAH",
+        "method_name": "_update_weight",
+        "line_number": 17,
+        "evidence": [
+          "Observer method detected: _update_weight"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Observer": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/base.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/base.py",
+        "class_name": "OLPS",
+        "method_name": "_normalize",
+        "line_number": 277,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Observer",
+        "category": "Behavioral",
+        "confidence": 0.65,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/base.py",
+        "class_name": "OLPS",
+        "method_name": "_update_weight",
+        "line_number": 167,
+        "evidence": [
+          "Observer method detected: _update_weight"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 1,
+      "Observer": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/corn.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/corn.py",
+        "class_name": "CORN",
+        "method_name": null,
+        "line_number": 7,
+        "evidence": [
+          "Implements interface: OLPS",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Observer",
+        "category": "Behavioral",
+        "confidence": 0.65,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/corn.py",
+        "class_name": "CORN",
+        "method_name": "_update_weight",
+        "line_number": 59,
+        "evidence": [
+          "Observer method detected: _update_weight"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 2,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1,
+      "Observer": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/cornk.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/cornk.py",
+        "class_name": "CORNK",
+        "method_name": null,
+        "line_number": 7,
+        "evidence": [
+          "Implements interface: UP",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/cornu.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/cornu.py",
+        "class_name": "CORNU",
+        "method_name": null,
+        "line_number": 7,
+        "evidence": [
+          "Implements interface: UP",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/cwmr.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/cwmr.py",
+        "class_name": "CWMR",
+        "method_name": null,
+        "line_number": 7,
+        "evidence": [
+          "Implements interface: OLPS",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Observer",
+        "category": "Behavioral",
+        "confidence": 0.65,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/cwmr.py",
+        "class_name": "CWMR",
+        "method_name": "_update_weight",
+        "line_number": 71,
+        "evidence": [
+          "Observer method detected: _update_weight"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1,
+      "Observer": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/eg.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Observer",
+        "category": "Behavioral",
+        "confidence": 0.65,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/eg.py",
+        "class_name": "EG",
+        "method_name": "_update_weight",
+        "line_number": 33,
+        "evidence": [
+          "Observer method detected: _update_weight"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Observer": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/fcorn.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/fcorn.py",
+        "class_name": "FCORN",
+        "method_name": "_sigmoid",
+        "line_number": 113,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/fcorn.py",
+        "class_name": "FCORN",
+        "method_name": null,
+        "line_number": 7,
+        "evidence": [
+          "Implements interface: CORN",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Observer",
+        "category": "Behavioral",
+        "confidence": 0.65,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/fcorn.py",
+        "class_name": "FCORN",
+        "method_name": "_update_weight",
+        "line_number": 41,
+        "evidence": [
+          "Observer method detected: _update_weight"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 2,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 1,
+      "Adapter": 1,
+      "Observer": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/fcornk.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/fcornk.py",
+        "class_name": "FCORNK",
+        "method_name": null,
+        "line_number": 7,
+        "evidence": [
+          "Implements interface: UP",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/ftl.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Observer",
+        "category": "Behavioral",
+        "confidence": 0.65,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/ftl.py",
+        "class_name": "FTL",
+        "method_name": "_update_weight",
+        "line_number": 18,
+        "evidence": [
+          "Observer method detected: _update_weight"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 1,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Observer": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/olmar.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/olmar.py",
+        "class_name": "OLMAR",
+        "method_name": null,
+        "line_number": 6,
+        "evidence": [
+          "Implements interface: OLPS",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Observer",
+        "category": "Behavioral",
+        "confidence": 0.65,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/olmar.py",
+        "class_name": "OLMAR",
+        "method_name": "_update_weight",
+        "line_number": 74,
+        "evidence": [
+          "Observer method detected: _update_weight"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1,
+      "Observer": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/pamr.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/pamr.py",
+        "class_name": "PAMR",
+        "method_name": null,
+        "line_number": 6,
+        "evidence": [
+          "Implements interface: OLPS",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Observer",
+        "category": "Behavioral",
+        "confidence": 0.65,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/pamr.py",
+        "class_name": "PAMR",
+        "method_name": "_update_weight",
+        "line_number": 64,
+        "evidence": [
+          "Observer method detected: _update_weight"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1,
+      "Observer": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/rmr.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/rmr.py",
+        "class_name": "RMR",
+        "method_name": "_transform",
+        "line_number": 142,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/rmr.py",
+        "class_name": "RMR",
+        "method_name": null,
+        "line_number": 6,
+        "evidence": [
+          "Implements interface: OLPS",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Observer",
+        "category": "Behavioral",
+        "confidence": 0.65,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/rmr.py",
+        "class_name": "RMR",
+        "method_name": "_update_weight",
+        "line_number": 78,
+        "evidence": [
+          "Observer method detected: _update_weight"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "TemplateMethod",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/rmr.py",
+        "class_name": "RMR",
+        "method_name": null,
+        "line_number": 6,
+        "evidence": [
+          "Has hook methods: _initialize, _calculate_predicted_relatives",
+          "Has abstract methods: __init__, _initialize"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 1,
+      "Adapter": 1,
+      "Observer": 1,
+      "TemplateMethod": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/scorn.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Observer",
+        "category": "Behavioral",
+        "confidence": 0.65,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/scorn.py",
+        "class_name": "SCORN",
+        "method_name": "_update_weight",
+        "line_number": 20,
+        "evidence": [
+          "Observer method detected: _update_weight"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 2,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Observer": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/up.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/online_portfolio_selection/up.py",
+        "class_name": "UP",
+        "method_name": null,
+        "line_number": 9,
+        "evidence": [
+          "Implements interface: OLPS",
+          "Has 10 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/cla.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/cla.py",
+        "class_name": "CriticalLineAlgorithm",
+        "method_name": null,
+        "line_number": 10,
+        "evidence": [
+          "Parameterized factory method: _get_matrices",
+          "Parameterized factory method: _get_bounded_weights",
+          "Multiple factory methods: _get_matrices, _get_bounded_weights"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/cla.py",
+        "class_name": "CriticalLineAlgorithm",
+        "method_name": "_infnone",
+        "line_number": 148,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/cla.py",
+        "class_name": "CriticalLineAlgorithm",
+        "method_name": null,
+        "line_number": 10,
+        "evidence": [
+          "Class name suggests Strategy: CriticalLineAlgorithm"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 1,
+      "Decorator": 1,
+      "Strategy": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/herc.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/herc.py",
+        "class_name": "HierarchicalEqualRiskContribution",
+        "method_name": null,
+        "line_number": 14,
+        "evidence": [
+          "Parameterized factory method: _get_optimal_number_of_clusters",
+          "Parameterized factory method: _get_children_cluster_ids",
+          "Factory method: _get_inverse_variance_weights",
+          "Parameterized factory method: _get_inverse_CVaR_weights",
+          "Parameterized factory method: _get_inverse_CDaR_weights",
+          "Parameterized factory method: _get_cluster_variance",
+          "Parameterized factory method: _get_cluster_expected_shortfall",
+          "Parameterized factory method: _get_cluster_conditional_drawdown_at_risk",
+          "Multiple factory methods: _get_optimal_number_of_clusters, _get_children_cluster_ids, _get_inverse_variance_weights"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/herc.py",
+        "class_name": "HierarchicalEqualRiskContribution",
+        "method_name": "_compute_cluster_inertia",
+        "line_number": 136,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 1,
+      "Decorator": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/hrp.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/hrp.py",
+        "class_name": "HierarchicalRiskParity",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Parameterized factory method: _get_seriated_matrix",
+          "Parameterized factory method: _build_long_short_portfolio",
+          "Factory method: _get_inverse_variance_weights",
+          "Parameterized factory method: _get_cluster_variance",
+          "Multiple factory methods: _get_seriated_matrix, _build_long_short_portfolio, _get_inverse_variance_weights"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/hrp.py",
+        "class_name": "HierarchicalRiskParity",
+        "method_name": "_tree_clustering",
+        "line_number": 117,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 1,
+      "Decorator": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/mean_variance.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/mean_variance.py",
+        "class_name": "MeanVarianceOptimisation",
+        "method_name": null,
+        "line_number": 10,
+        "evidence": [
+          "Factory method: get_portfolio_metrics",
+          "Parameterized factory method: _min_volatility_for_target_return",
+          "Parameterized factory method: _max_return_for_target_risk",
+          "Multiple factory methods: get_portfolio_metrics, _min_volatility_for_target_return, _max_return_for_target_risk"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/nco.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/nco.py",
+        "class_name": "NCO",
+        "method_name": "allocate_cvo",
+        "line_number": 27,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/returns_estimators.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/returns_estimators.py",
+        "class_name": "ReturnsEstimators",
+        "method_name": "calculate_mean_historical_returns",
+        "line_number": 19,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/risk_estimators.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/risk_estimators.py",
+        "class_name": "RiskEstimators",
+        "method_name": "minimum_covariance_determinant",
+        "line_number": 26,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/risk_metrics.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/risk_metrics.py",
+        "class_name": "RiskMetrics",
+        "method_name": "calculate_variance",
+        "line_number": 15,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/tic.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/tic.py",
+        "class_name": "TIC",
+        "method_name": null,
+        "line_number": 9,
+        "evidence": [
+          "Parameterized factory method: _get_linkage_corr",
+          "Parameterized factory method: _get_atoms",
+          "Multiple factory methods: _get_linkage_corr, _get_atoms"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/tic.py",
+        "class_name": "TIC",
+        "method_name": "corr_dist",
+        "line_number": 74,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Observer",
+        "category": "Behavioral",
+        "confidence": 0.65,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/portfolio_optimization/tic.py",
+        "class_name": "TIC",
+        "method_name": "_update_dist",
+        "line_number": 280,
+        "evidence": [
+          "Observer method detected: _update_dist"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 1,
+      "Decorator": 1,
+      "Observer": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_backtest_statistics.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_backtest_statistics.py",
+        "class_name": "TestBacktestStatistics",
+        "method_name": null,
+        "line_number": 18,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 11 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_backtests.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_backtests.py",
+        "class_name": "TestCampbellBacktesting",
+        "method_name": null,
+        "line_number": 9,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 7 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_best_constant_rebalanced_portfolio.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_best_constant_rebalanced_portfolio.py",
+        "class_name": "TestBestConstantRebalancedPortfolio",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Implements interface: TestCase",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_best_stock.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_best_stock.py",
+        "class_name": "TestBestStock",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Implements interface: TestCase",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_bet_sizing.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_bet_sizing.py",
+        "class_name": "TestBetSizeProbability",
+        "method_name": null,
+        "line_number": 20,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_bet_sizing.py",
+        "class_name": "TestBetSizeProbability",
+        "method_name": null,
+        "line_number": 20,
+        "evidence": [
+          "Part of strategy family with: TestBetSizeDynamic, TestBetSizeBudget, TestBetSizeReserve"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_bet_sizing.py",
+        "class_name": "TestBetSizeDynamic",
+        "method_name": null,
+        "line_number": 87,
+        "evidence": [
+          "Part of strategy family with: TestBetSizeProbability, TestBetSizeBudget, TestBetSizeReserve",
+          "Strategy interface method: test_bet_size_dynamic_default"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_bet_sizing.py",
+        "class_name": "TestBetSizeBudget",
+        "method_name": null,
+        "line_number": 122,
+        "evidence": [
+          "Factory method: test_bet_size_budget_default",
+          "Factory method: test_bet_size_budget_div_zero",
+          "Multiple factory methods: test_bet_size_budget_default, test_bet_size_budget_div_zero",
+          "Inherits from: unittest.TestCase"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_bet_sizing.py",
+        "class_name": "TestBetSizeBudget",
+        "method_name": null,
+        "line_number": 122,
+        "evidence": [
+          "Part of strategy family with: TestBetSizeProbability, TestBetSizeDynamic, TestBetSizeReserve",
+          "Strategy interface method: test_bet_size_budget_default"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_bet_sizing.py",
+        "class_name": "TestBetSizeReserve",
+        "method_name": "test_bet_size_reserve_default",
+        "line_number": 174,
+        "evidence": [
+          "Method uses decorators: [\"patch('mlfinlab.bet_sizing.bet_sizing.most_likely_parameters')\"]"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_bet_sizing.py",
+        "class_name": "TestBetSizeReserve",
+        "method_name": null,
+        "line_number": 169,
+        "evidence": [
+          "Part of strategy family with: TestBetSizeProbability, TestBetSizeDynamic, TestBetSizeBudget",
+          "Strategy interface method: test_bet_size_reserve_default"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_bet_sizing.py",
+        "class_name": "TestConfirmAndCastToDf",
+        "method_name": null,
+        "line_number": 248,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_bet_sizing.py",
+        "class_name": "TestConfirmAndCastToDf",
+        "method_name": null,
+        "line_number": 248,
+        "evidence": [
+          "Part of strategy family with: TestBetSizeProbability, TestBetSizeDynamic, TestBetSizeBudget"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_bet_sizing.py",
+        "class_name": "TestGetConcurrentSides",
+        "method_name": null,
+        "line_number": 305,
+        "evidence": [
+          "Part of strategy family with: TestBetSizeProbability, TestBetSizeDynamic, TestBetSizeBudget",
+          "Strategy interface method: test_get_concurrent_sides_default"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_bet_sizing.py",
+        "class_name": "TestCdfMixture",
+        "method_name": null,
+        "line_number": 345,
+        "evidence": [
+          "Part of strategy family with: TestBetSizeProbability, TestBetSizeDynamic, TestBetSizeBudget",
+          "Strategy interface method: test_cdf_mixture_default"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_bet_sizing.py",
+        "class_name": "TestSingleBetSizeMixed",
+        "method_name": null,
+        "line_number": 364,
+        "evidence": [
+          "Part of strategy family with: TestBetSizeProbability, TestBetSizeDynamic, TestBetSizeBudget",
+          "Strategy interface method: test_single_bet_size_mixed_above_zero"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      }
+    ],
+    "total_classes": 8,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 2,
+      "Strategy": 8,
+      "Factory": 1,
+      "Decorator": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_buy_and_hold.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_buy_and_hold.py",
+        "class_name": "TestBuyAndHold",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Implements interface: TestCase",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ch10_snippets.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ch10_snippets.py",
+        "class_name": "TestCh10Snippets",
+        "method_name": null,
+        "line_number": 19,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ch10_snippets.py",
+        "class_name": "TestCh10Snippets",
+        "method_name": null,
+        "line_number": 19,
+        "evidence": [
+          "Part of strategy family with: TestBetSize, TestGetTPos, TestInvPrice"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ch10_snippets.py",
+        "class_name": "TestBetSize",
+        "method_name": null,
+        "line_number": 117,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 6 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ch10_snippets.py",
+        "class_name": "TestBetSize",
+        "method_name": null,
+        "line_number": 117,
+        "evidence": [
+          "Part of strategy family with: TestCh10Snippets, TestGetTPos, TestInvPrice"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ch10_snippets.py",
+        "class_name": "TestGetTPos",
+        "method_name": null,
+        "line_number": 167,
+        "evidence": [
+          "Factory method: test_get_target_pos_sigmoid",
+          "Factory method: test_get_target_pos_power",
+          "Factory method: test_get_target_pos",
+          "Factory method: test_get_target_pos_key_error",
+          "Multiple factory methods: test_get_target_pos_sigmoid, test_get_target_pos_power, test_get_target_pos",
+          "Inherits from: unittest.TestCase"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ch10_snippets.py",
+        "class_name": "TestGetTPos",
+        "method_name": null,
+        "line_number": 167,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ch10_snippets.py",
+        "class_name": "TestGetTPos",
+        "method_name": null,
+        "line_number": 167,
+        "evidence": [
+          "Part of strategy family with: TestCh10Snippets, TestBetSize, TestInvPrice"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ch10_snippets.py",
+        "class_name": "TestInvPrice",
+        "method_name": null,
+        "line_number": 217,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ch10_snippets.py",
+        "class_name": "TestInvPrice",
+        "method_name": null,
+        "line_number": 217,
+        "evidence": [
+          "Part of strategy family with: TestCh10Snippets, TestBetSize, TestGetTPos"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ch10_snippets.py",
+        "class_name": "TestLimitPrice",
+        "method_name": null,
+        "line_number": 256,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ch10_snippets.py",
+        "class_name": "TestLimitPrice",
+        "method_name": null,
+        "line_number": 256,
+        "evidence": [
+          "Part of strategy family with: TestCh10Snippets, TestBetSize, TestGetTPos"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ch10_snippets.py",
+        "class_name": "TestGetW",
+        "method_name": null,
+        "line_number": 294,
+        "evidence": [
+          "Factory method: test_get_w_sigmoid",
+          "Factory method: test_get_w_power",
+          "Factory method: test_get_w_power_value_error",
+          "Factory method: test_get_w_power_warning",
+          "Factory method: test_get_w_key_error",
+          "Multiple factory methods: test_get_w_sigmoid, test_get_w_power, test_get_w_power_value_error",
+          "Inherits from: unittest.TestCase"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ch10_snippets.py",
+        "class_name": "TestGetW",
+        "method_name": null,
+        "line_number": 294,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ch10_snippets.py",
+        "class_name": "TestGetW",
+        "method_name": null,
+        "line_number": 294,
+        "evidence": [
+          "Part of strategy family with: TestCh10Snippets, TestBetSize, TestGetTPos"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      }
+    ],
+    "total_classes": 6,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 6,
+      "Strategy": 6,
+      "Factory": 2
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_cla.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_cla.py",
+        "class_name": "TestCLA",
+        "method_name": null,
+        "line_number": 13,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 23 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_codependence.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_codependence.py",
+        "class_name": "TestCodependence",
+        "method_name": null,
+        "line_number": 18,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 9 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_combinatorial_cross_validation.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_combinatorial_cross_validation.py",
+        "class_name": "TestCombinatorialPurgedCV",
+        "method_name": null,
+        "line_number": 9,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_confidence_weighted_mean_reversion.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_confidence_weighted_mean_reversion.py",
+        "class_name": "TestConfidenceWeightedMeanReversion",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Implements interface: TestCase",
+          "Has 7 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_constant_rebalanced_portfolio.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_constant_rebalanced_portfolio.py",
+        "class_name": "TestConstantRebalancedPortfolio",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Implements interface: TestCase",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_correlation_driven_nonparametric_learning.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_correlation_driven_nonparametric_learning.py",
+        "class_name": "TestCorrelationDrivenNonparametricLearning",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Implements interface: TestCase",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_correlation_driven_nonparametric_learning_k.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_correlation_driven_nonparametric_learning_k.py",
+        "class_name": "TestCorrelationDrivenNonparametricLearningK",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Implements interface: TestCase",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_correlation_driven_nonparametric_learning_uniform.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_correlation_driven_nonparametric_learning_uniform.py",
+        "class_name": "TestCorrelationDrivenNonparametricLearningUniform",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Implements interface: TestCase",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_cross_validation.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_cross_validation.py",
+        "class_name": "TestCrossValidation",
+        "method_name": null,
+        "line_number": 19,
+        "evidence": [
+          "Factory method: test_get_train_times_1",
+          "Factory method: test_get_train_times_2",
+          "Factory method: test_get_train_times_3",
+          "Multiple factory methods: test_get_train_times_1, test_get_train_times_2, test_get_train_times_3",
+          "Inherits from: unittest.TestCase"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_cross_validation.py",
+        "class_name": "TestCrossValidation",
+        "method_name": null,
+        "line_number": 19,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 15 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 1,
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_datasets.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_datasets.py",
+        "class_name": "TestDatasets",
+        "method_name": null,
+        "line_number": 9,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ef3m.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ef3m.py",
+        "class_name": "TestM2NConstructor",
+        "method_name": null,
+        "line_number": 13,
+        "evidence": [
+          "Part of strategy family with: TestM2NGetMoments, TestM2NIter4, TestM2NIter5",
+          "Strategy interface method: test_m2n_constructor"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ef3m.py",
+        "class_name": "TestM2NGetMoments",
+        "method_name": null,
+        "line_number": 31,
+        "evidence": [
+          "Part of strategy family with: TestM2NConstructor, TestM2NIter4, TestM2NIter5",
+          "Strategy interface method: test_get_moments"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ef3m.py",
+        "class_name": "TestM2NIter4",
+        "method_name": null,
+        "line_number": 58,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 6 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ef3m.py",
+        "class_name": "TestM2NIter4",
+        "method_name": null,
+        "line_number": 58,
+        "evidence": [
+          "Part of strategy family with: TestM2NConstructor, TestM2NGetMoments, TestM2NIter5"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ef3m.py",
+        "class_name": "TestM2NIter5",
+        "method_name": null,
+        "line_number": 119,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 9 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ef3m.py",
+        "class_name": "TestM2NIter5",
+        "method_name": null,
+        "line_number": 119,
+        "evidence": [
+          "Part of strategy family with: TestM2NConstructor, TestM2NGetMoments, TestM2NIter4"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ef3m.py",
+        "class_name": "TestM2NFit",
+        "method_name": null,
+        "line_number": 216,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 6 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ef3m.py",
+        "class_name": "TestM2NFit",
+        "method_name": null,
+        "line_number": 216,
+        "evidence": [
+          "Part of strategy family with: TestM2NConstructor, TestM2NGetMoments, TestM2NIter4"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ef3m.py",
+        "class_name": "TestM2NEF3M",
+        "method_name": null,
+        "line_number": 316,
+        "evidence": [
+          "Part of strategy family with: TestM2NConstructor, TestM2NGetMoments, TestM2NIter4",
+          "Strategy interface method: test_ef3m_variant_1"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ef3m.py",
+        "class_name": "TestM2NSingleFitLoop",
+        "method_name": null,
+        "line_number": 369,
+        "evidence": [
+          "Part of strategy family with: TestM2NConstructor, TestM2NGetMoments, TestM2NIter4",
+          "Strategy interface method: test_single_fit_loop_return_type"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ef3m.py",
+        "class_name": "TestM2NMpFit",
+        "method_name": null,
+        "line_number": 390,
+        "evidence": [
+          "Part of strategy family with: TestM2NConstructor, TestM2NGetMoments, TestM2NIter4",
+          "Strategy interface method: test_mp_fit_return_type"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ef3m.py",
+        "class_name": "TestCenteredMoment",
+        "method_name": null,
+        "line_number": 411,
+        "evidence": [
+          "Part of strategy family with: TestM2NConstructor, TestM2NGetMoments, TestM2NIter4",
+          "Strategy interface method: test_centered_moment_result"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ef3m.py",
+        "class_name": "TestRawMoment",
+        "method_name": null,
+        "line_number": 431,
+        "evidence": [
+          "Part of strategy family with: TestM2NConstructor, TestM2NGetMoments, TestM2NIter4",
+          "Strategy interface method: test_raw_moment_result"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_ef3m.py",
+        "class_name": "TestMostLikelyParameters",
+        "method_name": null,
+        "line_number": 445,
+        "evidence": [
+          "Part of strategy family with: TestM2NConstructor, TestM2NGetMoments, TestM2NIter4",
+          "Strategy interface method: test_most_likely_parameters_result"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      }
+    ],
+    "total_classes": 11,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Strategy": 11,
+      "Adapter": 3
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_etf_trick.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_etf_trick.py",
+        "class_name": "TestETFTrick",
+        "method_name": null,
+        "line_number": 13,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_exponential_gradient.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_exponential_gradient.py",
+        "class_name": "TestExponentialGradient",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Implements interface: TestCase",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Observer",
+        "category": "Behavioral",
+        "confidence": 0.65,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_exponential_gradient.py",
+        "class_name": "TestExponentialGradient",
+        "method_name": "test_wrong_update",
+        "line_number": 74,
+        "evidence": [
+          "Observer method detected: test_wrong_update"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1,
+      "Observer": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_feature_clusters.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_feature_clusters.py",
+        "class_name": "TestFeatureClusters",
+        "method_name": null,
+        "line_number": 10,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_feature_importance.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_feature_importance.py",
+        "class_name": "TestFeatureImportance",
+        "method_name": null,
+        "line_number": 21,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_filters.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_filters.py",
+        "class_name": "TestCUSUMFilter",
+        "method_name": null,
+        "line_number": 13,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "ChainOfResponsibility",
+        "category": "Behavioral",
+        "confidence": 0.6,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_filters.py",
+        "class_name": "TestCUSUMFilter",
+        "method_name": null,
+        "line_number": 13,
+        "evidence": [
+          "Class name suggests handler chain: TestCUSUMFilter"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1,
+      "ChainOfResponsibility": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_fingerpint.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_fingerpint.py",
+        "class_name": "TestModelFingerprint",
+        "method_name": null,
+        "line_number": 16,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 6 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_follow_the_leader.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_follow_the_leader.py",
+        "class_name": "TestFollowTheLeader",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Implements interface: TestCase",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_follow_the_regularized_leader.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_follow_the_regularized_leader.py",
+        "class_name": "TestFollowTheRegularizedLeader",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Implements interface: TestCase",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_fracdiff.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_fracdiff.py",
+        "class_name": "TestFractionalDifferentiation",
+        "method_name": null,
+        "line_number": 14,
+        "evidence": [
+          "Factory method: test_get_weights",
+          "Factory method: test_get_weights_ffd",
+          "Multiple factory methods: test_get_weights, test_get_weights_ffd",
+          "Inherits from: unittest.TestCase"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_fracdiff.py",
+        "class_name": "TestFractionalDifferentiation",
+        "method_name": null,
+        "line_number": 14,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 6 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Command",
+        "category": "Behavioral",
+        "confidence": 0.65,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_fracdiff.py",
+        "class_name": "TestFractionalDifferentiation",
+        "method_name": null,
+        "line_number": 14,
+        "evidence": [
+          "Class name suggests Command: TestFractionalDifferentiation"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 1,
+      "Adapter": 1,
+      "Command": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_functional_correlation_driven_nonparametric_learning.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_functional_correlation_driven_nonparametric_learning.py",
+        "class_name": "TestFunctionalCorrelationDrivenNonparametricLearning",
+        "method_name": null,
+        "line_number": 12,
+        "evidence": [
+          "Implements interface: TestCase",
+          "Has 6 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_functional_correlation_driven_nonparametric_learning_k.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_functional_correlation_driven_nonparametric_learning_k.py",
+        "class_name": "TestFunctionalCorrelationDrivenNonparametricLearningK",
+        "method_name": null,
+        "line_number": 12,
+        "evidence": [
+          "Implements interface: TestCase",
+          "Has 6 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_herc.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_herc.py",
+        "class_name": "TestHERC",
+        "method_name": null,
+        "line_number": 13,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 19 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_hrp.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_hrp.py",
+        "class_name": "TestHRP",
+        "method_name": null,
+        "line_number": 13,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 15 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_imbalance_data_structures.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_imbalance_data_structures.py",
+        "class_name": "TestDataStructures",
+        "method_name": null,
+        "line_number": 13,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 10 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_labeling_fixed_time_horizon.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_labeling_fixed_time_horizon.py",
+        "class_name": "TestLabelingFixedTime",
+        "method_name": null,
+        "line_number": 10,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 6 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_labeling_matrix_flags.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_labeling_matrix_flags.py",
+        "class_name": "TestMatrixFlagLabels",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 8 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_labeling_over_mean.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_labeling_over_mean.py",
+        "class_name": "TestLabelingOverMean",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_labeling_over_median.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_labeling_over_median.py",
+        "class_name": "TestLabelingOverMedian",
+        "method_name": null,
+        "line_number": 13,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_labeling_raw_return.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_labeling_raw_return.py",
+        "class_name": "TestLabelingRawReturns",
+        "method_name": null,
+        "line_number": 12,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_labeling_tail_sets.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_labeling_tail_sets.py",
+        "class_name": "TestTailSets",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_labeling_vs_benchmark.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_labeling_vs_benchmark.py",
+        "class_name": "TestReturnOverBenchmark",
+        "method_name": null,
+        "line_number": 10,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_labels.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_labels.py",
+        "class_name": "TestChapter3",
+        "method_name": null,
+        "line_number": 16,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 7 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_mean_variance.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_mean_variance.py",
+        "class_name": "TestMVO",
+        "method_name": null,
+        "line_number": 15,
+        "evidence": [
+          "Factory method: test_min_volatility_for_target_return",
+          "Factory method: test_max_return_for_target_risk",
+          "Multiple factory methods: test_min_volatility_for_target_return, test_max_return_for_target_risk",
+          "Inherits from: unittest.TestCase"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_mean_variance.py",
+        "class_name": "TestMVO",
+        "method_name": null,
+        "line_number": 15,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 40 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 1,
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_microstructural_features.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_microstructural_features.py",
+        "class_name": "TestMicrostructuralFeatures",
+        "method_name": null,
+        "line_number": 22,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 10 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_nco.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_nco.py",
+        "class_name": "TestNCO",
+        "method_name": "test_simulate_covariance",
+        "line_number": 23,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_nco.py",
+        "class_name": "TestNCO",
+        "method_name": null,
+        "line_number": 12,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 9 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 1,
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_onc.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_onc.py",
+        "class_name": "TestOptimalNumberOfClusters",
+        "method_name": "_check_if_in_cluster",
+        "line_number": 25,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_onc.py",
+        "class_name": "TestOptimalNumberOfClusters",
+        "method_name": null,
+        "line_number": 13,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 1,
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_online_moving_average_reversion.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_online_moving_average_reversion.py",
+        "class_name": "TestOnlineMovingAverageReversion",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Implements interface: TestCase",
+          "Has 9 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_online_portfolio_selection.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_online_portfolio_selection.py",
+        "class_name": "TestOLPS",
+        "method_name": null,
+        "line_number": 12,
+        "evidence": [
+          "Implements interface: TestCase",
+          "Has 12 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_passive_aggressive_mean_reversion.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_passive_aggressive_mean_reversion.py",
+        "class_name": "TestPassiveAggressiveMeanReversion",
+        "method_name": null,
+        "line_number": 12,
+        "evidence": [
+          "Implements interface: TestCase",
+          "Has 7 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_risk_estimators.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_risk_estimators.py",
+        "class_name": "TestRiskEstimators",
+        "method_name": "test_corr_to_cov",
+        "line_number": 119,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_risk_estimators.py",
+        "class_name": "TestRiskEstimators",
+        "method_name": null,
+        "line_number": 14,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 17 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 1,
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_risk_metrics.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_risk_metrics.py",
+        "class_name": "TestRiskMetrics",
+        "method_name": null,
+        "line_number": 8,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 8 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_robust_median_reversion.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_robust_median_reversion.py",
+        "class_name": "TestRobustMedianReversion",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Implements interface: TestCase",
+          "Has 9 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_run_data_structures.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_run_data_structures.py",
+        "class_name": "TestDataStructures",
+        "method_name": null,
+        "line_number": 13,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 9 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_sample_weights.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_sample_weights.py",
+        "class_name": "TestSampling",
+        "method_name": null,
+        "line_number": 16,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_sampling.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_sampling.py",
+        "class_name": "TestSampling",
+        "method_name": null,
+        "line_number": 25,
+        "evidence": [
+          "Factory method: test_get_av_uniqueness",
+          "Factory method: test_get_ind_mat_av_uniqueness",
+          "Factory method: test_get_ind_mat_uniqueness",
+          "Multiple factory methods: test_get_av_uniqueness, test_get_ind_mat_av_uniqueness, test_get_ind_mat_uniqueness",
+          "Inherits from: unittest.TestCase"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_sampling.py",
+        "class_name": "TestSampling",
+        "method_name": null,
+        "line_number": 25,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 8 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 1,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 1,
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_sb_bagging.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_sb_bagging.py",
+        "class_name": "TestSequentiallyBootstrappedBagging",
+        "method_name": null,
+        "line_number": 52,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 8 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 2,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_standard_data_structures.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_standard_data_structures.py",
+        "class_name": "TestDataStructures",
+        "method_name": null,
+        "line_number": 13,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 10 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_structural_breaks.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_structural_breaks.py",
+        "class_name": "TesStructuralBreaks",
+        "method_name": null,
+        "line_number": 18,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_symmetric_correlation_driven_nonparametric_learning_k.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_symmetric_correlation_driven_nonparametric_learning_k.py",
+        "class_name": "TestSymmetricCorrelationDrivenNonparametricLearningK",
+        "method_name": null,
+        "line_number": 12,
+        "evidence": [
+          "Implements interface: TestCase",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_tic.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_tic.py",
+        "class_name": "TestTIC",
+        "method_name": null,
+        "line_number": 14,
+        "evidence": [
+          "Factory method: test_get_linkage_corr",
+          "Factory method: test_get_atoms",
+          "Multiple factory methods: test_get_linkage_corr, test_get_atoms",
+          "Inherits from: unittest.TestCase"
+        ],
+        "related_classes": [
+          "unittest.TestCase"
+        ]
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_tic.py",
+        "class_name": "TestTIC",
+        "method_name": "test_link_clusters",
+        "line_number": 76,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_tic.py",
+        "class_name": "TestTIC",
+        "method_name": null,
+        "line_number": 14,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 8 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Observer",
+        "category": "Behavioral",
+        "confidence": 0.65,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_tic.py",
+        "class_name": "TestTIC",
+        "method_name": "test_update_dist",
+        "line_number": 103,
+        "evidence": [
+          "Observer method detected: test_update_dist"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 1,
+      "Decorator": 1,
+      "Adapter": 1,
+      "Observer": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_time_data_structures.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_time_data_structures.py",
+        "class_name": "TestTimeDataStructures",
+        "method_name": null,
+        "line_number": 13,
+        "evidence": [
+          "Implements interface: unittest.TestCase",
+          "Has 7 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_universal_portfolio.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "/Users/link/Documents/Skill_Seekers/src/mlfinlab/tests/test_universal_portfolio.py",
+        "class_name": "TestUniversalPortfolio",
+        "method_name": null,
+        "line_number": 12,
+        "evidence": [
+          "Implements interface: TestCase",
+          "Has 10 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Adapter": 1
+    }
+  }
+]
