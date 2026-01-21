@@ -12,6 +12,8 @@ The label is determined by which barrier is touched first.
 
 import pandas as pd
 import numpy as np
+import subprocess
+import sys
 from typing import Optional, Tuple, Union
 
 
@@ -273,7 +275,9 @@ def get_events(
         t1 = pd.Series(close.index[t1_indices], index=t_events)
     elif vertical_barrier_days is not None:
         # Standard time barrier: Look ahead N days
-        t1 = close.index.searchsorted(t_events + pd.Timedelta(days=vertical_barrier_days))
+        t1 = close.index.searchsorted(
+            t_events + pd.Timedelta(days=vertical_barrier_days)
+        )
         t1 = t1[t1 < close.shape[0]]
         t1 = pd.Series(close.index[t1], index=t_events[: t1.shape[0]])
     else:
@@ -385,9 +389,17 @@ def main():
     # AFML Standard setting: k=1.0 implies we only sample events when the cumulative
     # deviation exceeds 1 standard deviation (statistically significant shifts).
     # k can be adjusted (e.g., 0.5 for more samples, 2.0 for higher confidence).
-    cusum_vol_multiplier = 1.0
-    print(f"   Threshold Multiplier (k): {cusum_vol_multiplier} (Targeting 1-sigma events)")
-    
+
+    #    * 经验法则:
+    #    * 如果采样率 < 1%：说明阈值太高，可能漏掉了有效信息。尝试降低到 0.5 * vol。
+    #    * 如果采样率 > 20%：说明阈值太低，CUSUM
+    #      过滤器几乎没有起作用（接近于全量采样）。尝试提高到 1.0 * vol 或更高。
+
+    cusum_vol_multiplier = 2
+    print(
+        f"   Threshold Multiplier (k): {cusum_vol_multiplier} (Targeting 1-sigma events)"
+    )
+
     cusum_events = get_cusum_events(df["close"], threshold=vol * cusum_vol_multiplier)
     print(f"   Selected {len(cusum_events)} events from {len(df)} bars")
     print(f"   Sampling ratio: {len(cusum_events) / len(df) * 100:.2f}%")
@@ -395,7 +407,7 @@ def main():
     # 4. Set barrier parameters
     print("\n4. Setting barrier parameters...")
     pt_sl = [1, 1]  # Symmetric barriers at 1x volatility
-    vertical_barrier_bars = 50  # 50-bar holding period (Intrinsic Time)
+    vertical_barrier_bars = 12  # 50-bar holding period (Intrinsic Time)
     min_ret = 0.001  # 0.1% minimum return threshold
 
     print(f"   Profit-taking: {pt_sl[0]}x volatility")
@@ -459,6 +471,22 @@ def main():
     print("\n" + "=" * 80)
     print("✓ Triple Barrier Labeling Complete!")
     print("=" * 80)
+
+    # 10. Auto-run visualization
+    print("\n10. Running visualization...")
+    try:
+        subprocess.run([sys.executable, "src/visualize_labels.py"], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"   Error running visualization: {e}")
+    except FileNotFoundError:
+        # Fallback if running via uv/shell
+        try:
+            subprocess.run(
+                ["uv", "run", "python", "src/visualize_labels.py"], check=True
+            )
+        except Exception as e:
+            print(f"   Error running visualization via uv: {e}")
+
     print("\nNext steps:")
     print("  1. Feature engineering (technical indicators, microstructure)")
     print("  2. Sample weights (uniqueness, time decay)")
@@ -470,3 +498,44 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+#   1. 采样与过滤器 (CUSUM Filter)
+#    * 采样率 18.77% (737 events / 3927 bars):
+#        * 在 $2\sigma$ ($k=2$) 的阈值下，你过滤掉了 81% 的“噪音”Bar。
+#        * 这是一个非常理想的比例。它意味着你只在价格发生显著偏移（$2\sigma$）时才进行
+#          交易决策，这极大地提高了数据的信噪比。
+#        * 结论: cusum_vol_multiplier = 2.0
+#          是一个非常稳健且保守的设置，适合捕捉中短期趋势。
+
+#   2. 标签分布 (Label Distribution)
+#    * 均衡性:
+#        * Loss: 51.97%
+#        * Profit: 48.03%
+#        * 几乎是 50/50 的分布。这对于金融数据来说是非常好的信号。它表明：
+#            1. 你的 Barrier 设置是对称且公平的。
+#            2. Dollar Bars
+#               有效地去除了时间采样的微观噪音，使价格游走更接近随机游走（Random
+#               Walk），符合有效市场假说。
+#        * 机器学习启示:
+#          你的数据集类别非常平衡，不需要进行过采样（Over-sampling）或欠采样（Under-sa
+#          mpling），可以直接用于训练分类器（如 Random Forest, XGBoost）。
+
+#   3. 回报统计 (Return Statistics)
+#    * 均值: 0.007% (接近 0)。
+#    * 中位数: -0.408%。
+#    * 这再次印证了你在一个相对有效的市场上进行采样。如果均值显著不为0，说明存在简单的
+#      动量或均值回归机会（或者标签存在前视偏差 Look-ahead Bias）。
+#    * 获利能力:
+#        * Profit Mean: 0.954%
+#        * Loss Mean: -0.869%
+#        * 盈利交易的平均收益略高于亏损交易的平均亏损。虽然差异不大，但在高频/中频交易
+#          中，结合高胜率模型，这微小的 edge 是可以被放大的。
+
+#   4. 持仓时间 (Holding Period)
+#    * 平均: 28.19 小时。
+#    * 最大: 647.25 小时（约 27 天）。
+#    * Bar 视角: 你设置了 vertical_barrier_bars = 50。
+#    * 这说明大部分交易（由于触碰止盈或止损）在远早于 50 个 Bar 的时限前就结束了。这是
+#      Triple Barrier
+#      的核心优势：路径依赖。它不会傻傻地等到时间结束，而是在价格触及边界时立即反应。
