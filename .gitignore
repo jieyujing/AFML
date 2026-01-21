@@ -160,7 +160,6 @@ out/
 .env
 
 # Large Data files (Quantitative Research)
-*.csv
 *.h5
 *.hdf5
 *.feathers
