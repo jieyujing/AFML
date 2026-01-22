@@ -248,21 +248,20 @@
 
 实现了 AFML Chapter 3 的元标签策略，训练二级模型（Meta-Model）来过滤一级模型的信号。
 
-**实现细节 (LightGBM 版 v3)**:
-- **一级模型**: LightGBM Classifier (500 estimators, max_depth=7)
-- **二级模型**: LightGBM Classifier (300 estimators, max_depth=5, 更强正则化)
+**实现细节 (Random Forest 版)**:
+- **一级模型**: Random Forest Classifier (500 estimators, max_depth=5)
+- **二级模型**: Random Forest Classifier (500 estimators, max_depth=4, 更强正则化)
 - **新增特征**: `primary_model_prob` (一级模型对自己预测的置信度)
 - **Meta-Labels**: 1 (一级模型正确), 0 (一级模型错误)
 
-**模型升级理由**:
-- **更好的特征交互**: LightGBM 在处理非线性特征关系方面优于 Random Forest
-- **更快的训练速度**: Gradient Boosting 效率更高
-- **更好的正则化**: 内置 L1/L2 正则化，减少过拟合风险
-- **原生多分类支持**: 对于一级模型的三分类任务(-1, 0, 1)更适合
+**模型选择理由**:
+- **抗过拟合能力**: 随机森林通过 Bagging 机制在小样本和高噪声环境下表现更稳健，符合 AFML 的推荐。
+- **参数敏感度低**: 相比 LightGBM，随机森林对超参数不那么敏感，更容易在金融数据上获得稳定的 OOS 表现。
+- **内置采样调整**: 使用 `class_weight='balanced_subsample'` 可以更好地处理元标签中的类别不平衡问题。
 
 **关键洞察**:
-- LightGBM 能更好地学习"何时一级模型会犯错"的复杂模式
-- Regime Features (波动率、序列相关性、市场熵) 与 LightGBM 的特征交互能力相结合，应该能显著提升 Meta-Model 性能
+- 随机森林在二级模型中作为"过滤器"非常有效，能识别一级模型在特定市场环境下的不确定性。
+- 引入 `primary_model_prob` 特征将一级模型的内生信息传递给二级模型，显著增强了元模型的区分度。
 
 ---
 

@@ -2,7 +2,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import lightgbm as lgb
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_auc_score, confusion_matrix, classification_report
 from cv_setup import PurgedKFold
 import os
@@ -44,41 +44,28 @@ def load_data():
     selected_file = "selected_features.csv"
     if os.path.exists(selected_file):
         selected_df = pd.read_csv(selected_file)
-        # Assuming the CSV has a column 'feature' or similar, or it's a list. 
-        # Actually usually it's just columns. Let's check structure or assume it's a list from previous steps.
-        # From previous steps, it's likely a CSV with feature names.
-        # Let's inspect quickly or just assume column 0 is the name.
         selected_features = selected_df.iloc[:, 0].tolist()
         print(f"   Loaded {len(selected_features)} selected features.")
     else:
         print("   Warning: selected_features.csv not found. Using all features.")
         selected_features = [c for c in df.columns if c not in ['label', 'ret', 't1', 'trgt', 'side', 'sample_weight', 'avg_uniqueness', 'barrier_time']]
 
-    # Configure LightGBM parameters (optimized for financial ML)
-    lgb_params = {
-        'objective': 'multiclass',
-        'num_class': 3,  # Classes: -1, 0, 1
-        'metric': 'multi_logloss',
-        'boosting_type': 'gbdt',
-        'num_leaves': 31,
-        'learning_rate': 0.05,
-        'feature_fraction': 0.8,
-        'bagging_fraction': 0.8,
-        'bagging_freq': 5,
-        'max_depth': 7,
-        'min_child_samples': 20,
-        'reg_alpha': 0.1,  # L1 regularization
-        'reg_lambda': 0.1,  # L2 regularization
+    # Configure Random Forest parameters (AFML Chapter 8 style)
+    rf_params = {
         'n_estimators': 500,
+        'max_depth': 5,
+        'criterion': 'entropy',
+        'class_weight': 'balanced_subsample',
+        'bootstrap': True,
+        'max_features': 'sqrt',
+        'min_samples_leaf': 10,
         'random_state': 42,
-        'n_jobs': -1,
-        'verbose': -1,
-        'class_weight': 'balanced'
+        'n_jobs': -1
     }
     
-    print("   Configured LightGBM parameters for financial ML.")
+    print("   Configured Random Forest parameters for financial ML.")
     
-    return df, selected_features, lgb_params
+    return df, selected_features, rf_params
 
 def get_primary_predictions(df, features, params, n_splits=5):
     print("\n2. Generating Primary Model OOS Predictions (Purged CV)...")
@@ -104,8 +91,8 @@ def get_primary_predictions(df, features, params, n_splits=5):
         X_test = X.iloc[test_idx]
         w_train = weights.iloc[train_idx] if weights is not None else None
         
-        # Train Primary Model (LightGBM)
-        clf = lgb.LGBMClassifier(**params)
+        # Train Primary Model (Random Forest)
+        clf = RandomForestClassifier(**params)
         clf.fit(X_train, y_train, sample_weight=w_train)
         
         # Predict
@@ -133,14 +120,10 @@ def train_meta_model(df, features, primary_preds, primary_probs, tested_indices)
     primary_preds = primary_preds.iloc[tested_indices]
     probs_meta = primary_probs.iloc[tested_indices]
     
-    # 2. Define Meta-Labels (Same as before)
-    # Filter for non-zero predictions
+    # 2. Define Meta-Labels
     mask = primary_preds != 0
-    X_meta = df_meta.loc[mask, features].copy() # Use same features for secondary model
+    X_meta = df_meta.loc[mask, features].copy()
     
-    # *** KEY IMPROVEMENT ***
-    # Add Primary Model's Confidence (Probability) as a feature
-    # If pred=1, use prob(1). If pred=-1, use prob(-1).
     confidences = []
     for idx in X_meta.index:
         pred_class = primary_preds.loc[idx]
@@ -155,39 +138,25 @@ def train_meta_model(df, features, primary_preds, primary_probs, tested_indices)
     
     print(f"   Primary Model Coverage: {mask.sum()}/{len(df_meta)} samples ({mask.mean()*100:.1f}%) predicted non-zero.")
     
-    # Generate Meta Labels
-    # 1 if prediction matches magnitude
-    # y_meta = (y_pred_primary == y_true).astype(int)
-    
-    # Strict definition: Did it make money?
-    # If y_pred=1 and y_true=1 -> 1
-    # If y_pred=-1 and y_true=-1 -> 1
-    # Else -> 0
+    # Meta Labels: 1 if matches, 0 otherwise
     meta_labels = (y_pred_primary == y_true).astype(int)
     
     print("   Meta-Label Distribution:")
     print(meta_labels.value_counts(normalize=True))
     
-    # 3. Train Secondary Model (LightGBM for Meta-Labeling)
-    # Use a slightly regularized LightGBM to avoid overfitting on meta-labels
-    meta_clf = lgb.LGBMClassifier(
-        objective='binary',
-        num_leaves=15,      # Shallower tree for meta-model
-        learning_rate=0.05,
-        n_estimators=300,
-        max_depth=5,
-        min_child_samples=10,
-        reg_alpha=0.2,
-        reg_lambda=0.2,
-        class_weight='balanced',
-        n_jobs=-1,
+    # 3. Train Secondary Model (Random Forest for Meta-Labeling)
+    meta_clf = RandomForestClassifier(
+        n_estimators=500,
+        max_depth=4, # Shallower for meta-model
+        criterion='entropy',
+        class_weight='balanced_subsample',
+        bootstrap=True,
+        min_samples_leaf=20,
         random_state=42,
-        verbose=-1
+        n_jobs=-1
     )
     
-    # Split for Meta-Model Evaluation (Train/Test simple split 80/20)
-    # Note: This is an internal split of the "OOS" data generated from Primary CV. 
-    # Technically valid since Primary predictions were OOS.
+    # Split for Meta-Model Evaluation
     split = int(len(X_meta) * 0.8)
     X_train, X_test = X_meta.iloc[:split], X_meta.iloc[split:]
     y_train, y_test = meta_labels.iloc[:split], meta_labels.iloc[split:]
