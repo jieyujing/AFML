@@ -345,19 +345,44 @@
 -   **Pure ML (CUSUM + RF)**: Return **-0.29%**
 -   **Hybrid (MA + LightGBM)**: Return **-5.76%**
 -   **胜出者**: **Pure ML**。
--   **关键教训**: **样本量至关重要**。MA Cross 产生的信号太少 (4年仅80+)，导致 Meta-Model 无法训练。相比之下，CUSUM Filter 产生了 ~3700 个事件，为 ML 提供了充足的学习素材。
+-   **Key Insight**: **Sample Size is Critical**. MA Cross signals are too sparse. CUSUM Filter provides enough events (~3700) for ML.
+
+---
+
+### 15. 因子挖掘 2.0 (Feature Engineering 2.0) ✓
+**文件**: `src/feature_engineering_v2.py`, `src/microstructure_features.py`, `src/signal_features.py`
+
+... (内容省略) ...
+
+---
+
+### 16. 特征降维 (Dimensionality Reduction - PCA) ✓
+**文件**: `src/feature_pca.py`
+
+实现了基于主成分分析 (PCA) 的特征降维与正交化：
+- **特征对齐**: 对所有 Alpha158、FFD、微观结构和信号特征进行了标准化处理。
+- **信息保留**: 设置了 95% 的累积方差保留阈值。
+- **降维效果**: 
+  - 原始特征数: **234**
+  - 降维后特征数: **51** (压缩率 ~78%)
+- **正交化**: PCA 生成的主成分 (PC_1 到 PC_51) 彼此正交，消除了原始特征间的强共线性，有助于提升线性模型或浅层树模型的稳定性。
+
+**输出文件**:
+- `features_pca.csv`: 包含 metadata + 51个主成分的降维数据集。
+- `visual_analysis/pca_variance.png`: 解释方差贡献率的可视化图表。
 
 ---
 
 ## 🎯 下一步规划 (Future Work)
 
-### 1. 因子挖掘 (Feature Engineering 2.0) - 优先级: 最高 🔥
--   **目标**: 寻找更有预测力的因子，突破 0.52 AUC 的瓶颈。
--   **方向**:
-    -   **Microstructure Features**: VPIN, Kyle's Lambda (流微观结构)。
-    -   **Signal-based Features**: 将 MA Cross、Bollinger Break 等规则信号作为*特征*输入给 ML 模型 (而非作为 Primary Model)。
+### 1. 模型重训练与调优 (Model Retraining & Tuning) - 优先级: 最高 🔥
+-   **目标**: 使用 Feature Engineering 2.0 的新特征集 (MACD_SLOPE, VPIN 等) 重新训练模型, 验证 AUC 是否突破 0.524.
+-   **计划**:
+    -   使用 `selected_features_v2.csv` 中的正向特征.
+    -   运行 LightGBM + Purged CV.
+    -   对比 Baseline AUC.
 
-### 2. 模型调优 (Model Tuning)
+### 2. 微观结构深化 (High-Frequency Data)
 -   **目标**: 针对 Pure ML 架构 (CUSUM + LightGBM) 进行深度调优。
 -   **计划**:
     -   在 `src/train_model.py` 中引入 LightGBM 替换 RF (目前仅在 Hybrid 和 MetaLabeling 脚本中使用)。
