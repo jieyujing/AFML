@@ -442,9 +442,38 @@
 
 ## 🎯 下一步规划 (Future Work)
 
-### 1. 滚动训练回测 (Walk-Forward Backtest)
-- **目标**: 模拟真实的交易场景：每隔 N 天重新训练模型。
-- **预期**: 性能应介于 Purged CV (2.10) 和 Static Split (-1.92) 之间。
+### 20. 滚动回测 (Walk-Forward Backtest) ✓
+**文件**: `src/backtest_walk_forward.py`
+
+实施了最接近实盘的 Walk-Forward (Expanding Window) 回测：
+- **初始训练**: 前 400 个事件.
+- **步长**: 每 20 个事件 (约 1 个月) 重新训练一次模型.
+- **预测**: 仅预测下一个窗口 (OOS).
+
+**绩效对比**:
+
+| 验证方法 | Sharpe Ratio | Total Return | 评价 |
+|---------|--------------|--------------|------|
+| **Purged CV** | **2.10** | 0.3458 | 理想情况 (全样本特征筛选) |
+| **Static Split** | -1.92 | -0.05 | 完全失效 (无法适应新环境) |
+| **Walk-Forward** | **0.22** | 0.0154 | **现实表现** (勉强盈利) |
+
+**关键发现**:
+- **适应性**: 滚动训练成功避免了 Static Split 的崩溃，将 Sharpe 从 -1.92 拉回至 +0.22。
+- **Alpha 衰减**: 尽管为正，但表现远低于 CV 结果，暗示特征有效性随时间衰减，或者市场处于低波动/低效时期。
+- **改进方向**: 需要引入动态特征筛选 (Dynamic Feature Selection) 或更激进的止损机制。
+
+**输出文件**:
+- `backtest_wf_results.csv`: 滚动回测交易记录。
+- `visual_analysis/backtest_walk_forward.png`: 净值曲线。
+
+---
+
+## 🎯 下一步规划 (Future Work)
+
+### 1. 动态特征筛选 (Dynamic Feature Selection)
+- **目标**: 在每一步 Walk-Forward 训练前，重新运行 MDA 筛选特征，剔除失效因子。
+- **假设**: 因子表现是轮动的，静态特征集无法捕捉这一点。
 
 ### 2. 组合优化 (Portfolio Optimization)
 - **目标**: 将单一资产的预测扩展到多资产或多策略组合。
