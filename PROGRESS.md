@@ -380,8 +380,8 @@
 
 
 **实验结果**:
-- **LightGBM V2 (163 Feats)**: AUC 0.5333
-- **LightGBM PCA (49 Feats)**: **AUC 0.5546**
+- **Random Forest V2 (163 Feats)**: AUC 0.5333
+- **Random Forest PCA (49 Feats)**: **AUC 0.5546**
 - **提升幅度**: +4.00% (vs V2), +8.27% (vs Baseline)
 
 **关键洞察**:
