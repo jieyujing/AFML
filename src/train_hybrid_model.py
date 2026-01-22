@@ -14,6 +14,7 @@ This tests the hypothesis that ML is better at "filtering" than "predicting dire
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import lightgbm as lgb
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, roc_auc_score, confusion_matrix
 import sys
@@ -141,8 +142,8 @@ def main():
     print(f"   Meta-Dataset: {len(X_meta)} samples")
     print(f"   Class Balance: {y_meta.value_counts(normalize=True).to_dict()}")
 
-    # 5. Train Meta-Model (Purged CV)
-    print("\n5. Training Meta-Model (Random Forest)...")
+    # 5. Training Meta-Model (LightGBM)
+    print("\n5. Training Meta-Model (LightGBM)...")
     
     # Retrieve t1 for Purging
     t1_meta = labeled_events.loc[common_idx, 't1']
@@ -150,12 +151,20 @@ def main():
     # Using 5-Fold Purged CV
     cv = PurgedKFold(n_splits=5, samples_info_sets=t1_meta, embargo=0.01)
     
-    meta_model = RandomForestClassifier(
-        n_estimators=1000,
+    # Optimized LightGBM Parameters (from meta_labeling.py)
+    meta_model = lgb.LGBMClassifier(
+        objective='binary',
+        num_leaves=15,      # Shallower tree for meta-model
+        learning_rate=0.05,
+        n_estimators=300,
         max_depth=5,
-        class_weight='balanced_subsample',
+        min_child_samples=10,
+        reg_alpha=0.2,
+        reg_lambda=0.2,
+        class_weight='balanced',
+        n_jobs=-1,
         random_state=42,
-        n_jobs=-1
+        verbose=-1
     )
     
     # OOS Predictions container

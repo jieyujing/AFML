@@ -323,47 +323,45 @@
 ### 14. 混合策略实验 (Hybrid Strategy: Rule-Based + Meta-Labeling) ✓
 **文件**: `src/train_hybrid_model.py`, `src/rule_based_strategies.py`
 
-为了验证"规则定方向 + ML定仓位"的假设，我们对比了纯 ML 架构与混合架构的表现。
+为了验证"规则定方向 + ML定仓位"的假设，我们对比了纯 ML 架构与混合架构的表现。**已升级 Meta-Model 为 LightGBM (Gradient Boosting)**。
 
 **实验设计**:
 -   **Primary Model**: 均线交叉策略 (MA 20/50 Cross)
--   **Meta-Model**: Random Forest (预测 MA 信号的盈亏)
+-   **Meta-Model**: **LightGBM** (Targeting Profit/Loss of the Rule)
 -   **Bet Sizing**: 概率加权 + 并发调整
 
 **实验结果 (OOS Test)**:
 1.  **Raw Rule (MA Cross)**:
     -   Return: **-12.00%** (Win Rate: 41.67%)
     -   分析: 简单的趋势策略在当前数据集中表现极差，遭遇了大量的假突破（Whipsaws）。
-2.  **Hybrid (Binary)**:
-    -   Return: **-6.01%**
-    -   分析: Meta-Labeling 成功过滤了一半的亏损交易，但整体仍未扭亏。
-3.  **Hybrid (Sized)**:
-    -   Return: **-2.01%**
-    -   分析: 再次证明 Bet Sizing 的有效性，将回撤控制在了 2% 左右。
+2.  **Hybrid (Binary - LightGBM)**:
+    -   Return: **-5.76%** (Original RF: -6.01%)
+    -   分析: LightGBM 进一步减少了亏损，但受限于样本量极小 (仅84个信号)，模型难以有效学习。
+3.  **Hybrid (Sized - LightGBM)**:
+    -   Return: **-8.68%**
+    -   分析: 在高噪声环境下，概率加权反而可能放大了错误信号的影响。
 
 **对比结论**:
 -   **Pure ML (CUSUM + RF)**: Return **-0.29%**
--   **Hybrid (MA + RF)**: Return **-2.01%**
+-   **Hybrid (MA + LightGBM)**: Return **-5.76%**
 -   **胜出者**: **Pure ML**。
--   **原因**: CUSUM Filter 在捕捉"显著事件"方面比简单的 MA Cross 更有效。MA Cross 滞后性太强，导致进场时往往已经是行情的末端。
+-   **关键教训**: **样本量至关重要**。MA Cross 产生的信号太少 (4年仅80+)，导致 Meta-Model 无法训练。相比之下，CUSUM Filter 产生了 ~3700 个事件，为 ML 提供了充足的学习素材。
 
 ---
 
 ## 🎯 下一步规划 (Future Work)
 
-### 1. 模型升级: LightGBM (Gradient Boosting) - 优先级: 最高 🔥
--   **目标**: 引入 LightGBM 替换 Random Forest 作为 Meta-Model。
--   **依据**: 当前 Meta-Model 的 AUC 普遍偏低 (0.44~0.47)，说明 RF 难以捕捉特征间的非线性交互。GBDT 是挖掘此类弱信号的最佳工具。
--   **计划**:
-    -   安装 `lightgbm`。
-    -   实现 A/B 测试：RF vs LightGBM。
-    -   重点调优 `num_leaves` 和 `learning_rate`。
-
-### 2. 因子挖掘 (Feature Engineering 2.0) - 优先级: 高
--   **目标**: 寻找更有预测力的因子。
+### 1. 因子挖掘 (Feature Engineering 2.0) - 优先级: 最高 🔥
+-   **目标**: 寻找更有预测力的因子，突破 0.52 AUC 的瓶颈。
 -   **方向**:
     -   **Microstructure Features**: VPIN, Kyle's Lambda (流微观结构)。
-    -   **Signal-based Features**: 将 MA Cross、Bollinger Break 等规则信号作为*特征*输入给 ML 模型，而不是作为 Primary Model。
+    -   **Signal-based Features**: 将 MA Cross、Bollinger Break 等规则信号作为*特征*输入给 ML 模型 (而非作为 Primary Model)。
+
+### 2. 模型调优 (Model Tuning)
+-   **目标**: 针对 Pure ML 架构 (CUSUM + LightGBM) 进行深度调优。
+-   **计划**:
+    -   在 `src/train_model.py` 中引入 LightGBM 替换 RF (目前仅在 Hybrid 和 MetaLabeling 脚本中使用)。
+    -   使用 Optuna 对 LightGBM 进行超参数搜索。
 
 ---
 
