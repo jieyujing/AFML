@@ -198,6 +198,28 @@
 
 ---
 
+### 9. 筛选特征模型重训练 (Selected Features Model) ✓
+**文件**: `src/train_model.py` (修改), `src/compare_models.py` (新增)
+
+使用MDA筛选后的124个正向重要性特征重新训练了Random Forest模型。
+
+**模型对比结果 (Purged 5-Fold CV)**:
+
+| 指标 | Baseline (181特征) | Selected (124特征) | 变化 |
+|------|-------------------|--------------------|------|
+| **ROC AUC** | 0.5082 (+/-0.0248) | **0.5122** (+/-0.0257) | **+0.80%** ✓ |
+| **Accuracy** | 48.84% (+/-3.42%) | 48.30% (+/-3.02%) | -0.54% |
+
+**关键发现**:
+- **AUC提升**: 模型泛化能力提升0.80%
+- **特征减少**: 31%的特征被移除(181→124),模型更简洁
+- **方差降低**: 准确率的标准差从3.42%降至3.02%
+- **训练加速**: 更少的特征意味着更快的训练速度
+
+**结论**: 特征筛选成功! 用更少的特征获得了更好的AUC,验证了MDA方法能有效识别噪音特征。
+
+---
+
 ## 📊 数据质量评估
 
 ### 优点 ✅
@@ -216,23 +238,20 @@
 
 ## 🎯 下一步建议
 
-现在我们已经识别了有效特征,接下来应该用这些筛选后的特征重新训练模型。
+特征筛选已完成并成功提升了模型性能。接下来可以进一步优化。
 
-### 选项 1: 使用筛选后的特征重新训练 (推荐) ⭐
-**目标**: 仅使用125个正向MDA重要性特征重新训练Random Forest
-**预期效果**: 
-- 去除噪音特征,提升Out-of-Sample性能
-- 减少过拟合风险
-- 加快训练速度
-**实施**: 修改 `train_model.py` 加载 `selected_features.csv`
-
-### 选项 2: 超参数优化
+### 选项 1: 超参数优化 (推荐) ⭐
 **目标**: 调整 Random Forest 参数 (如 max_depth, min_samples_leaf)
-**理由**: 当前 max_depth=5 可能太保守,可以尝试更深的树。
+**理由**: 当前 max_depth=5 可能太保守,更深的树可能捕获更多复杂模式。
+**方法**: GridSearchCV 或 Optuna
 
-### 选项 3: 尝试其他模型
+### 选项 2: 尝试其他模型
 **目标**: 使用 XGBoost 或 LightGBM
-**理由**: 梯度提升树通常在表格数据上表现更好。
+**理由**: 梯度提升树通常在表格数据上表现更好,特别是处理特征交互。
+
+### 选项 3: Meta-Labeling
+**目标**: 分离交易信号和仓位大小
+**理由**: AFML Chapter 3 推荐的高级标签方法,可以提高策略的风险调整收益。
 
 ---
 
@@ -242,20 +261,25 @@
 AFML/
 ├── src/
 │   ├── process_bars.py          # Dollar bars 生成
-│   ├── labeling.py               # Triple barrier 标签
-│   ├── features.py               # Alpha158 + FFD 增强特征工程
-│   ├── sample_weights.py         # 样本权重计算
-│   └── cv_setup.py               # 交叉验证配置 (New!)
-├── features_labeled.csv          # 完整训练数据 (Features + Labels + Weights)
+│   ├── labeling.py              # Triple barrier 标签
+│   ├── features.py              # Alpha158 + FFD 增强特征工程
+│   ├── sample_weights.py        # 样本权重计算
+│   ├── cv_setup.py              # 交叉验证配置
+│   ├── train_model.py           # 模型训练 (自动使用筛选特征)
+│   ├── feature_importance.py    # 特征重要性分析 (MDI/MDA)
+│   └── compare_models.py        # 模型对比脚本
+├── features_labeled.csv         # 完整训练数据 (Features + Labels + Weights)
+├── selected_features.csv        # MDA筛选后的124个有效特征
+├── feature_importance_mda.csv   # MDA重要性分数
 └── visual_analysis/
-    ├── weights_distribution.png  # 权重分布
-    └── cv_splits.png             # CV 分割示意图 (New!)
+    ├── feature_importance_comparison.png  # MDI vs MDA 对比
+    ├── feature_clustering.png   # 特征聚类分析
+    └── cv_splits.png            # CV 分割示意图
 ```
 
-## ❓ 您的下一步指示?
+## ❓ 下一步建议
 
-请告诉我您想从以下哪个选项开始:
-1.  **模型训练** - 训练 Random Forest 并评估性能
-2.  **特征重要性** - 分析哪些因子最有效
-
-我已经准备好帮您训练第一个 AFML 模型! 🚀
+当前模型 AUC=0.5122 仍有提升空间。建议:
+1. **超参数优化** - 尝试更深的树或不同的min_samples_leaf
+2. **XGBoost/LightGBM** - 替代模型可能表现更好
+3. **Meta-Labeling** - 分离信号和仓位大小的高级方法
