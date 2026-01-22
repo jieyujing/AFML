@@ -5,6 +5,7 @@ import sys
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 import random
+import os
 
 
 def load_and_prep_data(filepath):
@@ -311,13 +312,17 @@ def plot_random_sample(df, sample_size=None, bar_type="Dollar Bars"):
 
     plt.tight_layout()
 
+    # Ensure output directory exists
+    output_dir = "visual_analysis"
+    os.makedirs(output_dir, exist_ok=True)
+
     # Save figure
-    output_image = f"{bar_type.lower().replace(' ', '_')}_sample.png"
+    filename = f"{bar_type.lower().replace(' ', '_')}_sample.png"
+    output_image = os.path.join(output_dir, filename)
     plt.savefig(output_image, dpi=150, bbox_inches="tight")
     print(f"  ✓ Chart saved to: {output_image}")
 
-    # Show plot
-    plt.show()
+    # plt.show()
 
     return output_image
 

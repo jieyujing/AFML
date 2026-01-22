@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime
+import os
 
 # Set style
 sns.set_style("whitegrid")
@@ -123,9 +124,10 @@ def plot_label_distribution(events: pd.DataFrame):
     ax.axhline(y=0, color="red", linestyle="--", alpha=0.5)
 
     plt.tight_layout()
-    plt.savefig("label_distribution.png", dpi=150, bbox_inches="tight")
-    print("✓ Saved: label_distribution.png")
-    plt.show()
+    output_path = os.path.join("visual_analysis", "label_distribution.png")
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    print(f"✓ Saved: {output_path}")
+    # plt.show()
 
 
 def plot_temporal_analysis(events: pd.DataFrame):
@@ -227,9 +229,10 @@ def plot_temporal_analysis(events: pd.DataFrame):
     ax.grid(axis="y", alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig("temporal_analysis.png", dpi=150, bbox_inches="tight")
-    print("✓ Saved: temporal_analysis.png")
-    plt.show()
+    output_path = os.path.join("visual_analysis", "temporal_analysis.png")
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    print(f"✓ Saved: {output_path}")
+    # plt.show()
 
 
 def plot_barrier_analysis(events: pd.DataFrame):
@@ -318,9 +321,10 @@ def plot_barrier_analysis(events: pd.DataFrame):
     ax.axhline(y=0, color="black", linestyle="--", alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig("barrier_analysis.png", dpi=150, bbox_inches="tight")
-    print("✓ Saved: barrier_analysis.png")
-    plt.show()
+    output_path = os.path.join("visual_analysis", "barrier_analysis.png")
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    print(f"✓ Saved: {output_path}")
+    # plt.show()
 
 
 def print_summary_statistics(events: pd.DataFrame):
@@ -400,6 +404,9 @@ def main():
     print("Generating Visualizations...")
     print("=" * 80)
 
+    # Create output directory
+    os.makedirs("visual_analysis", exist_ok=True)
+
     print("\n1. Label Distribution Analysis...")
     plot_label_distribution(events)
 
@@ -412,7 +419,7 @@ def main():
     print("\n" + "=" * 80)
     print("✓ Visualization Complete!")
     print("=" * 80)
-    print("\nGenerated files:")
+    print("\nGenerated files (in visual_analysis/):")
     print("  - label_distribution.png")
     print("  - temporal_analysis.png")
     print("  - barrier_analysis.png")
