@@ -324,7 +324,21 @@
 ### 13. 因子挖掘 2.0 (Feature Engineering 2.0) ✓
 **文件**: `src/feature_engineering_v2.py`, `src/microstructure_features.py`, `src/signal_features.py`
 
-... (内容省略) ...
+实现了深度的因子挖掘管线，将特征维度从 181 扩展至 **234** 个，重点引入了基于 AFML 第 19 章的微观结构特征和增强型信号特征。
+
+**A. 市场微观结构因子 (Microstructure)**:
+- **VPIN (Flow Toxicity)**: 衡量订单流毒性和信息不对称，识别知情交易者活动。
+- **Kyle/Amihud Lambda**: 评估价格冲击与流动性风险。
+- **Roll/Corwin-Schultz Spread**: 估算有效买卖价差，识别高交易损耗区间。
+
+**B. 增强型信号因子 (Signal-Based)**:
+- **设计哲学**: 将传统技术指标（MA, RSI, MACD, Bollinger）从二元信号转化为连续的“强度”特征。
+- **核心特征**: 包含均线偏离度 (Distance)、移动斜率 (Slope)、开口强度 (Strength) 以及 ATR 波动率分位点。
+
+**C. 集成特征管线 (Integrated Pipeline)**:
+- 整合 5 大模块：Alpha158 (基准)、FFD (长记忆)、Regime (状态)、Microstructure (微观)、Signal (信号)。
+- **输出**: `features_v2_labeled.csv`，包含完整的特征集、三重障碍标签及样本权重。
+- **数据规模**: 234 个特征，已完成全量生成。
 
 ---
 
