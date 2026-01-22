@@ -314,49 +314,22 @@
     -   正值表示趋势 (Momentum)，负值表示均值回归 (Mean Reversion)，接近0表示随机游走。
 3.  **Market Entropy (市场熵)**:
     -   `REGIME_ENT_w`: 收益率分布的香农熵 (Shannon Entropy)。
-    -   衡量市场的无序程度和信息效率。低熵通常对应强结构性行情，高熵对应噪音市场。
+    -   衡量市场的无序程度 and 信息效率。低熵通常对应强结构性行情，高熵对应噪音市场。
 
 **参数配置**:
 -   **窗口 (Windows)**: [20, 50, 100] (覆盖 ~1周, 2.5周, 5周)
 -   **特征更新**: 已重新生成 `features_labeled.csv`，包含新增列。
 
-### 14. 混合策略实验 (Hybrid Strategy: Rule-Based + Meta-Labeling) ✓
-**文件**: `src/train_hybrid_model.py`, `src/rule_based_strategies.py`
-
-为了验证"规则定方向 + ML定仓位"的假设，我们对比了纯 ML 架构与混合架构的表现。**已升级 Meta-Model 为 LightGBM (Gradient Boosting)**。
-
-**实验设计**:
--   **Primary Model**: 均线交叉策略 (MA 20/50 Cross)
--   **Meta-Model**: **LightGBM** (Targeting Profit/Loss of the Rule)
--   **Bet Sizing**: 概率加权 + 并发调整
-
-**实验结果 (OOS Test)**:
-1.  **Raw Rule (MA Cross)**:
-    -   Return: **-12.00%** (Win Rate: 41.67%)
-    -   分析: 简单的趋势策略在当前数据集中表现极差，遭遇了大量的假突破（Whipsaws）。
-2.  **Hybrid (Binary - LightGBM)**:
-    -   Return: **-5.76%** (Original RF: -6.01%)
-    -   分析: LightGBM 进一步减少了亏损，但受限于样本量极小 (仅84个信号)，模型难以有效学习。
-3.  **Hybrid (Sized - LightGBM)**:
-    -   Return: **-8.68%**
-    -   分析: 在高噪声环境下，概率加权反而可能放大了错误信号的影响。
-
-**对比结论**:
--   **Pure ML (CUSUM + RF)**: Return **-0.29%**
--   **Hybrid (MA + LightGBM)**: Return **-5.76%**
--   **胜出者**: **Pure ML**。
--   **Key Insight**: **Sample Size is Critical**. MA Cross signals are too sparse. CUSUM Filter provides enough events (~3700) for ML.
-
 ---
 
-### 15. 因子挖掘 2.0 (Feature Engineering 2.0) ✓
+### 13. 因子挖掘 2.0 (Feature Engineering 2.0) ✓
 **文件**: `src/feature_engineering_v2.py`, `src/microstructure_features.py`, `src/signal_features.py`
 
 ... (内容省略) ...
 
 ---
 
-### 16. 特征降维 (Dimensionality Reduction - PCA) ✓
+### 14. 特征降维 (Dimensionality Reduction - PCA) ✓
 **文件**: `src/feature_pca.py`
 
 实现了基于主成分分析 (PCA) 的特征降维与正交化：
@@ -371,7 +344,7 @@
 - `features_pca.csv`: 包含 metadata + 51个主成分的降维数据集。
 - `visual_analysis/pca_variance.png`: 解释方差贡献率的可视化图表。
 
-### 17. LightGBM 模型调优 (Model Retraining & Tuning) ✓
+### 15. LightGBM 模型调优 (Model Retraining & Tuning) ✓
 **文件**: `src/train_lgbm_v2.py`
 
 使用 Feature Engineering 2.0 (MDA 筛选后的 163 个特征) 和 LightGBM 进行了深度调优：
@@ -400,10 +373,10 @@
 
 ## 🎯 下一步规划 (Future Work)
 
-### 18. PCA 特征评估 (PCA Feature Evaluation) ✓
-**文件**: `src/train_lgbm_pca.py`
+### 16. PCA 特征评估 (PCA Feature Evaluation) ✓
+**文件**: `src/train_lgbm_pca.py`, `src/explain_pca.py`
 
-基于生成的 49 个 PCA 主成分 (保留 95% 方差) 进行了 LightGBM 模型训练与调优，验证了“特征正交化”对树模型的影响。
+使用 PCA 降维后的 51 个主成分训练 LightGBM 模型：
 
 **实验结果**:
 - **LightGBM V2 (163 Feats)**: AUC 0.5333
