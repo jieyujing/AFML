@@ -400,17 +400,35 @@
 
 ## 🎯 下一步规划 (Future Work)
 
-### 1. PCA 特征评估 (Evaluate PCA Features)
-- **目标**: 验证 `features_pca.csv` (51维) 在 LightGBM 上的表现。
-- **假设**: 降维后的正交特征可能进一步提升树模型的训练效率，并减少过拟合风险。
-- **计划**: 使用 `src/train_lgbm_v2.py` 加载 PCA 数据进行对比实验。
+### 18. PCA 特征评估 (PCA Feature Evaluation) ✓
+**文件**: `src/train_lgbm_pca.py`
 
-### 2. 策略回测 (Backtesting)
-- **目标**: 将 0.533 AUC 的预测信号转化为实际交易策略，验证 PnL。
-- **计划**: 
-  - 实现基于预测概率的开仓规则 (e.g., Prob > 0.55 Long, Prob < 0.45 Short)。
-  - 结合 Bet Sizing (Chapter 10)。
-  - 考虑交易成本和滑点。
+基于生成的 49 个 PCA 主成分 (保留 95% 方差) 进行了 LightGBM 模型训练与调优，验证了“特征正交化”对树模型的影响。
+
+**实验结果**:
+- **LightGBM V2 (163 Feats)**: AUC 0.5333
+- **LightGBM PCA (49 Feats)**: **AUC 0.5546**
+- **提升幅度**: +4.00% (vs V2), +8.27% (vs Baseline)
+
+**关键洞察**:
+1.  **降维有效性**: 仅用 30% 的特征数量 (49 vs 163) 取得了显著更好的性能。
+2.  **去噪**: PCA 可能成功剥离了原始特征中的随机噪音，使树模型能更专注于核心信息。
+3.  **重要性分布**: Top 特征包括 `PC_9`, `PC_1`, `PC_31`。这表明预测信号不仅存在于最大方差方向 (`PC_1`)，也隐藏在较小的方差分量中 (`PC_31`)。
+
+---
+
+## 🎯 下一步规划 (Future Work)
+
+### 1. 策略回测 (Strategy Backtesting) - 优先级: 最高 🔥
+-   **目标**: 将当前最强模型 (LightGBM PCA, AUC 0.5546) 转化为实际交易策略。
+-   **计划**: 
+    -   实现基于预测概率的开仓信号 (Signal Generation)。
+    -   结合 Bet Sizing (Chapter 10) 动态调整仓位。
+    -   执行事件驱动回测 (Event-Driven Backtest)，考虑交易成本。
+
+### 2. 组合模型 (Ensemble)
+-   **目标**: 尝试将 LightGBM V2 (原始特征) 和 LightGBM PCA (正交特征) 的预测结果进行加权融合。
+-   **假设**: 两个模型观察数据的视角不同，融合可能进一步提升稳定性。
 
 ---
 

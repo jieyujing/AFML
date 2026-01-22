@@ -76,7 +76,7 @@ def run_pca_pipeline():
     df = pd.read_csv('features_v2_labeled.csv')
     
     # 1. Drop non-numeric columns and explicit metadata
-    exclude_cols = ['bin', 'w', 'avg_u', 'ret', 'close', 'date', 'sample_weight']
+    exclude_cols = ['bin', 'w', 'avg_u', 'ret', 'close', 'date', 'sample_weight', 'label', 'return', 'holding_period']
     
     # Also drop index columns if they exist (e.g., Unnamed: 0)
     unnamed_cols = [c for c in df.columns if 'Unnamed' in c]
