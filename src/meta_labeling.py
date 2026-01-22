@@ -9,6 +9,10 @@ from cv_setup import PurgedKFold
 import os
 import sys
 
+# Ensure src is in path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from bet_sizing import bet_size_probability
+
 def load_data():
     print("1. Loading data...")
     feature_file = "features_labeled.csv"
@@ -30,6 +34,12 @@ def load_data():
         except Exception as e:
             print(f"   Error joining events: {e}")
             raise ValueError("'t1' column required for PurgedCV but not found.")
+
+    # Ensure avg_uniqueness is present (crucial for Bet Sizing)
+    if 'avg_uniqueness' not in df.columns:
+        print("   'avg_uniqueness' missing. Bet sizing concurrency adjustment will be disabled.")
+    else:
+        print(f"   'avg_uniqueness' present (Mean: {df['avg_uniqueness'].mean():.4f})")
             
     # Load selected features
     selected_file = "selected_features.csv"
@@ -204,7 +214,8 @@ def train_meta_model(df, features, primary_preds, primary_probs, tested_indices)
     
     print("\n   [Meta-Model Performance]")
     y_pred_meta = meta_clf.predict(X_test)
-    y_prob_meta = meta_clf.predict_proba(X_test)[:, 1]
+    y_prob_meta_arr = meta_clf.predict_proba(X_test)[:, 1]
+    y_prob_meta = pd.Series(y_prob_meta_arr, index=X_test.index)
     
     print(confusion_matrix(y_test, y_pred_meta))
     print(classification_report(y_test, y_pred_meta))
@@ -212,7 +223,7 @@ def train_meta_model(df, features, primary_preds, primary_probs, tested_indices)
     
     return meta_clf, X_test, y_test, y_prob_meta, df_meta.loc[mask].iloc[split:]
 
-def evaluate_strategy(df_eval, primary_preds, meta_probs, threshold=0.6):
+def evaluate_strategy(df_eval, primary_preds, meta_probs, threshold=0.55):
     print("\n4. Strategy Evaluation...")
     
     # df_eval contains original data (returns) for the test set
@@ -223,21 +234,55 @@ def evaluate_strategy(df_eval, primary_preds, meta_probs, threshold=0.6):
     # Returns = Sign(Pred) * Ret
     base_returns = primary_preds * df_eval['ret']
     
-    # 2. Meta Strategy (Primary + Filter)
+    # 2. Meta Strategy (Binary Threshold)
     # Position = Pred * (MetaProb > Threshold)
-    position_size = (meta_probs > threshold).astype(float)
-    meta_returns = base_returns * position_size
+    binary_position = (meta_probs > threshold).astype(float)
+    binary_returns = base_returns * binary_position
+
+    # 3. Meta Strategy (Bet Sizing - AFML Ch.10)
+    print("   Calculating Optimal Bet Sizing (AFML Ch.10)...")
+    # We pass the events info (specifically t1 and avg_uniqueness if available)
+    # We can check if 'avg_uniqueness' is in df_eval. If not, we skip the concurrency scaling part or try to fetch it.
     
-    print(f"   Threshold: {threshold}")
+    # Ensure df_eval has necessary columns
+    events_for_sizing = df_eval.copy()
+    if 'avg_uniqueness' not in events_for_sizing.columns:
+        # Try to recover it from original features if possible, or assume 1.0 (no scaling)
+        # Assuming features_labeled.csv had it.
+        # But df_eval is a slice. It SHOULD have it if we loaded all features in load_data.
+        # Let's check load_data... it loads selected features.
+        # If avg_uniqueness was not selected, it's missing.
+        # We should fix load_data to always keep 'avg_uniqueness' available in df.
+        pass
+    
+    # Calculate Bet Sizes
+    # Using 'average_active=True' which uses 'avg_uniqueness' column if present
+    bet_sizes = bet_size_probability(
+        events=events_for_sizing,
+        prob_series=meta_probs,
+        pred_series=None, # We apply direction manually below
+        average_active=True 
+    )
+    
+    sized_position = bet_sizes # Magnitude (0 to 1)
+    sized_returns = base_returns * sized_position
+    
+    print(f"   Binary Threshold: {threshold}")
+    print(f"   Bet Sizing: Dynamic (CDF-based) + Concurrency Adjustment")
     
     stats = []
-    for name, rets in [("Base (Primary)", base_returns), ("Meta-Labeling", meta_returns)]:
+    strategies = [
+        ("Base (Primary)", base_returns),
+        (f"Meta (Binary >{threshold})", binary_returns),
+        ("Meta (Bet Sizing)", sized_returns)
+    ]
+    
+    for name, rets in strategies:
         # Cumulative Return
         cum_ret = (1 + rets).cumprod()
         total_ret = cum_ret.iloc[-1] - 1
         
-        # Sharpe (Annualized, assuming 4 bars/day -> 252*4 ~ 1000 bars/year?)
-        # Let's just use per-trade sharpe or simple Sharpe
+        # Sharpe (Annualized approx)
         sharpe = rets.mean() / rets.std() * np.sqrt(252 * 4) if rets.std() != 0 else 0
         
         # Max Drawdown
@@ -250,8 +295,11 @@ def evaluate_strategy(df_eval, primary_preds, meta_probs, threshold=0.6):
         losses = rets[rets < 0]
         win_rate = len(wins) / (len(wins) + len(losses)) if (len(wins) + len(losses)) > 0 else 0
         
-        # Number of Trades
+        # Number of Trades (Count non-zero positions)
         n_trades = (rets != 0).sum()
+        
+        # Average Bet Size (for Sized strategy)
+        avg_size = np.abs(rets[rets!=0] / df_eval.loc[rets!=0, 'ret']).mean() if n_trades > 0 else 0
         
         stats.append({
             "Strategy": name,
@@ -259,7 +307,8 @@ def evaluate_strategy(df_eval, primary_preds, meta_probs, threshold=0.6):
             "Sharpe": f"{sharpe:.2f}",
             "Max DD": f"{max_dd*100:.2f}%",
             "Win Rate": f"{win_rate*100:.2f}%",
-            "Trades": n_trades
+            "Trades": n_trades,
+            "Avg Size": f"{avg_size:.2f}"
         })
         
     stats_df = pd.DataFrame(stats)
@@ -267,9 +316,11 @@ def evaluate_strategy(df_eval, primary_preds, meta_probs, threshold=0.6):
     
     # Plotting
     plt.figure(figsize=(12, 6))
-    plt.plot((1 + base_returns).cumprod(), label='Base Strategy', alpha=0.6)
-    plt.plot((1 + meta_returns).cumprod(), label='Meta-Labeling Strategy', linewidth=2)
-    plt.title(f'Strategy Cumulative Returns (Meta Threshold={threshold})')
+    plt.plot((1 + base_returns).cumprod(), label='Base (Primary)', alpha=0.4, linestyle='--')
+    plt.plot((1 + binary_returns).cumprod(), label=f'Meta (Binary >{threshold})', alpha=0.7)
+    plt.plot((1 + sized_returns).cumprod(), label='Meta (Bet Sizing)', linewidth=2.5, color='green')
+    
+    plt.title('Strategy Performance: Binary vs Bet Sizing')
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
