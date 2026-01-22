@@ -14,7 +14,7 @@ import pandas as pd
 import numpy as np
 import subprocess
 import sys
-from typing import Optional, Tuple, Union
+from typing import Optional, Union
 
 
 def get_volatility(close: pd.Series, span: int = 100) -> pd.Series:
@@ -106,6 +106,7 @@ def apply_triple_barrier(
     molecule: Optional[pd.DatetimeIndex] = None,
     t1: Optional[pd.Series] = None,
     side: Optional[pd.Series] = None,
+    target: Optional[pd.Series] = None,
 ) -> pd.DataFrame:
     """
     Apply the Triple Barrier Method to generate labels.
@@ -123,6 +124,7 @@ def apply_triple_barrier(
         molecule: Subset of events to process (for parallel processing)
         t1: Series with vertical barrier timestamps (max holding period)
         side: Series with position side (1 for long, -1 for short, 0 for both)
+        target: Series of target values (volatility) for barrier width. If None, it will be calculated.
 
     Returns:
         DataFrame with columns:
@@ -140,7 +142,10 @@ def apply_triple_barrier(
     events_ = events.intersection(molecule)
 
     # 2. Get target (volatility-based barrier width)
-    trgt = get_volatility(close)
+    if target is None:
+        trgt = get_volatility(close)
+    else:
+        trgt = target
     trgt = trgt.reindex(events_, method="ffill")
 
     # 3. Set vertical barrier (time limit)
@@ -290,6 +295,7 @@ def get_events(
         pt_sl=pt_sl,
         t1=t1,
         side=side,
+        target=target,
     )
 
     # 3. Filter by minimum return
