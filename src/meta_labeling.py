@@ -139,22 +139,31 @@ def get_primary_predictions(df, features, params, n_splits=5):
         
     return primary_preds, primary_probs, tested_indices
 
-def train_meta_model(df, features, primary_preds, tested_indices):
+def train_meta_model(df, features, primary_preds, primary_probs, tested_indices):
     print("\n3. Meta-Labeling & Secondary Model Training...")
     
     # 1. Filter to tested indices (valid OOS predictions)
     df_meta = df.iloc[tested_indices].copy()
     primary_preds = primary_preds.iloc[tested_indices]
+    probs_meta = primary_probs.iloc[tested_indices]
     
-    # 2. Define Meta-Labels
-    # Logic: 1 if Primary Model was correct AND took a position, 0 otherwise?
-    # Actually, standard approach:
-    # Filter dataset to where Primary Model != 0
-    # True Positive: Prediction matches direction of return (or label)
-    
+    # 2. Define Meta-Labels (Same as before)
     # Filter for non-zero predictions
     mask = primary_preds != 0
-    X_meta = df_meta.loc[mask, features] # Use same features for secondary model
+    X_meta = df_meta.loc[mask, features].copy() # Use same features for secondary model
+    
+    # *** KEY IMPROVEMENT ***
+    # Add Primary Model's Confidence (Probability) as a feature
+    # If pred=1, use prob(1). If pred=-1, use prob(-1).
+    confidences = []
+    for idx in X_meta.index:
+        pred_class = primary_preds.loc[idx]
+        conf = probs_meta.loc[idx, pred_class]
+        confidences.append(conf)
+        
+    X_meta['primary_model_prob'] = confidences
+    print("   ✓ Added 'primary_model_prob' feature to Meta-Model.")
+    
     y_true = df_meta.loc[mask, 'label']
     y_pred_primary = primary_preds[mask]
     
@@ -283,7 +292,7 @@ def main():
     primary_preds, primary_probs, tested_indices = get_primary_predictions(df, features, params)
     
     # 3. Train Meta Model
-    meta_clf, X_test, y_test, y_prob_meta, df_eval = train_meta_model(df, features, primary_preds, tested_indices)
+    meta_clf, X_test, y_test, y_prob_meta, df_eval = train_meta_model(df, features, primary_preds, primary_probs, tested_indices)
     
     # 4. Evaluate
     # Get primary preds for the evaluation set
