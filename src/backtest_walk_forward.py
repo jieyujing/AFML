@@ -71,59 +71,50 @@ def get_train_indices(df, test_start_time, embargo_pct=0.01):
     
     return df[train_mask].index
 
-def run_walk_forward(df, feature_cols, params, initial_train_size=400, step_size=20):
+def run_walk_forward(df, feature_cols, params, initial_train_size=400, step_size=20, top_n_features=20):
     """
-    Expanding Window Walk-Forward Validation.
+    Expanding Window Walk-Forward Validation with Dynamic Feature Selection.
     """
-    print(f"\nStarting Walk-Forward Validation")
-    print(f"Initial Train Size: {initial_train_size} events")
-    print(f"Step Size: {step_size} events")
+    print(f"\nStarting Walk-Forward Validation with Dynamic Feature Selection")
+    print(f"Initial Train Size: {initial_train_size} events | Step Size: {step_size} events")
+    print(f"Dynamic Feature Selection: Top {top_n_features} by MDI")
     
-    # DataFrame to store OOS predictions
     oos_probs = pd.Series(index=df.index, dtype=float)
     oos_probs[:] = np.nan
     
-    # Iterate
-    # We step through the index locations
     n_samples = len(df)
-    
     current_idx = initial_train_size
-    
-    # Progress bar
     pbar = tqdm(total=n_samples - initial_train_size)
     
     while current_idx < n_samples:
-        # Define Test Window
         test_end_idx = min(current_idx + step_size, n_samples)
         test_indices = df.index[current_idx : test_end_idx]
         test_start_time = test_indices[0]
         
-        # Define Train Window (Expanding)
-        # Train on all events that finished before test_start_time
-        # This is the "Purged" training set for this fold
         train_indices = df[df['t1'] < test_start_time].index
         
-        if len(train_indices) < 50:
-            print(f"Warning: Small train set ({len(train_indices)}) at {test_start_time}")
-        
-        # Prepare Data
-        X_train = df.loc[train_indices, feature_cols]
+        X_train_full = df.loc[train_indices, feature_cols]
         y_train = df.loc[train_indices, 'label'].astype(int)
         w_train = df.loc[train_indices, 'sample_weight'] if 'sample_weight' in df.columns else None
         
-        X_test = df.loc[test_indices, feature_cols]
+        # --- Dynamic Feature Selection (MDI) ---
+        temp_model = lgb.LGBMClassifier(**params, importance_type='gain')
+        temp_model.fit(X_train_full, y_train, sample_weight=w_train)
         
-        # Train
+        importances = pd.Series(temp_model.feature_importances_, index=feature_cols)
+        selected_features = importances.sort_values(ascending=False).head(top_n_features).index.tolist()
+        # ---------------------------------------
+        
+        X_train_sel = X_train_full[selected_features]
+        X_test_sel = df.loc[test_indices, selected_features]
+        
+        # Final Train on selected features
         model = lgb.LGBMClassifier(**params)
-        model.fit(X_train, y_train, sample_weight=w_train)
+        model.fit(X_train_sel, y_train, sample_weight=w_train)
         
-        # Predict
-        preds = model.predict_proba(X_test)[:, 1]
-        
-        # Store
+        preds = model.predict_proba(X_test_sel)[:, 1]
         oos_probs.loc[test_indices] = preds
         
-        # Advance
         step_actual = test_end_idx - current_idx
         pbar.update(step_actual)
         current_idx = test_end_idx

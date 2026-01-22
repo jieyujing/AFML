@@ -445,35 +445,29 @@
 ### 20. 滚动回测 (Walk-Forward Backtest) ✓
 **文件**: `src/backtest_walk_forward.py`
 
-实施了最接近实盘的 Walk-Forward (Expanding Window) 回测：
-- **初始训练**: 前 400 个事件.
-- **步长**: 每 20 个事件 (约 1 个月) 重新训练一次模型.
-- **预测**: 仅预测下一个窗口 (OOS).
+实施了两种 Walk-Forward (Expanding Window) 回测：
 
-**绩效对比**:
+**A. 基础滚动回测 (Static Features)**
+- **绩效**: Sharpe **0.22**, Total Return 0.0154.
+- **问题**: 特征集静态，无法应对因子衰减。
 
-| 验证方法 | Sharpe Ratio | Total Return | 评价 |
-|---------|--------------|--------------|------|
-| **Purged CV** | **2.10** | 0.3458 | 理想情况 (全样本特征筛选) |
-| **Static Split** | -1.92 | -0.05 | 完全失效 (无法适应新环境) |
-| **Walk-Forward** | **0.22** | 0.0154 | **现实表现** (勉强盈利) |
-
-**关键发现**:
-- **适应性**: 滚动训练成功避免了 Static Split 的崩溃，将 Sharpe 从 -1.92 拉回至 +0.22。
-- **Alpha 衰减**: 尽管为正，但表现远低于 CV 结果，暗示特征有效性随时间衰减，或者市场处于低波动/低效时期。
-- **改进方向**: 需要引入动态特征筛选 (Dynamic Feature Selection) 或更激进的止损机制。
+**B. 动态特征筛选滚动回测 (Dynamic Feature Selection) ⭐**
+- **核心机制**: 在每个 retraining 窗口，根据 MDI 重要性动态选取当前最优的 **Top 20** 特征。
+- **绩效**: Sharpe **1.16**, Total Return **0.1023**.
+- **提升**: 夏普比率提升 **427%**。
+- **结论**: **动态特征筛选是该策略的核心竞争力**。它不仅提升了盈利能力，更关键的是增强了模型在不同市场机制下的泛化能力 (OOS Sharpe > 1.0)。
 
 **输出文件**:
 - `backtest_wf_results.csv`: 滚动回测交易记录。
-- `visual_analysis/backtest_walk_forward.png`: 净值曲线。
+- `visual_analysis/backtest_walk_forward.png`: 动态优化的净值曲线。
 
 ---
 
 ## 🎯 下一步规划 (Future Work)
 
-### 1. 动态特征筛选 (Dynamic Feature Selection)
-- **目标**: 在每一步 Walk-Forward 训练前，重新运行 MDA 筛选特征，剔除失效因子。
-- **假设**: 因子表现是轮动的，静态特征集无法捕捉这一点。
+### 1. 物理特征集验证 (Raw Feature Validation)
+- **目标**: 将动态筛选应用到原始特征集 (Feature Engineering 2.0)，而非 PCA 成分。
+- **假设**: 具有物理意义的因子 (如 MACD_SLOPE) 在动态筛选下可能比 PC 成分提供更稳定的 Alpha。
 
 ### 2. 组合优化 (Portfolio Optimization)
 - **目标**: 将单一资产的预测扩展到多资产或多策略组合。
