@@ -320,23 +320,50 @@
 -   **窗口 (Windows)**: [20, 50, 100] (覆盖 ~1周, 2.5周, 5周)
 -   **特征更新**: 已重新生成 `features_labeled.csv`，包含新增列。
 
+### 14. 混合策略实验 (Hybrid Strategy: Rule-Based + Meta-Labeling) ✓
+**文件**: `src/train_hybrid_model.py`, `src/rule_based_strategies.py`
+
+为了验证"规则定方向 + ML定仓位"的假设，我们对比了纯 ML 架构与混合架构的表现。
+
+**实验设计**:
+-   **Primary Model**: 均线交叉策略 (MA 20/50 Cross)
+-   **Meta-Model**: Random Forest (预测 MA 信号的盈亏)
+-   **Bet Sizing**: 概率加权 + 并发调整
+
+**实验结果 (OOS Test)**:
+1.  **Raw Rule (MA Cross)**:
+    -   Return: **-12.00%** (Win Rate: 41.67%)
+    -   分析: 简单的趋势策略在当前数据集中表现极差，遭遇了大量的假突破（Whipsaws）。
+2.  **Hybrid (Binary)**:
+    -   Return: **-6.01%**
+    -   分析: Meta-Labeling 成功过滤了一半的亏损交易，但整体仍未扭亏。
+3.  **Hybrid (Sized)**:
+    -   Return: **-2.01%**
+    -   分析: 再次证明 Bet Sizing 的有效性，将回撤控制在了 2% 左右。
+
+**对比结论**:
+-   **Pure ML (CUSUM + RF)**: Return **-0.29%**
+-   **Hybrid (MA + RF)**: Return **-2.01%**
+-   **胜出者**: **Pure ML**。
+-   **原因**: CUSUM Filter 在捕捉"显著事件"方面比简单的 MA Cross 更有效。MA Cross 滞后性太强，导致进场时往往已经是行情的末端。
+
 ---
 
 ## 🎯 下一步规划 (Future Work)
 
-### 1. Meta-Labeling 性能评估 (LightGBM) - 优先级: 高 🔥
--   **目标**: 评估 LightGBM Meta-Labeling 的实际性能提升。
--   **依据**: 已完成从 Random Forest 到 LightGBM 的迁移，需要量化评估性能改进。
--   **行动**:
-    -   运行 `uv run python src/meta_labeling.py` 获取新的性能指标。
-    -   对比 LightGBM vs Random Forest 的 Meta-Model AUC。
-    -   验证 Regime Features 在 LightGBM 框架下的特征重要性。
-    -   更新策略回测结果 (Sharpe Ratio, Max DD, Win Rate)。
+### 1. 模型升级: LightGBM (Gradient Boosting) - 优先级: 最高 🔥
+-   **目标**: 引入 LightGBM 替换 Random Forest 作为 Meta-Model。
+-   **依据**: 当前 Meta-Model 的 AUC 普遍偏低 (0.44~0.47)，说明 RF 难以捕捉特征间的非线性交互。GBDT 是挖掘此类弱信号的最佳工具。
+-   **计划**:
+    -   安装 `lightgbm`。
+    -   实现 A/B 测试：RF vs LightGBM。
+    -   重点调优 `num_leaves` 和 `learning_rate`。
 
-### 2. Bet Sizing (仓位管理) - 优先级: 中
-- **目标**: 动态调整仓位大小。
-- **依据**: AFML Chapter 10。不仅要预测方向，还要根据信号的置信度 (Probability) 决定下注大小。
-- **行动**: 实现基于 Kelly Criterion 或 Meta-Labeling 概率的仓位管理逻辑。
+### 2. 因子挖掘 (Feature Engineering 2.0) - 优先级: 高
+-   **目标**: 寻找更有预测力的因子。
+-   **方向**:
+    -   **Microstructure Features**: VPIN, Kyle's Lambda (流微观结构)。
+    -   **Signal-based Features**: 将 MA Cross、Bollinger Break 等规则信号作为*特征*输入给 ML 模型，而不是作为 Primary Model。
 
 ---
 

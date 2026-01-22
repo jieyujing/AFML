@@ -390,20 +390,20 @@ class MarketRegimeFeatureGenerator:
 
 
 def main():
-    """Generate comprehensive features for labeled dollar bars."""
+    """Generate comprehensive features for ALL dollar bars."""
     print("=" * 80)
     print("Feature Engineering: Alpha158 + FFD Momentum + Market Regime")
     print("=" * 80)
 
-    # 1. Load labeled dollar bars
-    print("\n1. Loading labeled dollar bars...")
+    # 1. Load ALL dollar bars (not just labeled ones)
+    print("\n1. Loading all dollar bars...")
     try:
-        df = pd.read_csv("dollar_bars_labeled.csv", index_col=0, parse_dates=True)
+        df = pd.read_csv("dynamic_dollar_bars.csv", index_col=0, parse_dates=True)
     except FileNotFoundError:
-        print("Error: 'dollar_bars_labeled.csv' not found.")
+        print("Error: 'dynamic_dollar_bars.csv' not found.")
         return
 
-    print(f"   Loaded {len(df)} labeled bars")
+    print(f"   Loaded {len(df)} bars")
 
     # 2. Generate Alpha158 features (Keeping legacy for comparison)
     print("\n2. Generating Alpha158 features...")
@@ -432,22 +432,20 @@ def main():
     # Merge features
     features = pd.concat([features_alpha, features_ffd, features_regime], axis=1)
 
-    # 5. Combine with labels
-    print("\n5. Combining features with labels...")
+    # 5. Save Results (No labels yet, this is the Feature Store)
+    print("\n5. Saving feature set...")
     result = features.copy()
-    result["label"] = df["label"]
-    result["ret"] = df["ret"]
 
-    # Drop rows with NaN
+    # Drop rows with NaN (warmup)
     original_len = len(result)
     result = result.dropna()
     print(f"   Dropped {original_len - len(result)} rows (warmup period)")
     print(f"   Final dataset: {len(result)} samples")
 
     # 6. Save results
-    output_combined = "features_labeled.csv"
+    output_combined = "features_all.csv"
     result.to_csv(output_combined)
-    print(f"\n   ✓ Saved combined dataset to: {output_combined}")
+    print(f"\n   ✓ Saved full feature set to: {output_combined}")
 
     # 7. Detailed Statistics
     print("\n" + "=" * 80)
@@ -466,24 +464,6 @@ def main():
         # Get weight window size for this d
         w = ffd_gen.get_weights_ffd(d, 1e-4, len(df))
         print(f"  {col.upper():<10} | d = {d:.2f} | Memory Window: {len(w):>4} bars")
-
-    # Feature-Label Correlation
-    print("\nTop 15 Features by Label Correlation:")
-    correlations = result.corr()["label"].abs().sort_values(ascending=False)
-    # Exclude 'label' and 'ret' from the correlation list
-    top_corr = correlations.drop(["label", "ret"], errors="ignore").head(15)
-    
-    print(f"{'Feature Name':<30} | Abs Correlation")
-    print("-" * 50)
-    for name, corr in top_corr.items():
-        print(f"{name:<30} | {corr:.4f}")
-
-    # Data Quality Check
-    print("\nData Distribution Summary (Labels):")
-    label_counts = result["label"].value_counts().sort_index()
-    total_samples = len(result)
-    for label, count in label_counts.items():
-        print(f"  Class {label:>2}: {count:>6} samples ({count/total_samples*100:>5.1f}%)")
 
     print("\n" + "=" * 80)
     print("✓ Feature Engineering Complete!")
