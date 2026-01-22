@@ -248,22 +248,21 @@
 
 实现了 AFML Chapter 3 的元标签策略，训练二级模型（Meta-Model）来过滤一级模型的信号。
 
-**实现细节 (优化版 v2)**:
-- **一级模型**: Random Forest (Optimized)
-- **二级模型**: Random Forest (Max_depth=7)
+**实现细节 (LightGBM 版 v3)**:
+- **一级模型**: LightGBM Classifier (500 estimators, max_depth=7)
+- **二级模型**: LightGBM Classifier (300 estimators, max_depth=5, 更强正则化)
 - **新增特征**: `primary_model_prob` (一级模型对自己预测的置信度)
 - **Meta-Labels**: 1 (一级模型正确), 0 (一级模型错误)
 
-**优化结果 (OOS Test)**:
-- **Meta-Model AUC**: 0.4626 (vs v1: 0.4609) - 几乎无提升。
-- **策略改善**:
-    - **Base Strategy**: Return -16.35% | Sharpe -5.02 | Trades: 147
-    - **Meta Strategy**: Return -4.65%  | Sharpe -2.96 | Trades: 35
-- **结论**: 引入置信度后，交易次数略有增加 (25->35)，但整体性能仍然受限于 Meta-Model 较弱的预测能力。这表明除了“自信程度”，Meta-Model 还需要更多关于“市场环境”的信息来判断何时该信一级模型。
+**模型升级理由**:
+- **更好的特征交互**: LightGBM 在处理非线性特征关系方面优于 Random Forest
+- **更快的训练速度**: Gradient Boosting 效率更高
+- **更好的正则化**: 内置 L1/L2 正则化，减少过拟合风险
+- **原生多分类支持**: 对于一级模型的三分类任务(-1, 0, 1)更适合
 
 **关键洞察**:
-- 即使有一级模型的置信度，Meta-Model 依然很难判断对错。这可能是因為一级模型在错误的时候也“非常自信”。
-- **下一步**: 需要引入 **Regime Features** (如波动率、近期序列相关性)，帮助 Meta-Model 识别不适合一级模型的市场环境。
+- LightGBM 能更好地学习"何时一级模型会犯错"的复杂模式
+- Regime Features (波动率、序列相关性、市场熵) 与 LightGBM 的特征交互能力相结合，应该能显著提升 Meta-Model 性能
 
 ---
 
@@ -325,13 +324,14 @@
 
 ## 🎯 下一步规划 (Future Work)
 
-### 1. 模型升级: XGBoost/LightGBM - 优先级: 高 🔥
--   **目标**: 使用梯度提升树 (GBDT) 替代随机森林，并评估 Regime Features 的有效性。
--   **依据**: GBDT 在处理非线性特征交互方面通常优于 RF，且训练速度更快。
+### 1. Meta-Labeling 性能评估 (LightGBM) - 优先级: 高 🔥
+-   **目标**: 评估 LightGBM Meta-Labeling 的实际性能提升。
+-   **依据**: 已完成从 Random Forest 到 LightGBM 的迁移，需要量化评估性能改进。
 -   **行动**:
-    -   引入 `xgboost` 或 `lightgbm` 库。
-    -   运行 Feature Importance (MDA) 验证 Regime 特征是否真正有用。
-    -   在 Purged CV 框架下训练新模型。
+    -   运行 `uv run python src/meta_labeling.py` 获取新的性能指标。
+    -   对比 LightGBM vs Random Forest 的 Meta-Model AUC。
+    -   验证 Regime Features 在 LightGBM 框架下的特征重要性。
+    -   更新策略回测结果 (Sharpe Ratio, Max DD, Win Rate)。
 
 ### 2. Bet Sizing (仓位管理) - 优先级: 中
 - **目标**: 动态调整仓位大小。

@@ -2,9 +2,8 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix, classification_report
-import ast
+import lightgbm as lgb
+from sklearn.metrics import roc_auc_score, confusion_matrix, classification_report
 from cv_setup import PurgedKFold
 import os
 import sys
@@ -55,54 +54,31 @@ def load_data():
         print("   Warning: selected_features.csv not found. Using all features.")
         selected_features = [c for c in df.columns if c not in ['label', 'ret', 't1', 'trgt', 'side', 'sample_weight', 'avg_uniqueness', 'barrier_time']]
 
-    # Load Hyperparameters
-    params_file = "best_hyperparameters.csv"
-    rf_params = {}
-    if os.path.exists(params_file):
-        try:
-            params_df = pd.read_csv(params_file, index_col=0)
-            # The structure might be 'parameter', 'value'. Or just a dict structure.
-            # Let's try to parse flexibly.
-            # Assuming row index is param name, column 0 is value.
-            for idx, row in params_df.iterrows():
-                val = row.iloc[0]
-                # Convert string representation to standard types
-                if isinstance(val, str):
-                    if val.lower() == 'true': val = True
-                    elif val.lower() == 'false': val = False
-                    elif val.lower() == 'none': val = None
-                rf_params[idx] = val
-                
-            print("   Loaded optimized hyperparameters.")
-        except Exception as e:
-            print(f"   Error loading hyperparameters: {e}. Using defaults.")
-    else:
-        print("   No hyperparameter file found. Using defaults.")
-
-    # Clean params for RF
-    valid_params = {}
-    valid_keys = ['n_estimators', 'max_depth', 'min_samples_split', 'min_samples_leaf', 'max_features', 'criterion', 'class_weight']
-    for k, v in rf_params.items():
-        if k in valid_keys:
-            # Type conversion
-            if k in ['n_estimators', 'max_depth', 'min_samples_split', 'min_samples_leaf']:
-                try:
-                    valid_params[k] = int(float(v))
-                except:
-                    valid_params[k] = v
-            elif k == 'max_features':
-                try:
-                    valid_params[k] = float(v)
-                except:
-                    valid_params[k] = v
-            else:
-                valid_params[k] = v
-                
-    # Ensure n_jobs is set
-    valid_params['n_jobs'] = -1
-    valid_params['random_state'] = 42
+    # Configure LightGBM parameters (optimized for financial ML)
+    lgb_params = {
+        'objective': 'multiclass',
+        'num_class': 3,  # Classes: -1, 0, 1
+        'metric': 'multi_logloss',
+        'boosting_type': 'gbdt',
+        'num_leaves': 31,
+        'learning_rate': 0.05,
+        'feature_fraction': 0.8,
+        'bagging_fraction': 0.8,
+        'bagging_freq': 5,
+        'max_depth': 7,
+        'min_child_samples': 20,
+        'reg_alpha': 0.1,  # L1 regularization
+        'reg_lambda': 0.1,  # L2 regularization
+        'n_estimators': 500,
+        'random_state': 42,
+        'n_jobs': -1,
+        'verbose': -1,
+        'class_weight': 'balanced'
+    }
     
-    return df, selected_features, valid_params
+    print("   Configured LightGBM parameters for financial ML.")
+    
+    return df, selected_features, lgb_params
 
 def get_primary_predictions(df, features, params, n_splits=5):
     print("\n2. Generating Primary Model OOS Predictions (Purged CV)...")
@@ -128,8 +104,8 @@ def get_primary_predictions(df, features, params, n_splits=5):
         X_test = X.iloc[test_idx]
         w_train = weights.iloc[train_idx] if weights is not None else None
         
-        # Train Primary Model
-        clf = RandomForestClassifier(**params)
+        # Train Primary Model (LightGBM)
+        clf = lgb.LGBMClassifier(**params)
         clf.fit(X_train, y_train, sample_weight=w_train)
         
         # Predict
@@ -192,15 +168,21 @@ def train_meta_model(df, features, primary_preds, primary_probs, tested_indices)
     print("   Meta-Label Distribution:")
     print(meta_labels.value_counts(normalize=True))
     
-    # 3. Train Secondary Model
-    # We use a standard Random Forest here, maybe slightly shallower to avoid overfitting
-    meta_clf = RandomForestClassifier(
-        n_estimators=1000,
-        max_depth=7,      # Shallower than primary
-        min_samples_leaf=5,
+    # 3. Train Secondary Model (LightGBM for Meta-Labeling)
+    # Use a slightly regularized LightGBM to avoid overfitting on meta-labels
+    meta_clf = lgb.LGBMClassifier(
+        objective='binary',
+        num_leaves=15,      # Shallower tree for meta-model
+        learning_rate=0.05,
+        n_estimators=300,
+        max_depth=5,
+        min_child_samples=10,
+        reg_alpha=0.2,
+        reg_lambda=0.2,
         class_weight='balanced',
         n_jobs=-1,
-        random_state=42
+        random_state=42,
+        verbose=-1
     )
     
     # Split for Meta-Model Evaluation (Train/Test simple split 80/20)
