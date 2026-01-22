@@ -371,22 +371,46 @@
 - `features_pca.csv`: 包含 metadata + 51个主成分的降维数据集。
 - `visual_analysis/pca_variance.png`: 解释方差贡献率的可视化图表。
 
+### 17. LightGBM 模型调优 (Model Retraining & Tuning) ✓
+**文件**: `src/train_lgbm_v2.py`
+
+使用 Feature Engineering 2.0 (MDA 筛选后的 163 个特征) 和 LightGBM 进行了深度调优：
+- **算法**: LightGBM (Gradient Boosting Decision Tree)
+- **优化框架**: Optuna (TPE Sampler, 50 trials)
+- **验证框架**: Purged K-Fold CV (5 Folds, 1% Embargo)
+
+**性能突破**:
+- **Baseline (RF)**: AUC 0.5122
+- **Previous Best (Optimized RF)**: AUC 0.5241
+- **LightGBM V2**: **AUC 0.5333**
+- **提升幅度**: +4.12% (vs Baseline)
+
+**最佳参数**:
+- `num_leaves`: 111 (高容量模型)
+- `learning_rate`: 0.0116 (低学习率，更稳健)
+- `max_depth`: 9
+- `reg_alpha`: 5.37e-07 (L1正则)
+- `reg_lambda`: 4.02e-06 (L2正则)
+
+**结论**: 
+- **特征工程有效**: 引入 MACD_SLOPE、VPIN 等特征结合 LightGBM 的非线性能力，成功突破了 RF 的性能瓶颈。
+- **稳健性验证**: 在严格的 Purged CV 下取得 0.53+ AUC，表明模型具有真实的预测能力。
+
 ---
 
 ## 🎯 下一步规划 (Future Work)
 
-### 1. 模型重训练与调优 (Model Retraining & Tuning) - 优先级: 最高 🔥
--   **目标**: 使用 Feature Engineering 2.0 的新特征集 (MACD_SLOPE, VPIN 等) 重新训练模型, 验证 AUC 是否突破 0.524.
--   **计划**:
-    -   使用 `selected_features_v2.csv` 中的正向特征.
-    -   运行 LightGBM + Purged CV.
-    -   对比 Baseline AUC.
+### 1. PCA 特征评估 (Evaluate PCA Features)
+- **目标**: 验证 `features_pca.csv` (51维) 在 LightGBM 上的表现。
+- **假设**: 降维后的正交特征可能进一步提升树模型的训练效率，并减少过拟合风险。
+- **计划**: 使用 `src/train_lgbm_v2.py` 加载 PCA 数据进行对比实验。
 
-### 2. 微观结构深化 (High-Frequency Data)
--   **目标**: 针对 Pure ML 架构 (CUSUM + LightGBM) 进行深度调优。
--   **计划**:
-    -   在 `src/train_model.py` 中引入 LightGBM 替换 RF (目前仅在 Hybrid 和 MetaLabeling 脚本中使用)。
-    -   使用 Optuna 对 LightGBM 进行超参数搜索。
+### 2. 策略回测 (Backtesting)
+- **目标**: 将 0.533 AUC 的预测信号转化为实际交易策略，验证 PnL。
+- **计划**: 
+  - 实现基于预测概率的开仓规则 (e.g., Prob > 0.55 Long, Prob < 0.45 Short)。
+  - 结合 Bet Sizing (Chapter 10)。
+  - 考虑交易成本和滑点。
 
 ---
 
