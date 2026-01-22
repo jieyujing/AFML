@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import lightgbm as lgb
+from sklearn.ensemble import RandomForestClassifier
 import matplotlib.pyplot as plt
 import os
 import sys
@@ -98,7 +98,7 @@ def run_walk_forward(df, feature_cols, params, initial_train_size=400, step_size
         w_train = df.loc[train_indices, 'sample_weight'] if 'sample_weight' in df.columns else None
         
         # --- Dynamic Feature Selection (MDI) ---
-        temp_model = lgb.LGBMClassifier(**params, importance_type='gain')
+        temp_model = RandomForestClassifier(**params)
         temp_model.fit(X_train_full, y_train, sample_weight=w_train)
         
         importances = pd.Series(temp_model.feature_importances_, index=feature_cols)
@@ -109,7 +109,7 @@ def run_walk_forward(df, feature_cols, params, initial_train_size=400, step_size
         X_test_sel = df.loc[test_indices, selected_features]
         
         # Final Train on selected features
-        model = lgb.LGBMClassifier(**params)
+        model = RandomForestClassifier(**params)
         model.fit(X_train_sel, y_train, sample_weight=w_train)
         
         preds = model.predict_proba(X_test_sel)[:, 1]
@@ -178,17 +178,32 @@ def main():
     
     # 2. Load Params
     try:
-        params_df = pd.read_csv('best_hyperparameters_lgbm_pca.csv')
-        params = params_df.iloc[0].to_dict()
-        if 'best_auc' in params: del params['best_auc']
-        
-        int_params = ['n_estimators', 'num_leaves', 'max_depth', 'min_child_samples']
-        for p in int_params:
-            if p in params: params[p] = int(params[p])
+        # Try to load Random Forest best params
+        if os.path.exists('best_hyperparameters.csv'):
+            params_df = pd.read_csv('best_hyperparameters.csv')
+            params = params_df.iloc[0].to_dict()
+            if 'best_auc' in params: del params['best_auc']
             
-        params['random_state'] = 42
-        params['n_jobs'] = -1
-        params['verbosity'] = -1
+            # Ensure proper types for RF
+            int_params = ['n_estimators', 'max_depth', 'min_samples_split', 'min_samples_leaf']
+            for p in int_params:
+                if p in params: params[p] = int(params[p])
+            
+            # Add fixed AFML recommended defaults if missing
+            params['class_weight'] = 'balanced_subsample'
+            params['bootstrap'] = True
+            params['random_state'] = 42
+            params['n_jobs'] = -1
+        else:
+            print("best_hyperparameters.csv not found. Using robust RF defaults.")
+            params = {
+                'n_estimators': 1000,
+                'max_depth': 5,
+                'class_weight': 'balanced_subsample',
+                'criterion': 'entropy',
+                'random_state': 42,
+                'n_jobs': -1
+            }
     except Exception as e:
         print(f"Error loading params: {e}")
         return
