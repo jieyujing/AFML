@@ -422,41 +422,33 @@
 ### 19. 策略回测 (Strategy Backtesting) ✓
 **文件**: `src/backtest.py`
 
-基于最佳模型 (LightGBM + PCA, AUC 0.5546) 进行了向量化策略回测。
+对最佳模型进行了两种方式的回测验证：
 
-**回测设置**:
-- **信号生成**: 使用 Purged CV 生成的 OOS 预测概率。
-- **策略 A (Binary)**: 若 P > 0.5 做多，P < 0.5 做空。
-- **策略 B (Bet Sizing)**: 仓位大小 $m = 2P - 1$ (Kelly-like)。
-- **交易成本**: 双边 2bps (每笔交易)。
+**A. Purged Cross-Validation (Walk-Forward Simulation)**
+- **方法**: 使用 5-Fold Purged CV 生成全样本 OOS 预测。
+- **结果**: **Sharpe 2.10**, Total Return 0.34 (Net).
+- **结论**: 在不断更新模型的情况下，策略具有显著盈利能力。
 
-**绩效指标 (Net of Costs)**:
+**B. Static Temporal Split (Stress Test)**
+- **方法**: 前 80% 训练 (IS)，后 20% 测试 (OOS)。模型不更新。
+- **IS 表现**: Sharpe 39.53 (严重过拟合).
+- **OOS 表现**: Sharpe -1.92 (失效).
+- **关键洞察**: 金融数据具有高度非平稳性。**Static Split 失败**而 **CV 成功**强烈暗示了必须采用 **Walk-Forward (Rolling/Expanding Window)** 的再训练机制，不能指望一个“训练一次用一辈子”的模型。
 
-| 指标 | Binary Strategy | Sized Strategy | 提升 |
-|------|----------------|----------------|------|
-| **Win Rate** | 53.46% | 53.46% | - |
-| **Sharpe Ratio** | **1.01** | **2.10** | **+108%** |
-| **Total Return** | 0.2454 | 0.3458 | +41% |
-
-**关键结论**:
-- **Bet Sizing 至关重要**: 引入概率加权仓位后，夏普比率翻倍 (1.01 -> 2.10)。这验证了 AFML Chapter 10 的核心观点：模型不仅要预测方向，更要预测*信心*。
-- **正向收益**: 即便扣除交易成本，模型在 OOS 数据上依然实现了显著的正收益。
-
-**输出文件**:
-- `backtest_results.csv`: 逐笔交易明细。
-- `visual_analysis/backtest_performance.png`: 累计收益曲线 (Equity Curve)。
+**可视化输出**:
+- `visual_analysis/backtest_is_oos.png`: 清晰展示了 IS (完美曲线) 与 OOS (回撤) 的巨大反差，以及 Buy & Hold 策略的对比。
 
 ---
 
 ## 🎯 下一步规划 (Future Work)
 
-### 1. 组合优化 (Portfolio Optimization) - 优先级: 高
-- **目标**: 将单一资产的预测扩展到多资产或多策略组合。
-- **计划**: 尝试 HRP (Hierarchical Risk Parity) 或 CLA (Critical Line Algorithm) 来分配资金 (AFML Chapter 16)。
+### 1. 滚动训练回测 (Walk-Forward Backtest)
+- **目标**: 模拟真实的交易场景：每隔 N 天重新训练模型。
+- **预期**: 性能应介于 Purged CV (2.10) 和 Static Split (-1.92) 之间。
 
-### 2. 实盘模拟 (Paper Trading)
-- **目标**: 接入实时数据流 (e.g. IBKR, Binance)，验证模型在真实环境下的表现。
-- **计划**: 构建轻量级执行引擎。
+### 2. 组合优化 (Portfolio Optimization)
+- **目标**: 将单一资产的预测扩展到多资产或多策略组合。
+- **计划**: 尝试 HRP (Hierarchical Risk Parity) (AFML Chapter 16)。
 
 ---
 
