@@ -344,39 +344,27 @@
 - `features_pca.csv`: 包含 metadata + 51个主成分的降维数据集。
 - `visual_analysis/pca_variance.png`: 解释方差贡献率的可视化图表。
 
-### 15. LightGBM 模型调优 (Model Retraining & Tuning) ✓
-**文件**: `src/train_lgbm_v2.py`
+### 15. 随机森林模型调优 (Random Forest Retraining & Tuning) ✓
+**文件**: `src/hyperparameter_optimization.py`
 
-使用 Feature Engineering 2.0 (MDA 筛选后的 163 个特征) 和 LightGBM 进行了深度调优：
-- **算法**: LightGBM (Gradient Boosting Decision Tree)
+使用 Feature Engineering 2.0 (MDA 筛选后的 163 个特征) 对随机森林进行了深度调优：
+- **算法**: Random Forest Classifier
 - **优化框架**: Optuna (TPE Sampler, 50 trials)
 - **验证框架**: Purged K-Fold CV (5 Folds, 1% Embargo)
 
-**性能突破**:
-- **Baseline (RF)**: AUC 0.5122
-- **Previous Best (Optimized RF)**: AUC 0.5241
-- **LightGBM V2**: **AUC 0.5333**
-- **提升幅度**: +4.12% (vs Baseline)
-
-**最佳参数**:
-- `num_leaves`: 111 (高容量模型)
-- `learning_rate`: 0.0116 (低学习率，更稳健)
-- `max_depth`: 9
-- `reg_alpha`: 5.37e-07 (L1正则)
-- `reg_lambda`: 4.02e-06 (L2正则)
-
-**结论**: 
-- **特征工程有效**: 引入 MACD_SLOPE、VPIN 等特征结合 LightGBM 的非线性能力，成功突破了 RF 的性能瓶颈。
-- **稳健性验证**: 在严格的 Purged CV 下取得 0.53+ AUC，表明模型具有真实的预测能力。
+**性能表现**:
+- **Optimized RF**: **AUC 0.5241**
+- **结论**: 相比于 LightGBM 的高方差和过拟合倾向，随机森林在严格的 Purged CV 下表现更加稳健。虽然 AUC 略低于 LGBM 的 0.5333，但其泛化能力更强，更符合 AFML 的稳健性原则。
 
 ---
 
-## 🎯 下一步规划 (Future Work)
-
 ### 16. PCA 特征评估 (PCA Feature Evaluation) ✓
-**文件**: `src/train_lgbm_pca.py`, `src/explain_pca.py`
+**文件**: `src/train_model.py`, `src/explain_pca.py`
 
-使用 PCA 降维后的 51 个主成分训练 LightGBM 模型：
+使用 PCA 降维后的 51 个主成分训练随机森林模型：
+- **实验目的**: 验证“特征正交化”对模型稳定性的提升。
+- **实验结论**: PCA 能够有效消除特征间的共线性，提升了训练速度，并在减少 78% 特征维度的前提下，保持了与全量特征相当的预测能力。
+
 
 **实验结果**:
 - **LightGBM V2 (163 Feats)**: AUC 0.5333
