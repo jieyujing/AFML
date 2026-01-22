@@ -302,21 +302,38 @@
 
 ---
 
+### 12. 市场状态特征 (Market Regime Features) ✓
+**文件**: `src/features.py`
+
+为了帮助 Meta-Model 识别不适合一级模型的市场环境，引入了 9 个市场状态特征 (3 Metrics x 3 Windows)：
+
+**核心指标**:
+1.  **Volatility (波动率)**:
+    -   `REGIME_VOL_w`: 对数收益率的滚动标准差。衡量市场风险水平。
+2.  **Serial Correlation (序列相关性)**:
+    -   `REGIME_AC1_w`: 滞后1期的自相关系数。
+    -   正值表示趋势 (Momentum)，负值表示均值回归 (Mean Reversion)，接近0表示随机游走。
+3.  **Market Entropy (市场熵)**:
+    -   `REGIME_ENT_w`: 收益率分布的香农熵 (Shannon Entropy)。
+    -   衡量市场的无序程度和信息效率。低熵通常对应强结构性行情，高熵对应噪音市场。
+
+**参数配置**:
+-   **窗口 (Windows)**: [20, 50, 100] (覆盖 ~1周, 2.5周, 5周)
+-   **特征更新**: 已重新生成 `features_labeled.csv`，包含新增列。
+
+---
+
 ## 🎯 下一步规划 (Future Work)
 
-当前模型已完成超参数优化 (AUC=0.5241)。接下来的工作将聚焦于模型架构升级和策略优化。
+### 1. 模型升级: XGBoost/LightGBM - 优先级: 高 🔥
+-   **目标**: 使用梯度提升树 (GBDT) 替代随机森林，并评估 Regime Features 的有效性。
+-   **依据**: GBDT 在处理非线性特征交互方面通常优于 RF，且训练速度更快。
+-   **行动**:
+    -   引入 `xgboost` 或 `lightgbm` 库。
+    -   运行 Feature Importance (MDA) 验证 Regime 特征是否真正有用。
+    -   在 Purged CV 框架下训练新模型。
 
-### 1. 引入市场状态特征 (Market Regime) - 优先级: 高 🔥
-- **问题**: Meta-Model 无法区分何时该信一级模型。
-- **假设**: 某些策略只在特定波动率或趋势下有效。
-- **行动**: 为 Meta-Model 添加 `volatility` (波动率), `serial_correlation` (序列相关性), `market_entropy` (市场熵) 等环境特征。
-
-### 2. 模型升级: XGBoost/LightGBM - 优先级: 中
-- **目标**: 使用梯度提升树 (GBDT) 替代随机森林。
-- **依据**: GBDT 在处理非线性特征交互方面通常优于 RF，且训练速度更快。
-- **行动**: 引入 `xgboost` 或 `lightgbm` 库，并在同样严谨的 Purged CV 框架下测试。
-
-### 3. Bet Sizing (仓位管理) - 优先级: 中
+### 2. Bet Sizing (仓位管理) - 优先级: 中
 - **目标**: 动态调整仓位大小。
 - **依据**: AFML Chapter 10。不仅要预测方向，还要根据信号的置信度 (Probability) 决定下注大小。
 - **行动**: 实现基于 Kelly Criterion 或 Meta-Labeling 概率的仓位管理逻辑。
