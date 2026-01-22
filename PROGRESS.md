@@ -220,6 +220,29 @@
 
 ---
 
+### 10. 超参数优化 (Hyperparameter Optimization) ✓
+**文件**: `src/hyperparameter_optimization.py`
+
+使用 **Optuna** 框架结合 **Purged K-Fold CV** 进行了 50 次试验的超参数搜索。
+
+**优化结果**:
+- **Baseline AUC**: 0.5122
+- **Optimized AUC**: **0.5241** (+2.32%)
+- **Best Parameters**:
+  - `n_estimators`: 1800 (Base: 1000)
+  - `max_depth`: 13 (Base: 5) - 更深的模型捕捉了更多细节
+  - `min_samples_leaf`: 2
+  - `max_features`: 0.3 (30%)
+
+**输出文件**:
+- `best_hyperparameters.csv`: 最佳参数配置
+- `feature_importance_optimized.csv`: 优化模型的特征重要性
+- `visual_analysis/hyperparameter_optimization.png`: 优化过程可视化
+
+**结论**: 通过允许模型更深 (max_depth=13) 并使用更多树 (n_estimators=1800)，模型性能得到了显著提升，同时通过 Purged CV 保证了结果的稳健性。
+
+---
+
 ## 📊 数据质量评估
 
 ### 优点 ✅
@@ -267,10 +290,13 @@ AFML/
 │   ├── cv_setup.py              # 交叉验证配置
 │   ├── train_model.py           # 模型训练 (自动使用筛选特征)
 │   ├── feature_importance.py    # 特征重要性分析 (MDI/MDA)
-│   └── compare_models.py        # 模型对比脚本
+│   ├── compare_models.py        # 模型对比脚本
+│   └── hyperparameter_optimization.py # 超参数优化 (Optuna)
 ├── features_labeled.csv         # 完整训练数据 (Features + Labels + Weights)
 ├── selected_features.csv        # MDA筛选后的124个有效特征
 ├── feature_importance_mda.csv   # MDA重要性分数
+├── feature_importance_optimized.csv # 优化后的特征重要性
+├── best_hyperparameters.csv     # 最佳超参数配置
 └── visual_analysis/
     ├── feature_importance_comparison.png  # MDI vs MDA 对比
     ├── feature_clustering.png   # 特征聚类分析
@@ -279,7 +305,19 @@ AFML/
 
 ## ❓ 下一步建议
 
-当前模型 AUC=0.5122 仍有提升空间。建议:
-1. **超参数优化** - 尝试更深的树或不同的min_samples_leaf
-2. **XGBoost/LightGBM** - 替代模型可能表现更好
-3. **Meta-Labeling** - 分离信号和仓位大小的高级方法
+## ❓ 下一步建议
+
+当前模型 AUC=0.5241 (优化后)。建议下一步:
+
+1. **Meta-Labeling (元标签)** - **强烈推荐**
+   - AFML 核心方法 (Chapter 3)
+   - 训练一个二级模型来预测一级模型(当前RF)的准确性
+   - 作用: 过滤掉置信度低的交易，显著提高 Sharpe Ratio
+
+2. **XGBoost / LightGBM**
+   - 使用梯度提升树替代随机森林
+   - 可能进一步挤压出一点性能 (e.g. AUC -> 0.53+)
+
+3. **Bet Sizing (仓位管理)**
+   - 基于 Meta-Labeling 的概率输出调整仓位大小
+   - 进一步优化风险调整后收益

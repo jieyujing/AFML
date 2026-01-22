@@ -1,0 +1,2 @@
+n_estimators,max_depth,min_samples_split,min_samples_leaf,max_features,criterion,best_auc
+1800,13,2,2,0.3,gini,0.5240844845288677
