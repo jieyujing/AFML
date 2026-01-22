@@ -311,10 +311,88 @@ class Alpha158FeatureGenerator:
         return (features - mean) / std
 
 
+class MarketRegimeFeatureGenerator:
+    """
+    Generates features capturing market regimes (AFML Chapter 18 & 19):
+    1. Volatility (Risk)
+    2. Serial Correlation (Trendiness/Efficiency)
+    3. Market Entropy (Information content/Complexity)
+    """
+    
+    def __init__(
+        self, 
+        windows: list[int] = [20, 50, 100]
+    ):
+        self.windows = windows
+
+    def generate(self, df: pd.DataFrame) -> pd.DataFrame:
+        features = pd.DataFrame(index=df.index)
+        
+        # Pre-compute log returns for calculation
+        close = df["close"]
+        log_ret = np.log(close / close.shift(1)).fillna(0)
+        
+        print(f"   [Regime] Generating features for windows: {self.windows}")
+        
+        for w in self.windows:
+            # 1. Volatility (Realized Volatility)
+            # Annualized volatility assuming daily bars? 
+            # We stick to raw std per window for ML features (normalization comes later)
+            features[f"REGIME_VOL_{w}"] = log_ret.rolling(w).std()
+            
+            # 2. Serial Correlation (Autocorrelation Lag 1)
+            # Measures efficiency: 0 = Random walk, +ve = Trend, -ve = Mean Reversion
+            features[f"REGIME_AC1_{w}"] = log_ret.rolling(w).apply(
+                lambda x: self._autocorr_lag1(x), raw=True
+            )
+            
+            # 3. Market Entropy (Shannon Entropy of returns)
+            features[f"REGIME_ENT_{w}"] = log_ret.rolling(w).apply(
+                lambda x: self._shannon_entropy(x), raw=True
+            )
+            
+            # 4. Hurst Exponent (simplified rolling proxy)
+            # Full Hurst is expensive. We can use Volatility scaling as proxy:
+            # H ~ log(Range) / log(Interval) or similar.
+            # Here we skip it to keep it fast, AC1 and Entropy cover similar ground.
+
+        return features
+
+    def _autocorr_lag1(self, x: np.ndarray) -> float:
+        """Calculate lag-1 autocorrelation safely."""
+        if len(x) < 2: return 0.0
+        # Manual calculation is faster than pd.Series.autocorr inside rolling
+        var = np.var(x)
+        if var < 1e-9: return 0.0
+        mean = np.mean(x)
+        # (x_t - mu)(x_{t-1} - mu)
+        cov = np.mean((x[:-1] - mean) * (x[1:] - mean))
+        return cov / var
+
+    def _shannon_entropy(self, x: np.ndarray, bins: int = 10) -> float:
+        """
+        Calculate Shannon Entropy of the distribution of returns.
+        High entropy = Random/Noisy
+        Low entropy = Deterministic/Structured
+        """
+        if len(x) < 2: return 0.0
+        try:
+            # Discretize into bins
+            hist, _ = np.histogram(x, bins=bins, density=True)
+            # Convert to probabilities (approximate)
+            p = hist / hist.sum()
+            # Remove zeros for log
+            p = p[p > 0]
+            if len(p) == 0: return 0.0
+            return -np.sum(p * np.log(p))
+        except:
+            return 0.0
+
+
 def main():
     """Generate comprehensive features for labeled dollar bars."""
     print("=" * 80)
-    print("Feature Engineering: Alpha158 + FFD Momentum")
+    print("Feature Engineering: Alpha158 + FFD Momentum + Market Regime")
     print("=" * 80)
 
     # 1. Load labeled dollar bars
@@ -345,11 +423,17 @@ def main():
     features_ffd = ffd_gen.generate(df, content_cols=["close", "volume"])
     print(f"   FFD: {len(features_ffd.columns)} features (including rolling stats)")
 
-    # Merge features
-    features = pd.concat([features_alpha, features_ffd], axis=1)
+    # 4. Generate Market Regime features (NEW)
+    print("\n4. Generating Market Regime features...")
+    regime_gen = MarketRegimeFeatureGenerator(windows=[20, 50, 100])
+    features_regime = regime_gen.generate(df)
+    print(f"   Regime: {len(features_regime.columns)} features")
 
-    # 4. Combine with labels
-    print("\n4. Combining features with labels...")
+    # Merge features
+    features = pd.concat([features_alpha, features_ffd, features_regime], axis=1)
+
+    # 5. Combine with labels
+    print("\n5. Combining features with labels...")
     result = features.copy()
     result["label"] = df["label"]
     result["ret"] = df["ret"]
@@ -360,12 +444,12 @@ def main():
     print(f"   Dropped {original_len - len(result)} rows (warmup period)")
     print(f"   Final dataset: {len(result)} samples")
 
-    # 5. Save results
+    # 6. Save results
     output_combined = "features_labeled.csv"
     result.to_csv(output_combined)
     print(f"\n   ✓ Saved combined dataset to: {output_combined}")
 
-    # 6. Detailed Statistics
+    # 7. Detailed Statistics
     print("\n" + "=" * 80)
     print("FEATURE ENGINEERING SUMMARY")
     print("-" * 80)
@@ -374,6 +458,7 @@ def main():
     print(f"Total Features:     {len(features.columns)}")
     print(f"  - Alpha158:       {len(features_alpha.columns)}")
     print(f"  - FFD (Stationary): {len(features_ffd.columns)}")
+    print(f"  - Regime (State):   {len(features_regime.columns)}")
     
     # FFD Parameter Summary
     print("\nOptimized FFD Parameters (Memory Preservation):")
