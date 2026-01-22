@@ -413,7 +413,7 @@ def main():
     # 4. Set barrier parameters
     print("\n4. Setting barrier parameters...")
     pt_sl = [1, 1]  # Symmetric barriers at 1x volatility
-    vertical_barrier_bars = 12  # 50-bar holding period (Intrinsic Time)
+    vertical_barrier_bars = 12  # 12-bar holding period (Intrinsic Time)
     min_ret = 0.001  # 0.1% minimum return threshold
 
     print(f"   Profit-taking: {pt_sl[0]}x volatility")
