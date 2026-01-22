@@ -447,15 +447,14 @@
 
 实施了两种 Walk-Forward (Expanding Window) 回测：
 
-**A. 基础滚动回测 (Static Features)**
+**A. 基础滚动回测 (Static PCA Features)**
 - **绩效**: Sharpe **0.22**, Total Return 0.0154.
-- **问题**: 特征集静态，无法应对因子衰减。
 
-**B. 动态特征筛选滚动回测 (Dynamic Feature Selection) ⭐**
-- **核心机制**: 在每个 retraining 窗口，根据 MDI 重要性动态选取当前最优的 **Top 20** 特征。
+**B. 动态特征筛选滚动回测 (Dynamic PCA Feature Selection) ⭐**
+- **核心机制**: 在每个 retraining 窗口，从 49 个 PCA 主成分中动态选取当前 MDI 最优的 **Top 20** 成分。
 - **绩效**: Sharpe **1.16**, Total Return **0.1023**.
 - **提升**: 夏普比率提升 **427%**。
-- **结论**: **动态特征筛选是该策略的核心竞争力**。它不仅提升了盈利能力，更关键的是增强了模型在不同市场机制下的泛化能力 (OOS Sharpe > 1.0)。
+- **结论**: **动态 PCA 成分选择** 是当前最优策略。这暗示了不同时期市场由不同的"主成分"（即不同的因子组合）驱动。
 
 **输出文件**:
 - `backtest_wf_results.csv`: 滚动回测交易记录。
@@ -463,15 +462,42 @@
 
 ---
 
+### 21. 物理特征集验证 (Raw Feature Validation) ✓
+**文件**: `src/backtest_wf_raw.py`
+
+为了验证"是否还需要 PCA"，我们在原始物理特征集 (230+ features) 上直接运行了动态筛选回测 (Walk-Forward + Dynamic Selection)。
+
+**实验结果**:
+- **Sharpe Ratio**: **-0.54** (Fail)
+- **对比**: 远低于 PCA 版本的 1.16。
+- **原因分析**: 原始特征集存在极高的多重共线性和噪音。LightGBM 虽然能做特征选择，但在每个小窗口(样本少)内，直接面对 230 个特征容易过拟合噪音。
+- **结论**: **PCA 降维/正交化步骤是必须的**。它起到了极其重要的"Feature Regularization"作用。
+
+---
+
+### 22. PCA 因子归因 (PCA Attribution) ✓
+**文件**: `src/explain_pca.py`
+
+为了打开 PCA 的"黑盒"，我们分析了关键主成分的物理载荷 (Loadings)。
+
+**关键发现**:
+- **PC_1 (28.88% Var)**: **Trend / Price Level**. 由 MA20, MA30 等趋势指标主导。
+- **PC_2 (9.19% Var)**: **Volume Activity**. 由 VMA (成交量均线) 主导。
+- **PC_9 (1.87% Var) [LightGBM Selected]**: **Weighted Volume Trend**. 由 WVMA (VWAP类指标) 主导，捕捉量价背离。
+- **PC_31 (0.43% Var) [LightGBM Selected]**: **Microstructure / Efficiency**. 由 **VPIN** (知情交易概率) 和 **RSQR** (趋势拟合度) 主导。
+- **洞察**: 模型能够从极低方差的分量 (PC_31) 中提取出微观结构 Alpha，这证明了 PCA 不仅保留了信息，还通过正交化让微弱但独立的信号得以显现。
+
+---
+
 ## 🎯 下一步规划 (Future Work)
 
-### 1. 物理特征集验证 (Raw Feature Validation)
-- **目标**: 将动态筛选应用到原始特征集 (Feature Engineering 2.0)，而非 PCA 成分。
-- **假设**: 具有物理意义的因子 (如 MACD_SLOPE) 在动态筛选下可能比 PC 成分提供更稳定的 Alpha。
+### 23. 组合优化 (Portfolio Optimization)
+- **目标**: 如果我们要交易多个标的，或者将 Long/Short 视为两个策略，可以使用 HRP (Hierarchical Risk Parity) 进行配权。
+- **当前**: 目前是单资产 timing 策略，Bet Size 由概率决定。暂不需要 HRP 除非引入由不同 seed/params 训练的多个模型 (Model Ensemble)。
 
-### 2. 组合优化 (Portfolio Optimization)
-- **目标**: 将单一资产的预测扩展到多资产或多策略组合。
-- **计划**: 尝试 HRP (Hierarchical Risk Parity) (AFML Chapter 16)。
+### 24. 模型融合 (Ensemble)
+- **目标**: 既然动态筛选 PCA 有效，是否可以训练 5 个不同的 LightGBM (不同的超参/Seed)，然后 Bagging 它们的预测？这通常能进一步提升 Sharpe。
+
 
 ---
 
