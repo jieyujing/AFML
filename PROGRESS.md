@@ -419,16 +419,44 @@
 
 ## 🎯 下一步规划 (Future Work)
 
-### 1. 策略回测 (Strategy Backtesting) - 优先级: 最高 🔥
--   **目标**: 将当前最强模型 (LightGBM PCA, AUC 0.5546) 转化为实际交易策略。
--   **计划**: 
-    -   实现基于预测概率的开仓信号 (Signal Generation)。
-    -   结合 Bet Sizing (Chapter 10) 动态调整仓位。
-    -   执行事件驱动回测 (Event-Driven Backtest)，考虑交易成本。
+### 19. 策略回测 (Strategy Backtesting) ✓
+**文件**: `src/backtest.py`
 
-### 2. 组合模型 (Ensemble)
--   **目标**: 尝试将 LightGBM V2 (原始特征) 和 LightGBM PCA (正交特征) 的预测结果进行加权融合。
--   **假设**: 两个模型观察数据的视角不同，融合可能进一步提升稳定性。
+基于最佳模型 (LightGBM + PCA, AUC 0.5546) 进行了向量化策略回测。
+
+**回测设置**:
+- **信号生成**: 使用 Purged CV 生成的 OOS 预测概率。
+- **策略 A (Binary)**: 若 P > 0.5 做多，P < 0.5 做空。
+- **策略 B (Bet Sizing)**: 仓位大小 $m = 2P - 1$ (Kelly-like)。
+- **交易成本**: 双边 2bps (每笔交易)。
+
+**绩效指标 (Net of Costs)**:
+
+| 指标 | Binary Strategy | Sized Strategy | 提升 |
+|------|----------------|----------------|------|
+| **Win Rate** | 53.46% | 53.46% | - |
+| **Sharpe Ratio** | **1.01** | **2.10** | **+108%** |
+| **Total Return** | 0.2454 | 0.3458 | +41% |
+
+**关键结论**:
+- **Bet Sizing 至关重要**: 引入概率加权仓位后，夏普比率翻倍 (1.01 -> 2.10)。这验证了 AFML Chapter 10 的核心观点：模型不仅要预测方向，更要预测*信心*。
+- **正向收益**: 即便扣除交易成本，模型在 OOS 数据上依然实现了显著的正收益。
+
+**输出文件**:
+- `backtest_results.csv`: 逐笔交易明细。
+- `visual_analysis/backtest_performance.png`: 累计收益曲线 (Equity Curve)。
+
+---
+
+## 🎯 下一步规划 (Future Work)
+
+### 1. 组合优化 (Portfolio Optimization) - 优先级: 高
+- **目标**: 将单一资产的预测扩展到多资产或多策略组合。
+- **计划**: 尝试 HRP (Hierarchical Risk Parity) 或 CLA (Critical Line Algorithm) 来分配资金 (AFML Chapter 16)。
+
+### 2. 实盘模拟 (Paper Trading)
+- **目标**: 接入实时数据流 (e.g. IBKR, Binance)，验证模型在真实环境下的表现。
+- **计划**: 构建轻量级执行引擎。
 
 ---
 
