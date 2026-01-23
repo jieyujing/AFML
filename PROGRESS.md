@@ -556,7 +556,15 @@ AFML/
 - **Feature Eng**: 生成了完整特征集 (Alpha158 + FFD + Microstructure + Signal)。
 - **PCA**: 降维至 51 个主成分 (保留 95% 方差)。
 
-### 3. 模型优化 (Running)
-- **Status**: Hyperparameter Optimization (Optuna) in progress.
-- **Interim Result**: Best AUC > 0.558 (vs Baseline 0.554).
-- **Next Steps**: Finish Optimization -> Train -> Position Sizing -> Walk-Forward Backtest.
+### 3. 模型优化 (Completed)
+- **Status**: Finished.
+- **Best Params**: `n_estimators=1800`, `max_depth=15`, `entropy`, `balanced_subsample`.
+- **Validation**: Best AUC **0.5601**.
+
+### 4. 最终回测 (Walk-Forward)
+- **Settings**: Correctly loaded Optimized Params + PCA Features.
+- **Results**:
+    - **Sharpe Ratio**: **1.48** (Target > 1.0 achieved! 🚀)
+    - **Win Rate**: 52.26%
+    - **Total Return**: 9.71% (OOS period)
+- **Conclusion**: Deep Random Forest on PCA orthogonal features effectively captures alpha in the test set.

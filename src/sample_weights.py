@@ -202,11 +202,11 @@ def main():
     print("\n1. Loading data...")
     try:
         # Load full price series (needed for concurrency calculation across full history)
-        close_df = pd.read_csv("dynamic_dollar_bars.csv", index_col=0, parse_dates=True)
+        close_df = pd.read_csv(os.path.join("data", "output", "dynamic_dollar_bars.csv"), index_col=0, parse_dates=True)
         close_series = close_df["close"]
         
         # Load labeled events
-        events = pd.read_csv("labeled_events.csv", index_col=0, parse_dates=True)
+        events = pd.read_csv(os.path.join("data", "output", "labeled_events.csv"), index_col=0, parse_dates=True)
         
         # Ensure t1 is datetime
         events["t1"] = pd.to_datetime(events["t1"])
@@ -263,12 +263,14 @@ def main():
     # Merge with original events for completeness (optional, but useful)
     output_df = output_df.join(events[['t1', 'label', 'ret']])
     
-    output_file = "sample_weights.csv"
+    output_dir = os.path.join("data", "output")
+    os.makedirs(output_dir, exist_ok=True)
+    output_file = os.path.join(output_dir, "sample_weights.csv")
     output_df.to_csv(output_file)
     print(f"   ✓ Saved weights to: {output_file}")
     
     # 5. Update features_labeled.csv if it exists
-    features_file = "features_labeled.csv"
+    features_file = os.path.join("data", "output", "features_labeled.csv")
     if os.path.exists(features_file):
         print(f"\n5. Updating {features_file} with weights...")
         features_df = pd.read_csv(features_file, index_col=0, parse_dates=True)

@@ -14,6 +14,7 @@ import pandas as pd
 import numpy as np
 import subprocess
 import sys
+import os
 from typing import Optional, Union
 
 
@@ -374,7 +375,8 @@ def main():
     # 1. Load dollar bars
     print("\n1. Loading dollar bars...")
     try:
-        df = pd.read_csv("dynamic_dollar_bars.csv", index_col=0, parse_dates=True)
+        input_path = os.path.join("data", "output", "dynamic_dollar_bars.csv")
+        df = pd.read_csv(input_path, index_col=0, parse_dates=True)
     except FileNotFoundError:
         print(
             "Error: 'dynamic_dollar_bars.csv' not found. Please run process_bars.py first."
@@ -453,7 +455,9 @@ def main():
 
     # 8. Save labeled data
     print("\n8. Saving labeled events...")
-    output_file = "labeled_events.csv"
+    output_dir = os.path.join("data", "output")
+    os.makedirs(output_dir, exist_ok=True)
+    output_file = os.path.join(output_dir, "labeled_events.csv")
     events.to_csv(output_file)
     print(f"   ✓ Saved to: {output_file}")
 
@@ -469,7 +473,7 @@ def main():
     # Drop rows without labels
     df_labeled = df_labeled.dropna(subset=["label"])
 
-    final_output = "dollar_bars_labeled.csv"
+    final_output = os.path.join(output_dir, "dollar_bars_labeled.csv")
     df_labeled.to_csv(final_output)
     print(f"   ✓ Saved to: {final_output}")
     print(f"   ✓ Total labeled bars: {len(df_labeled)}")

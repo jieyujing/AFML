@@ -393,7 +393,7 @@ def main():
 
     # Load labeled events
     print("\nLoading labeled events...")
-    events = pd.read_csv("labeled_events.csv", index_col=0, parse_dates=True)
+    events = pd.read_csv(os.path.join("data", "output", "labeled_events.csv"), index_col=0, parse_dates=True)
     print(f"✓ Loaded {len(events)} events")
 
     # Print summary

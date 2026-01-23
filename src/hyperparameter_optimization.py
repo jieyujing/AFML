@@ -383,7 +383,14 @@ def main():
     # 1. Load Data
     print("\n1. Loading Data...")
     try:
-        df = pd.read_csv(os.path.join("data", "output", "features_labeled.csv"), index_col=0, parse_dates=True)
+        # Use PCA features as they are the current best strategy
+        input_path = os.path.join("data", "output", "features_pca.csv")
+        if not os.path.exists(input_path):
+             # Fallback to V2 labeled if PCA missing
+             input_path = os.path.join("data", "output", "features_v2_labeled.csv")
+             
+        df = pd.read_csv(input_path, index_col=0, parse_dates=True)
+        print(f"   Loaded data from {os.path.basename(input_path)}: {df.shape}")
         print(f"   Loaded features_labeled.csv: {df.shape}")
         
         # Check for t1
@@ -414,11 +421,18 @@ def main():
     weight_col = 'sample_weight'
     exclude_cols = ['label', 'ret', 'sample_weight', 'avg_uniqueness', 't1', 'trgt', 'side', 'bin', 't1_events']
     
-    # Use selected features if available
-    if os.path.exists(os.path.join("data", "output", "selected_features.csv")):
-        print("   Using MDA-selected features")
+    # Feature Selection Logic
+    # 1. If using PCA features, use all PC_* columns
+    pc_cols = [c for c in df.columns if c.startswith('PC_')]
+    if len(pc_cols) > 0:
+        print(f"   Detected {len(pc_cols)} PCA components. Using PCA features.")
+        feature_cols = pc_cols
+    # 2. Else if selected_features.csv exists, use those (for Raw features)
+    elif os.path.exists(os.path.join("data", "output", "selected_features.csv")):
+        print("   Using MDA-selected features (Raw)")
         selected_df = pd.read_csv(os.path.join("data", "output", "selected_features.csv"))
         feature_cols = [c for c in selected_df['feature'].tolist() if c in df.columns]
+    # 3. Else use all non-excluded columns
     else:
         feature_cols = [c for c in df.columns if c not in exclude_cols]
         

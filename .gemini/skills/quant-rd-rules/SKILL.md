@@ -1,9 +1,10 @@
 ---
 name: quant-rd-rules
-description: Enforces Quant R&D Rules for methodology retrieval, code standards, and mandatory reporting. Use this skill for any quantitative finance task, ensuring AFML methodology and MLFinLab standards are followed.
+description: Establishes strict protocols for quantitative research and development, including workflow requirements, coding standards, version control rules, and project tracking. Use this skill when the user asks to start a quantitative R&D task, implement financial algorithms, or work on the AFML project.
 ---
+<!-- activation: always -->
 
-# Quant R&D Rules (量化研发与 AI 协作规范)
+# Quant R&D Rules (量化研发与 AI 协作规范 v1.1)
 
 ## 1. Core Workflow (核心工作流)
 
@@ -16,7 +17,10 @@ description: Enforces Quant R&D Rules for methodology retrieval, code standards,
   - Strictly adhere to its Object Definitions and code formatting.
 
 - **[Mid-task] Version Control ([中置] 版本控制)**
-  - Whenever a feature is completed and tests pass, you MUST add a git commit.
+  - **Auto-Commit Trigger:** Whenever there is new progress or a new feature added, you MUST automatically execute a git commit.
+  - **Atomic Staging Rule:** The `git add` command MUST target **ONLY** the specific files related to the newly added feature.
+    - **PROHIBITED:** Do NOT use `git add .` or stage all files indiscriminately.
+    - **REQUIRED:** Explicitly specify filenames (e.g., `git add strategies/feature_x.py`) to ensure clean commit history.
 
 - **[Post-task] Task Summary ([后置] 任务总结)**
   - At the end of every conversation, you MUST explicitly list the Skills used in this task and their specific application points.
@@ -36,36 +40,20 @@ description: Enforces Quant R&D Rules for methodology retrieval, code standards,
 
 ## 3. Mandatory Response Template (对话结束强制响应模版)
 
-
-
 **Format Requirement:**
 
 At the end of the conversation, output the following format:
 
-
-
 > **Skill Usage List:**
-
 > - `afml skill`: [Description of methodology applied, e.g., "Used Chapter 3 Triple-Barrier Labeling"]
-
 > - `mlfinlab skill`: [Description of class definitions referenced, e.g., "Referenced FinancialDataStructure object"]
-
-
 
 ## 4. Project Tracking (项目进度追踪)
 
-
-
 - **Context Awareness (上下文感知)**
-
   - At the start of a session, check `PROGRESS.md` (if available) to understand the current project state.
-
   - Review `PROGRESS.md` to identify completed tasks and recommended next steps.
 
-
-
 - **Progress Recording (进度记录)**
-
   - After completing a significant milestone (e.g., new feature, successful test, generated data), update `PROGRESS.md`.
-
   - Ensure `PROGRESS.md` maintains a "Completed Work", "Current Status", and "Next Steps" structure.
