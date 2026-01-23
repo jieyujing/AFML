@@ -379,9 +379,9 @@
 
 
 **实验结果**:
-- **Random Forest V2 (163 Feats)**: AUC 0.5333
-- **Random Forest PCA (49 Feats)**: **AUC 0.5546**
-- **提升幅度**: +4.00% (vs V2), +8.27% (vs Baseline)
+- **Random Forest V2 (163 Feats)**: AUC TBD
+- **Random Forest PCA (50 Feats)**: AUC TBD
+- **注**: 由于扩充了 2 年数据 (2020-2021)，模型面临更复杂的市场环境。
 
 **关键洞察**:
 1.  **降维有效性**: 仅用 30% 的特征数量 (49 vs 163) 取得了显著更好的性能。
@@ -423,11 +423,14 @@
 **A. 基础滚动回测 (Static PCA Features)**
 - **绩效**: Sharpe **0.22**, Total Return 0.0154.
 
-**B. 动态特征筛选滚动回测 (Dynamic PCA Feature Selection) ⭐**
-- **核心机制**: 在每个 retraining 窗口，从 49 个 PCA 主成分中动态选取当前 MDI 最优的 **Top 20** 成分。
-- **绩效**: Sharpe **1.16**, Total Return **0.1023**.
-- **提升**: 夏普比率提升 **427%**。
-- **结论**: **动态 PCA 成分选择** 是当前最优策略。这暗示了不同时期市场由不同的"主成分"（即不同的因子组合）驱动。
+**B. 动态特征筛选滚动回测 (Dynamic PCA Feature Selection) - 2020-2026**
+- **核心机制**: 滚动窗口动态选取 Top 20 PCA 成分。使用 Optuna 优化后的超参数。
+- **绩效 (2020-2026)**: Sharpe **-0.68**, Win Rate 49.57%
+- **分析**:
+  - 即使进行了超参数优化 (Best AUC 0.4914)，模型在扩充后的长周期数据上依然表现乏力。
+  - Sharpe Ratio 几乎没有改善 (-0.69 -> -0.68)，说明问题不在于参数微调，而在于策略假设本身。
+  - **根本原因**: 20202026 包含了市场结构剧烈变化的时期 (Regime Shift)。单一模型（即使是滚动重训）可能难以适应。
+  - **建议**: 需要引入 Regime Detection 或尝试非线性更强的模型 (LightGBM/XGBoost)。
 
 **输出文件**:
 - `data/output/backtest_wf_results.csv`: 滚动回测交易记录。
@@ -462,14 +465,50 @@
 
 ---
 
+### 23. 概率头寸管理 (Probabilistic Position Sizing) ✓
+**文件**: `src/position_sizing.py`
+
+实现了 AFML Chapter 10 的概率头寸管理，将模型概率转换为仓位大小，填补了训练与回测之间的关键步骤。
+
+**核心方法**:
+1.  **Gaussian Bet Sizing**:
+    - z = (p - 0.5) / sqrt(p * (1-p)) 计算概率的 z-score
+    - m = 2 * Φ(z) - 1 通过标准正态 CDF 映射到 [-1, 1]
+2.  **Concurrency Scaling**:
+    - 使用 `avg_uniqueness` 缩放重叠仓位
+    - 避免在样本并发时过度暴露
+3.  **Probability Threshold**:
+    - 仅当 p > 0.5 时开仓
+    - 低置信度信号自动归零
+
+**实验结果**:
+- **Probability 分布**: Mean 0.50, Std 0.11, Range [0.26, 0.73]
+- **Bet Size 分布**: Mean 0.07, Max 0.36 (保守的仓位管理)
+- **No Position 比例**: ~50% (有效过滤噪音信号)
+
+**输出文件**:
+- `data/output/position_sizes.csv`: 包含 probability, bet_size, side, ret, pnl
+- `visual_analysis/bet_sizing_analysis.png`: 概率-仓位映射可视化
+
+**关键发现**:
+- Kelly 准则的 Sigmoid-like 形状使高置信度交易获得更大仓位
+- avg_uniqueness 缩放有效控制了并发仓位的杠杆
+- 约 50% 的交易被过滤（p < 0.5），体现了元标签的"过滤器"功能
+
+---
+
 ## 🎯 下一步规划 (Future Work)
 
-### 23. 组合优化 (Portfolio Optimization)
+### 24. 组合优化 (Portfolio Optimization)
 - **目标**: 如果我们要交易多个标的，或者将 Long/Short 视为两个策略，可以使用 HRP (Hierarchical Risk Parity) 进行配权。
 - **当前**: 目前是单资产 timing 策略，Bet Size 由概率决定。暂不需要 HRP 除非引入由不同 seed/params 训练的多个模型 (Model Ensemble)。
 
-### 24. 模型融合 (Ensemble)
-- **目标**: 既然动态筛选 PCA 有效，是否可以训练 5 个不同的 LightGBM (不同的超参/Seed)，然后 Bagging 它们的预测？这通常能进一步提升 Sharpe。
+### 25. 模型升级策略 (Remediation V2)
+- **目标**: 彻底解决 Sharpe < 0 的问题。
+- **执行**:
+  1. **Regime Switching**: 使用现有的 `MarketRegimeFeatureGenerator` 构建显式的 Regime Classifier。在不同市场状态下使用不同的模型或参数。
+  2. **Model Pivot**: 放弃 Random Forest，全面转向 **LightGBM**。RF 在处理高维/非线性特征时虽然稳健但缺乏捕捉细微 Alpha 的能力。
+  3. **Target Engineering**: 尝试使用 Meta-Labeling 过滤掉低置信度交易，只在模型确信时下注。
 
 
 ---
@@ -485,6 +524,7 @@ AFML/
 │   ├── sample_weights.py        # 样本权重计算
 │   ├── cv_setup.py              # 交叉验证配置
 │   ├── train_model.py           # 模型训练 (自动使用筛选特征)
+│   ├── position_sizing.py       # 概率头寸管理 (AFML Ch.10)
 │   ├── feature_importance.py    # 特征重要性分析 (MDI/MDA)
 │   ├── compare_models.py        # 模型对比脚本
 │   └── hyperparameter_optimization.py # 超参数优化 (Optuna)
@@ -494,6 +534,7 @@ AFML/
 │   ├── feature_importance_mda.csv   # MDA重要性分数
 │   ├── feature_importance_optimized.csv # 优化后的特征重要性
 │   ├── best_hyperparameters.csv     # 最佳超参数配置
+│   ├── position_sizes.csv           # 概率头寸大小
 │   └── ... (Other generated CSVs)
 └── visual_analysis/
     ├── feature_importance_comparison.png  # MDI vs MDA 对比
