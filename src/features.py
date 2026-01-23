@@ -14,6 +14,7 @@ Reference:
 
 import pandas as pd
 import numpy as np
+import os
 from typing import Optional, Tuple, List
 from statsmodels.tsa.stattools import adfuller
 
@@ -398,7 +399,8 @@ def main():
     # 1. Load ALL dollar bars (not just labeled ones)
     print("\n1. Loading all dollar bars...")
     try:
-        df = pd.read_csv("dynamic_dollar_bars.csv", index_col=0, parse_dates=True)
+        input_path = os.path.join("data", "output", "dynamic_dollar_bars.csv")
+        df = pd.read_csv(input_path, index_col=0, parse_dates=True)
     except FileNotFoundError:
         print("Error: 'dynamic_dollar_bars.csv' not found.")
         return
@@ -443,7 +445,9 @@ def main():
     print(f"   Final dataset: {len(result)} samples")
 
     # 6. Save results
-    output_combined = "features_all.csv"
+    output_dir = os.path.join("data", "output")
+    os.makedirs(output_dir, exist_ok=True)
+    output_combined = os.path.join(output_dir, "features_all.csv")
     result.to_csv(output_combined)
     print(f"\n   ✓ Saved full feature set to: {output_combined}")
 

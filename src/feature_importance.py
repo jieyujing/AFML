@@ -191,10 +191,15 @@ class FeatureImportanceAnalyzer:
         imp_scores = pd.DataFrame(index=X.columns)
         
         # Baseline score without permutation
-        print("      Computing baseline scores (no permutation)...")
+        print("      Computing scores (fitting model once per fold)...")
+        
+        # We need to store scores per fold per feature
+        # structure: {feature: [score_fold_1, score_fold_2, ...]}
+        feat_scores = {feat: [] for feat in X.columns}
         baseline_scores = []
         
         for fold_idx, (train_idx, test_idx) in enumerate(cv_iterator.split(X, y)):
+            print(f"         Fold {fold_idx+1}/{n_splits}")
             X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
             y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
             
@@ -205,45 +210,21 @@ class FeatureImportanceAnalyzer:
                 w_train = None
                 w_test = None
             
-            # Fit model
+            # Fit model (ONCE per fold)
             if w_train is not None:
                 self.clf.fit(X_train, y_train, sample_weight=w_train)
             else:
                 self.clf.fit(X_train, y_train)
             
-            # Score on test set
-            score = self._score_model(
+            # Score baseline on test set
+            score_base = self._score_model(
                 self.clf, X_test, y_test, w_test, self.scoring
             )
-            baseline_scores.append(score)
-        
-        baseline_mean = np.mean(baseline_scores)
-        print(f"      Baseline score: {baseline_mean:.4f}")
-        
-        # Permutation importance for each feature
-        print("      Computing permutation importance for each feature...")
-        
-        for feature in X.columns:
-            fold_scores = []
+            baseline_scores.append(score_base)
             
-            for fold_idx, (train_idx, test_idx) in enumerate(cv_iterator.split(X, y)):
-                X_train, X_test = X.iloc[train_idx], X.iloc[test_idx].copy()
-                y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
-                
-                if sample_weight is not None:
-                    w_train = sample_weight.iloc[train_idx]
-                    w_test = sample_weight.iloc[test_idx]
-                else:
-                    w_train = None
-                    w_test = None
-                
-                # Fit model
-                if w_train is not None:
-                    self.clf.fit(X_train, y_train, sample_weight=w_train)
-                else:
-                    self.clf.fit(X_train, y_train)
-                
-                # Permute feature in test set
+            # Permute each feature and score
+            for feature in X.columns:
+                # Permute feature in test set ONLY
                 X_test_perm = X_test.copy()
                 np.random.seed(42 + fold_idx)  # Reproducible permutation
                 X_test_perm[feature] = np.random.permutation(X_test_perm[feature].values)
@@ -252,22 +233,26 @@ class FeatureImportanceAnalyzer:
                 score_perm = self._score_model(
                     self.clf, X_test_perm, y_test, w_test, self.scoring
                 )
-                fold_scores.append(score_perm)
-            
-            # Importance = Baseline - Permuted (higher is better)
-            # For neg_log_loss, baseline is more negative (better), so we flip
-            if 'neg' in self.scoring or 'loss' in self.scoring:
-                importance = np.array(baseline_scores) - np.array(fold_scores)
-            else:
-                importance = np.array(baseline_scores) - np.array(fold_scores)
-            
-            imp_scores.loc[feature, f'fold_importance'] = importance.mean()
-            imp_scores.loc[feature, f'fold_std'] = importance.std()
+                
+                # Importance = Baseline - Permuted
+                # Note: if scoring is negative (like neg_log_loss), higher is better (e.g. -0.5 > -1.0)
+                # Baseline (-0.5) - Permuted (-1.0) = +0.5 (Good)
+                # Baseline (-0.5) - Permuted (-0.4) = -0.1 (Bad)
+                feat_scores[feature].append(score_base - score_perm)
+
+        baseline_mean = np.mean(baseline_scores)
+        print(f"      Baseline score: {baseline_mean:.4f}")
+
+        # Aggregate results
+        for feature in X.columns:
+            imp_vals = feat_scores[feature]
+            imp_scores.loc[feature, 'fold_importance'] = np.mean(imp_vals)
+            imp_scores.loc[feature, 'fold_std'] = np.std(imp_vals)
         
         # Rename columns
         result = pd.DataFrame({
-            'mean': imp_scores[f'fold_importance'],
-            'std': imp_scores[f'fold_std']
+            'mean': imp_scores['fold_importance'],
+            'std': imp_scores['fold_std']
         })
         
         return result.sort_values('mean', ascending=False)
@@ -544,12 +529,12 @@ def main():
     # 1. Load data
     print("\n1. Loading labeled features...")
     try:
-        df = pd.read_csv("features_labeled.csv", index_col=0, parse_dates=True)
+        df = pd.read_csv(os.path.join("data", "output", "features_v2_labeled.csv"), index_col=0, parse_dates=True)
         
         # Check for t1
         if 't1' not in df.columns:
             print("   't1' column missing. Joining with labeled_events.csv...")
-            events = pd.read_csv("labeled_events.csv", index_col=0, parse_dates=True)
+            events = pd.read_csv(os.path.join("data", "output", "labeled_events.csv"), index_col=0, parse_dates=True)
             df = df.join(events[['t1']], rsuffix='_events')
             if 't1' not in df.columns and 't1_events' in df.columns:
                 df['t1'] = df['t1_events']
@@ -565,7 +550,7 @@ def main():
     # 2. Prepare data
     target_col = 'label'
     weight_col = 'sample_weight'
-    exclude_cols = ['label', 'ret', 'sample_weight', 'avg_uniqueness', 't1', 'trgt', 'side', 'bin', 't1_events']
+    exclude_cols = ['label', 'ret', 'return', 'holding_period', 'sample_weight', 'avg_uniqueness', 't1', 'trgt', 'side', 'bin', 't1_events']
     
     feature_cols = [c for c in df.columns if c not in exclude_cols]
     
@@ -582,7 +567,7 @@ def main():
     
     # 3a. MDI (Fast)
     mdi_imp = analyzer.fit_importance_mdi(X, y, sample_weights)
-    mdi_imp.to_csv("feature_importance_mdi.csv")
+    mdi_imp.to_csv(os.path.join("data", "output", "feature_importance_v2_mdi.csv"))
     print(f"      MDI: Top feature = {mdi_imp.index[0]} ({mdi_imp.iloc[0, 0]:.4f})")
     
     # 3b. MDA (Gold Standard)
@@ -591,7 +576,7 @@ def main():
         n_splits=5,
         embargo_pct=0.01
     )
-    mda_imp.to_csv("feature_importance_mda.csv")
+    mda_imp.to_csv(os.path.join("data", "output", "feature_importance_v2_mda.csv"))
     print(f"      MDA: Top feature = {mda_imp.index[0]} ({mda_imp.iloc[0, 0]:.4f})")
     
     # 3c. SFI (Optional - slower)
@@ -625,8 +610,8 @@ def main():
         'mda_importance': mda_imp.loc[selected_features, 'mean'],
         'mdi_importance': mdi_imp.loc[selected_features, 'mean']
     })
-    selected_df.to_csv("selected_features.csv", index=False)
-    print(f"   Saved selected features to: selected_features.csv")
+    selected_df.to_csv(os.path.join("data", "output", "selected_features_v2.csv"), index=False)
+    print(f"   Saved selected features to: selected_features_v2.csv")
     
     # Display top 15
     print("\n   Top 15 Features by MDA Importance:")

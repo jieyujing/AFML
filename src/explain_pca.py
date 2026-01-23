@@ -12,7 +12,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 def explain_pca_components():
     print("Loading data for PCA explanation...")
-    df = pd.read_csv('features_v2_labeled.csv')
+    df = pd.read_csv(os.path.join("data", "output", "features_v2_labeled.csv"))
     
     # --- Replicate the exact preprocessing from feature_pca.py ---
     exclude_cols = ['bin', 'w', 'avg_u', 'ret', 'close', 'date', 'sample_weight', 'label', 'return', 'holding_period']
@@ -97,8 +97,8 @@ def explain_pca_components():
     print("Saved PCA loadings heatmap.")
 
     # Save detailed loadings
-    loadings.to_csv('pca_loadings_matrix.csv')
-    pd.DataFrame(analysis_results).to_csv('pca_component_definitions.csv', index=False)
+    loadings.to_csv(os.path.join("data", "output", "pca_loadings_matrix.csv"))
+    pd.DataFrame(analysis_results).to_csv(os.path.join("data", "output", "pca_component_definitions.csv"), index=False)
 
 if __name__ == "__main__":
     explain_pca_components()

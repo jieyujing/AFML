@@ -383,13 +383,13 @@ def main():
     # 1. Load Data
     print("\n1. Loading Data...")
     try:
-        df = pd.read_csv("features_labeled.csv", index_col=0, parse_dates=True)
+        df = pd.read_csv(os.path.join("data", "output", "features_labeled.csv"), index_col=0, parse_dates=True)
         print(f"   Loaded features_labeled.csv: {df.shape}")
         
         # Check for t1
         if 't1' not in df.columns:
             print("   't1' column missing. Joining with labeled_events.csv...")
-            events = pd.read_csv("labeled_events.csv", index_col=0, parse_dates=True)
+            events = pd.read_csv(os.path.join("data", "output", "labeled_events.csv"), index_col=0, parse_dates=True)
             df = df.join(events[['t1']], rsuffix='_events')
             if 't1' not in df.columns and 't1_events' in df.columns:
                 df['t1'] = df['t1_events']
@@ -415,9 +415,9 @@ def main():
     exclude_cols = ['label', 'ret', 'sample_weight', 'avg_uniqueness', 't1', 'trgt', 'side', 'bin', 't1_events']
     
     # Use selected features if available
-    if os.path.exists("selected_features.csv"):
+    if os.path.exists(os.path.join("data", "output", "selected_features.csv")):
         print("   Using MDA-selected features")
-        selected_df = pd.read_csv("selected_features.csv")
+        selected_df = pd.read_csv(os.path.join("data", "output", "selected_features.csv"))
         feature_cols = [c for c in selected_df['feature'].tolist() if c in df.columns]
     else:
         feature_cols = [c for c in df.columns if c not in exclude_cols]
@@ -450,7 +450,9 @@ def main():
     
     # 4. Save results
     print("\n4. Saving Results...")
-    optimizer.save_results(output_dir='.')
+    # 4. Save results
+    print("\n4. Saving Results...")
+    optimizer.save_results(output_dir=os.path.join("data", "output"))
     
     # 5. Plot
     print("\n5. Generating Visualizations...")
@@ -474,7 +476,7 @@ def main():
         'Feature': feature_cols,
         'Importance': best_model.feature_importances_
     }).sort_values('Importance', ascending=False)
-    fi.to_csv('feature_importance_optimized.csv', index=False)
+    fi.to_csv(os.path.join('data', 'output', 'feature_importance_optimized.csv'), index=False)
     print("   Saved feature importance to feature_importance_optimized.csv")
     
     print("\n" + "=" * 80)

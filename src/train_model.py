@@ -35,13 +35,13 @@ def main():
     # 1. Load Data
     print("\n1. Loading Data...")
     try:
-        df = pd.read_csv("features_labeled.csv", index_col=0, parse_dates=True)
+        df = pd.read_csv(os.path.join("data", "output", "features_labeled.csv"), index_col=0, parse_dates=True)
         print(f"   Loaded features_labeled.csv: {df.shape}")
         
         # Check for t1 (required for purging)
         if 't1' not in df.columns:
             print("   't1' column missing in features. Joining with labeled_events.csv...")
-            events = pd.read_csv("labeled_events.csv", index_col=0, parse_dates=True)
+            events = pd.read_csv(os.path.join("data", "output", "labeled_events.csv"), index_col=0, parse_dates=True)
             df = df.join(events[['t1']], rsuffix='_events')
             if 't1' not in df.columns and 't1_events' in df.columns:
                 df['t1'] = df['t1_events']
@@ -67,9 +67,9 @@ def main():
     
     # Check for selected features from MDA analysis
     use_selected_features = False
-    if os.path.exists("selected_features.csv"):
+    if os.path.exists(os.path.join("data", "output", "selected_features.csv")):
         print("\n   Found selected_features.csv - using MDA-filtered features")
-        selected_df = pd.read_csv("selected_features.csv")
+        selected_df = pd.read_csv(os.path.join("data", "output", "selected_features.csv"))
         feature_cols = selected_df['feature'].tolist()
         # Filter to only available columns
         feature_cols = [c for c in feature_cols if c in df.columns]
@@ -184,7 +184,7 @@ def main():
     feature_importances['Std_Importance'] = feature_importances.std(axis=1)
     
     fi_sorted = feature_importances.sort_values('Mean_Importance', ascending=False)
-    fi_sorted.to_csv("feature_importance.csv")
+    fi_sorted.to_csv(os.path.join("data", "output", "feature_importance.csv"))
     print("   Saved to feature_importance.csv")
     
     # Plot top 20

@@ -14,7 +14,7 @@ def load_data():
     print("Loading data...")
     # 1. Features (PCA)
     try:
-        df = pd.read_csv('features_pca.csv')
+        df = pd.read_csv(os.path.join("data", "output", "features_pca.csv"))
     except Exception as e:
         print(f"Error reading features_pca.csv: {e}")
         return None, None
@@ -29,7 +29,7 @@ def load_data():
         df.set_index('date', inplace=True)
         
     # 2. Events (for ret and t1)
-    events = pd.read_csv('labeled_events.csv', index_col=0, parse_dates=True)
+    events = pd.read_csv(os.path.join("data", "output", "labeled_events.csv"), index_col=0, parse_dates=True)
     
     # Align
     df = df.join(events[['t1', 'ret', 'trgt', 'side']], rsuffix='_events')
@@ -145,7 +145,7 @@ def main():
     
     # 2. Load Params
     try:
-        params_df = pd.read_csv('best_hyperparameters_lgbm_pca.csv')
+        params_df = pd.read_csv(os.path.join("data", "output", "best_hyperparameters_lgbm_pca.csv"))
         params = params_df.iloc[0].to_dict()
         if 'best_auc' in params: del params['best_auc']
         
@@ -168,7 +168,7 @@ def main():
     analyze_and_plot(df_res, split_date)
     
     # Save CSV
-    df_res.to_csv('backtest_split_results.csv')
+    df_res.to_csv(os.path.join("data", "output", "backtest_split_results.csv"))
     print("Saved results to backtest_split_results.csv")
 
 if __name__ == "__main__":

@@ -80,10 +80,10 @@ def main():
     
     # 1. Load data
     print("\n1. Loading data...")
-    df = pd.read_csv("features_labeled.csv", index_col=0, parse_dates=True)
+    df = pd.read_csv(os.path.join("data", "output", "features_labeled.csv"), index_col=0, parse_dates=True)
     
     if 't1' not in df.columns:
-        events = pd.read_csv("labeled_events.csv", index_col=0, parse_dates=True)
+        events = pd.read_csv(os.path.join("data", "output", "labeled_events.csv"), index_col=0, parse_dates=True)
         df = df.join(events[['t1']], rsuffix='_events')
         if 't1' not in df.columns and 't1_events' in df.columns:
             df['t1'] = df['t1_events']
@@ -110,7 +110,7 @@ def main():
     
     # 3. Selected features
     print("\n3. Training with SELECTED features (MDA > 0)...")
-    selected_df = pd.read_csv("selected_features.csv")
+    selected_df = pd.read_csv(os.path.join("data", "output", "selected_features.csv"))
     selected_feature_cols = [c for c in selected_df['feature'].tolist() if c in df.columns]
     X_selected = df[selected_feature_cols]
     print(f"   Features: {len(selected_feature_cols)}")

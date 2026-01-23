@@ -73,7 +73,8 @@ def run_pca_pipeline():
     """
     print("Loading features...")
     # Load the latest feature set
-    df = pd.read_csv('features_v2_labeled.csv')
+    # Load the latest feature set
+    df = pd.read_csv(os.path.join('data', 'output', 'features_v2_labeled.csv'))
     
     # 1. Drop non-numeric columns and explicit metadata
     exclude_cols = ['bin', 'w', 'avg_u', 'ret', 'close', 'date', 'sample_weight', 'label', 'return', 'holding_period']
@@ -105,7 +106,9 @@ def run_pca_pipeline():
     df_pca = pd.concat([df[meta_cols], X_pca], axis=1)
     
     # Save results
-    output_file = 'features_pca.csv'
+    output_dir = os.path.join('data', 'output')
+    os.makedirs(output_dir, exist_ok=True)
+    output_file = os.path.join(output_dir, 'features_pca.csv')
     df_pca.to_csv(output_file, index=False)
     print(f"PCA features saved to {output_file}")
     

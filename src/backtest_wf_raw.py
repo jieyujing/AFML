@@ -14,7 +14,7 @@ def load_data():
     """Load Raw Feature 2.0 data."""
     print("Loading features_v2_labeled.csv...")
     try:
-        df = pd.read_csv('features_v2_labeled.csv', index_col=0, parse_dates=True)
+        df = pd.read_csv(os.path.join("data", "output", "features_v2_labeled.csv"), index_col=0, parse_dates=True)
     except Exception as e:
         print(f"Error reading csv: {e}")
         return None, None
@@ -26,7 +26,7 @@ def load_data():
     if missing_meta:
         print(f"   Missing metadata {missing_meta}. Joining with labeled_events.csv...")
         try:
-            events = pd.read_csv("labeled_events.csv", index_col=0, parse_dates=True)
+            events = pd.read_csv(os.path.join("data", "output", "labeled_events.csv"), index_col=0, parse_dates=True)
             # Join only missing columns
             cols_to_join = [c for c in required_meta if c in events.columns and c not in df.columns]
             df = df.join(events[cols_to_join], rsuffix='_events')
@@ -185,8 +185,8 @@ def main():
     # 2. Params
     try:
         # Try to load Random Forest best params
-        if os.path.exists('best_hyperparameters.csv'):
-            params_df = pd.read_csv('best_hyperparameters.csv')
+        if os.path.exists(os.path.join("data", "output", "best_hyperparameters.csv")):
+            params_df = pd.read_csv(os.path.join("data", "output", "best_hyperparameters.csv"))
             params = params_df.iloc[0].to_dict()
             if 'best_auc' in params: del params['best_auc']
             
@@ -212,12 +212,12 @@ def main():
     
     # 4. Analyze Performance
     df_res = analyze_performance(df, probs)
-    df_res.to_csv('backtest_wf_raw_results.csv')
+    df_res.to_csv(os.path.join("data", "output", "backtest_wf_raw_results.csv"))
     
     # 5. Analyze Features
     sel_matrix, freq = analyze_feature_stability(log, feature_cols)
-    sel_matrix.to_csv('feature_selection_log.csv')
-    freq.to_csv('feature_selection_frequency.csv')
+    sel_matrix.to_csv(os.path.join("data", "output", "feature_selection_log.csv"))
+    freq.to_csv(os.path.join("data", "output", "feature_selection_frequency.csv"))
 
 if __name__ == "__main__":
     main()

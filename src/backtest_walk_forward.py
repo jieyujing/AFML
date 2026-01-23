@@ -13,7 +13,7 @@ def load_data():
     """Load PCA features and labeled events."""
     print("Loading data...")
     try:
-        df = pd.read_csv('features_pca.csv')
+        df = pd.read_csv(os.path.join("data", "output", "features_pca.csv"))
     except Exception as e:
         print(f"Error reading features_pca.csv: {e}")
         return None, None
@@ -27,7 +27,7 @@ def load_data():
         df['date'] = pd.to_datetime(df['date'])
         df.set_index('date', inplace=True)
         
-    events = pd.read_csv('labeled_events.csv', index_col=0, parse_dates=True)
+    events = pd.read_csv(os.path.join("data", "output", "labeled_events.csv"), index_col=0, parse_dates=True)
     df = df.join(events[['t1', 'ret', 'trgt', 'side']], rsuffix='_events')
     
     if 't1' not in df.columns and 't1_events' in df.columns:
@@ -179,8 +179,8 @@ def main():
     # 2. Load Params
     try:
         # Try to load Random Forest best params
-        if os.path.exists('best_hyperparameters.csv'):
-            params_df = pd.read_csv('best_hyperparameters.csv')
+        if os.path.exists(os.path.join("data", "output", "best_hyperparameters.csv")):
+            params_df = pd.read_csv(os.path.join("data", "output", "best_hyperparameters.csv"))
             params = params_df.iloc[0].to_dict()
             if 'best_auc' in params: del params['best_auc']
             
@@ -216,7 +216,7 @@ def main():
     df_res = analyze_wf_performance(df, oos_probs)
     
     # Save
-    df_res.to_csv('backtest_wf_results.csv')
+    df_res.to_csv(os.path.join("data", "output", "backtest_wf_results.csv"))
 
 if __name__ == "__main__":
     main()

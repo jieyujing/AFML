@@ -14,7 +14,7 @@ def main():
 
     # 1. Load Data
     try:
-        df = pd.read_csv("sample_weights.csv", index_col=0, parse_dates=True)
+        df = pd.read_csv(os.path.join("data", "output", "sample_weights.csv"), index_col=0, parse_dates=True)
         print(f"Loaded {len(df)} weighted events")
     except FileNotFoundError:
         print("Error: sample_weights.csv not found.")
