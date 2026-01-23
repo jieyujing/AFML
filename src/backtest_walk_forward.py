@@ -200,6 +200,30 @@ def analyze_wf_performance(df, probs, output_dir="data/output", suffix=""):
     
     # Plot
     plt.figure(figsize=(12, 6))
+    
+    # --- Plot Underlying Buy & Hold ---
+    bars_path = os.path.join("data", "output", "dynamic_dollar_bars.csv")
+    if os.path.exists(bars_path) and not df_res.empty:
+        try:
+            bars = pd.read_csv(bars_path)
+            bars['datetime'] = pd.to_datetime(bars['datetime'])
+            bars.set_index('datetime', inplace=True)
+            
+            # Align time range
+            start_dt, end_dt = df_res.index.min(), df_res.index.max()
+            mask = (bars.index >= start_dt) & (bars.index <= end_dt)
+            bars = bars[mask].copy()
+            
+            if not bars.empty:
+                # Calculate Cumulative Returns (Simple Summation to match PnL logic)
+                bars['ret'] = bars['close'].pct_change().fillna(0)
+                bars['cum_bnh'] = bars['ret'].cumsum()
+                
+                plt.plot(bars.index, bars['cum_bnh'], label='Underlying Asset (Buy & Hold)', color='black', alpha=0.5, linestyle=':', linewidth=1.5)
+                print(f"Added Underlying Buy & Hold comparison ({len(bars)} bars)")
+        except Exception as e:
+            print(f"Warning: Failed to plot underlying asset: {e}")
+
     sr_str = f"{stats['sharpe_ratio']:.2f}"
     psr_str = f"{stats['psr']:.2f}"
     
