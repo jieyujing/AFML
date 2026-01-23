@@ -219,7 +219,7 @@ def analyze_wf_performance(df, probs, output_dir="data/output", suffix=""):
                 bars['ret'] = bars['close'].pct_change().fillna(0)
                 bars['cum_bnh'] = bars['ret'].cumsum()
                 
-                plt.plot(bars.index, bars['cum_bnh'], label='Underlying Asset (Buy & Hold)', color='black', alpha=0.5, linestyle=':', linewidth=1.5)
+                plt.plot(bars.index, bars['cum_bnh'], label='Underlying Asset (Buy & Hold)', color='gray', alpha=0.6, linestyle=':', linewidth=1.5)
                 print(f"Added Underlying Buy & Hold comparison ({len(bars)} bars)")
         except Exception as e:
             print(f"Warning: Failed to plot underlying asset: {e}")
@@ -227,8 +227,8 @@ def analyze_wf_performance(df, probs, output_dir="data/output", suffix=""):
     sr_str = f"{stats['sharpe_ratio']:.2f}"
     psr_str = f"{stats['psr']:.2f}"
     
-    plt.plot(df_res.index, df_res['cum_pnl'], label=f'WF Strategy (SR {sr_str} | PSR {psr_str})', linewidth=2)
-    plt.plot(df_res.index, df_res['cum_bh'], label='Primary Model (Baseline)', color='gray', linestyle='--', alpha=0.7)
+    plt.plot(df_res.index, df_res['cum_pnl'], label=f'WF Strategy (SR {sr_str} | PSR {psr_str})', color='#1f77b4', linewidth=2)
+    plt.plot(df_res.index, df_res['cum_bh'], label='Primary Model (Baseline)', color='#ff7f0e', linestyle='--', alpha=0.8)
     plt.title(f'Walk-Forward Backtest (Expanding Window) {suffix}')
     plt.xlabel('Date')
     plt.ylabel('Cumulative Return (Units)')
