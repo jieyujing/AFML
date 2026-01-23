@@ -537,7 +537,26 @@ AFML/
 │   ├── position_sizes.csv           # 概率头寸大小
 │   └── ... (Other generated CSVs)
 └── visual_analysis/
+└── visual_analysis/
     ├── feature_importance_comparison.png  # MDI vs MDA 对比
     ├── feature_clustering.png   # 特征聚类分析
     └── cv_splits.png            # CV 分割示意图
-```
+
+---
+
+## 📅 实验记录: RB9999 Full Workflow (2020-2026) [In Progress]
+
+### 1. 数据采样与标注
+- **Input**: `RB9999.XSGE-2020-1-1-To-2026-01-22-1m.csv`
+- **Sampling**: Dynamic Dollar Bars (Output: `dynamic_dollar_bars.csv`)
+- **Labeling**: Triple Barrier (12 bars, 1x Vol). Symmetric results.
+- **Weights**: Average Uniqueness calculated.
+
+### 2. 特征工程 V2 + PCA
+- **Feature Eng**: 生成了完整特征集 (Alpha158 + FFD + Microstructure + Signal)。
+- **PCA**: 降维至 51 个主成分 (保留 95% 方差)。
+
+### 3. 模型优化 (Running)
+- **Status**: Hyperparameter Optimization (Optuna) in progress.
+- **Interim Result**: Best AUC > 0.558 (vs Baseline 0.554).
+- **Next Steps**: Finish Optimization -> Train -> Position Sizing -> Walk-Forward Backtest.
