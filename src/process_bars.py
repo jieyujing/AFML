@@ -328,7 +328,7 @@ def plot_random_sample(df, sample_size=None, bar_type="Dollar Bars"):
 
 
 def main():
-    file_path = "IF9999.CCFX-2022-1-1-To-2026-01-20-1m.csv"
+    file_path = "IF9999.CCFX-2020-1-1-To-2026-01-22-1m.csv"
 
     # 1. Load
     df_time = load_and_prep_data(file_path)
@@ -343,7 +343,9 @@ def main():
     print(f"Generated {len(df_dynamic)} dynamic dollar bars.")
 
     # 4. Save Dynamic Dollar Bars to CSV (AFML format)
-    output_file = "dynamic_dollar_bars.csv"
+    output_dir = os.path.join("data", "output")
+    os.makedirs(output_dir, exist_ok=True)
+    output_file = os.path.join(output_dir, "dynamic_dollar_bars.csv")
     save_to_csv(df_dynamic, output_file, bar_type="Dynamic Dollar Bars")
 
     # 5. Visualize All Data

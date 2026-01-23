@@ -10,8 +10,8 @@
 - **Dynamic Dollar Bars**: 使用 EMA 动态阈值
 
 **输出文件**:
-- `data/output/dynamic_dollar_bars.csv` - 3,927 个 dollar bars
-- 时间范围: 2022-01-04 至 2026-01-20
+- `data/output/dynamic_dollar_bars.csv` - 5,889 个 dollar bars
+- 时间范围: 2020-01-02 至 2026-01-22
 
 **关键发现**:
 - Dollar bars 成功降低了 Jarque-Bera 统计量
@@ -29,12 +29,12 @@
 - **垂直障碍**: 时间限制 (12 bars ≈ 3 days)
 
 **输出文件**:
-- `data/output/labeled_events.csv` - 3,707 个标记事件
+- `data/output/labeled_events.csv` - 1,108 个标记事件
 - `data/output/dollar_bars_labeled.csv` - 带标签的完整数据集
 
 **标签分布**:
-- Loss (-1): 53.33% (1,977 events)
-- Profit (1): 46.67% (1,730 events)
+- Loss (-1): 48.74%
+- Profit (1): 51.26%
 
 **收益统计**:
 - 平均收益: -0.014%
