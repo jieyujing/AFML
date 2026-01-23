@@ -25,7 +25,8 @@ def load_and_prep_data(filepath):
 
     # Calculate approximate dollar amount per bar
     # Using average price of the bar * volume * multiplier
-    multiplier = 300.0
+    # RB contract multiplier is 10
+    multiplier = 10.0
     avg_price = (df["open"] + df["high"] + df["low"] + df["close"]) / 4.0
     df["amount"] = avg_price * df["volume"] * multiplier
 
@@ -328,7 +329,7 @@ def plot_random_sample(df, sample_size=None, bar_type="Dollar Bars"):
 
 
 def main():
-    file_path = "IF9999.CCFX-2020-1-1-To-2026-01-22-1m.csv"
+    file_path = "RB9999.XSGE-2020-1-1-To-2026-01-22-1m.csv"
 
     # 1. Load
     df_time = load_and_prep_data(file_path)
