@@ -35,8 +35,19 @@ def main():
     # 1. Load Data
     print("\n1. Loading Data...")
     try:
-        df = pd.read_csv(os.path.join("data", "output", "features_labeled.csv"), index_col=0, parse_dates=True)
-        print(f"   Loaded features_labeled.csv: {df.shape}")
+        # Prioritize PCA features -> V2 Features -> Legacy Features
+        if os.path.exists(os.path.join("data", "output", "features_pca.csv")):
+             input_path = os.path.join("data", "output", "features_pca.csv")
+             print("   Using PCA Features (features_pca.csv)")
+        elif os.path.exists(os.path.join("data", "output", "features_v2_labeled.csv")):
+             input_path = os.path.join("data", "output", "features_v2_labeled.csv")
+             print("   Using V2 Features (features_v2_labeled.csv)")
+        else:
+             input_path = os.path.join("data", "output", "features_labeled.csv")
+             print("   Using Legacy Features (features_labeled.csv)")
+
+        df = pd.read_csv(input_path, index_col=0, parse_dates=True)
+        print(f"   Loaded data: {df.shape}")
         
         # Check for t1 (required for purging)
         if 't1' not in df.columns:
@@ -65,15 +76,16 @@ def main():
     weight_col = 'sample_weight'
     exclude_cols = ['label', 'ret', 'sample_weight', 'avg_uniqueness', 't1', 'trgt', 'side', 'bin', 't1_events']
     
-    # Check for selected features from MDA analysis
-    use_selected_features = False
-    if os.path.exists(os.path.join("data", "output", "selected_features.csv")):
+    # Feature Selection Logic
+    pc_cols = [c for c in df.columns if c.startswith('PC_')]
+    if len(pc_cols) > 0:
+        print(f"   Using {len(pc_cols)} PCA components")
+        feature_cols = pc_cols
+    elif os.path.exists(os.path.join("data", "output", "selected_features.csv")):
         print("\n   Found selected_features.csv - using MDA-filtered features")
         selected_df = pd.read_csv(os.path.join("data", "output", "selected_features.csv"))
         feature_cols = selected_df['feature'].tolist()
-        # Filter to only available columns
         feature_cols = [c for c in feature_cols if c in df.columns]
-        use_selected_features = True
         print(f"   Using {len(feature_cols)} selected features (MDA > 0)")
     else:
         feature_cols = [c for c in df.columns if c not in exclude_cols]
@@ -98,18 +110,43 @@ def main():
     print(f"   Features: {len(feature_cols)} | Classes: {y.unique()}")
     
     # 3. Setup Model and CV
-    # Random Forest parameters suitable for financial data
-    rf_params = {
-        'n_estimators': 1000,
-        'max_depth': 5, # Prevent overfitting
-        'criterion': 'entropy', # Information gain
-        'class_weight': 'balanced_subsample', # Handle class imbalance per tree
-        'bootstrap': True,
-        'max_features': 'sqrt',
-        'min_samples_leaf': 5, # Regularization
-        'random_state': 42,
-        'n_jobs': -1
-    }
+    # Load optimized hyperparameters if available
+    params_path = os.path.join("data", "output", "best_hyperparameters.csv")
+    if os.path.exists(params_path):
+        print("\n   Loading optimized hyperparameters...")
+        params_df = pd.read_csv(params_path)
+        # Drop best_auc column if it exists
+        if 'best_auc' in params_df.columns:
+            params_df = params_df.drop(columns=['best_auc'])
+        rf_params = params_df.iloc[0].to_dict()
+        # Ensure correct types
+        if 'n_estimators' in rf_params: rf_params['n_estimators'] = int(rf_params['n_estimators'])
+        if 'max_depth' in rf_params: rf_params['max_depth'] = int(rf_params['max_depth'])
+        if 'min_samples_split' in rf_params: rf_params['min_samples_split'] = int(rf_params['min_samples_split'])
+        if 'min_samples_leaf' in rf_params: rf_params['min_samples_leaf'] = int(rf_params['min_samples_leaf'])
+        
+        # Add constant params
+        rf_params['n_jobs'] = -1
+        rf_params['random_state'] = 42
+        rf_params['class_weight'] = 'balanced_subsample'
+        rf_params['bootstrap'] = True
+        
+        print("   Parameters loaded:")
+        for k, v in rf_params.items():
+            print(f"     {k}: {v}")
+    else:
+        print("\n   Using default parameters (Optimization not found)")
+        rf_params = {
+            'n_estimators': 1000,
+            'max_depth': 5,
+            'criterion': 'entropy',
+            'class_weight': 'balanced_subsample',
+            'bootstrap': True,
+            'max_features': 'sqrt',
+            'min_samples_leaf': 5,
+            'random_state': 42,
+            'n_jobs': -1
+        }
     
     model = RandomForestClassifier(**rf_params)
     
