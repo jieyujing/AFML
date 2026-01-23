@@ -10,7 +10,7 @@
 - **Dynamic Dollar Bars**: 使用 EMA 动态阈值
 
 **输出文件**:
-- `dynamic_dollar_bars.csv` - 3,927 个 dollar bars
+- `data/output/dynamic_dollar_bars.csv` - 3,927 个 dollar bars
 - 时间范围: 2022-01-04 至 2026-01-20
 
 **关键发现**:
@@ -29,8 +29,8 @@
 - **垂直障碍**: 时间限制 (12 bars ≈ 3 days)
 
 **输出文件**:
-- `labeled_events.csv` - 3,707 个标记事件
-- `dollar_bars_labeled.csv` - 带标签的完整数据集
+- `data/output/labeled_events.csv` - 3,707 个标记事件
+- `data/output/dollar_bars_labeled.csv` - 带标签的完整数据集
 
 **标签分布**:
 - Loss (-1): 53.33% (1,977 events)
@@ -89,7 +89,7 @@
 - **FFD Slope**: 在平稳序列上计算局部斜率
 
 **输出文件**:
-- `features_labeled.csv` - 包含 Alpha158 + FFD 特征 + 标签的完整数据集
+- `data/output/features_labeled.csv` - 包含 Alpha158 + FFD 特征 + 标签的完整数据集
 - 特征总数: ~180 个 (大幅增强了特征维度)
 
 ---
@@ -109,8 +109,8 @@
 - 权重分布呈现长尾特征，部分高收益且独立的样本获得了极高的权重 (Max > 6.0)
 
 **输出文件**:
-- `sample_weights.csv` - 包含唯一性分数和最终权重
-- `features_labeled.csv` - 已更新，新增 `sample_weight` 和 `avg_uniqueness` 列
+- `data/output/sample_weights.csv` - 包含唯一性分数和最终权重
+- `data/output/features_labeled.csv` - 已更新，新增 `sample_weight` 和 `avg_uniqueness` 列
 - `visual_analysis/weights_distribution.png` - 权重分布图
 - `visual_analysis/weights_correlations.png` - 权重与其他变量的相关性
 
@@ -151,7 +151,7 @@
 **结果分析**:
 - 模型的预测能力目前接近随机猜测 (AUC ~0.50)，这是金融数据的常见起点。
 - 考虑到使用了较为严格的 Purged CV，这反映了真实的泛化能力，没有过拟合。
-- **特征重要性**: 已提取并保存至 `feature_importance.csv`，并生成了 `visual_analysis/feature_importance.png`。
+- **特征重要性**: 已提取并保存至 `data/output/feature_importance.csv`，并生成了 `visual_analysis/feature_importance.png`。
 
 ---
 
@@ -190,9 +190,9 @@
 - 短期技术指标(5-10期)比长期指标(50期)更重要
 
 **输出文件**:
-- `feature_importance_mdi.csv` - MDI重要性分数
-- `feature_importance_mda.csv` - MDA重要性分数(推荐使用)
-- `selected_features.csv` - 筛选后的125个有效特征
+- `data/output/feature_importance_mdi.csv` - MDI重要性分数
+- `data/output/feature_importance_mda.csv` - MDA重要性分数(推荐使用)
+- `data/output/selected_features.csv` - 筛选后的125个有效特征
 - `visual_analysis/feature_importance_comparison.png` - MDI vs MDA 对比图
 - `visual_analysis/feature_clustering.png` - 特征聚类分析
 
@@ -235,8 +235,8 @@
   - `max_features`: 0.3 (30%)
 
 **输出文件**:
-- `best_hyperparameters.csv`: 最佳参数配置
-- `feature_importance_optimized.csv`: 优化模型的特征重要性
+- `data/output/best_hyperparameters.csv`: 最佳参数配置
+- `data/output/feature_importance_optimized.csv`: 优化模型的特征重要性
 - `visual_analysis/hyperparameter_optimization.png`: 优化过程可视化
 
 **结论**: 通过允许模型更深 (max_depth=13) 并使用更多树 (n_estimators=1800)，模型性能得到了显著提升，同时通过 Purged CV 保证了结果的稳健性。
@@ -258,8 +258,7 @@
 - **抗过拟合能力**: 随机森林通过 Bagging 机制在小样本和高噪声环境下表现更稳健，符合 AFML 的推荐。
 - **参数敏感度低**: 相比 LightGBM，随机森林对超参数不那么敏感，更容易在金融数据上获得稳定的 OOS 表现。
 - **内置采样调整**: 使用 `class_weight='balanced_subsample'` 可以更好地处理元标签中的类别不平衡问题。
-
-**关键洞察**:
+- **关键洞察**:
 - 随机森林在二级模型中作为"过滤器"非常有效，能识别一级模型在特定市场环境下的不确定性。
 - 引入 `primary_model_prob` 特征将一级模型的内生信息传递给二级模型，显著增强了元模型的区分度。
 
@@ -317,7 +316,7 @@
 
 **参数配置**:
 -   **窗口 (Windows)**: [20, 50, 100] (覆盖 ~1周, 2.5周, 5周)
--   **特征更新**: 已重新生成 `features_labeled.csv`，包含新增列。
+-   **特征更新**: 已重新生成 `data/output/features_labeled.csv`，包含新增列。
 
 ---
 
@@ -337,7 +336,7 @@
 
 **C. 集成特征管线 (Integrated Pipeline)**:
 - 整合 5 大模块：Alpha158 (基准)、FFD (长记忆)、Regime (状态)、Microstructure (微观)、Signal (信号)。
-- **输出**: `features_v2_labeled.csv`，包含完整的特征集、三重障碍标签及样本权重。
+- **输出**: `data/output/features_v2_labeled.csv`，包含完整的特征集、三重障碍标签及样本权重。
 - **数据规模**: 234 个特征，已完成全量生成。
 
 ---
@@ -354,7 +353,7 @@
 - **正交化**: PCA 生成的主成分 (PC_1 到 PC_51) 彼此正交，消除了原始特征间的强共线性，有助于提升线性模型或浅层树模型的稳定性。
 
 **输出文件**:
-- `features_pca.csv`: 包含 metadata + 51个主成分的降维数据集。
+- `data/output/features_pca.csv`: 包含 metadata + 51个主成分的降维数据集。
 - `visual_analysis/pca_variance.png`: 解释方差贡献率的可视化图表。
 
 ### 15. 随机森林模型调优 (Random Forest Retraining & Tuning) ✓
@@ -431,7 +430,7 @@
 - **结论**: **动态 PCA 成分选择** 是当前最优策略。这暗示了不同时期市场由不同的"主成分"（即不同的因子组合）驱动。
 
 **输出文件**:
-- `backtest_wf_results.csv`: 滚动回测交易记录。
+- `data/output/backtest_wf_results.csv`: 滚动回测交易记录。
 - `visual_analysis/backtest_walk_forward.png`: 动态优化的净值曲线。
 
 ---
@@ -475,7 +474,7 @@
 
 ---
 
-## 📁 当前项目结构
+## 📁 当前项目结构 (Updated Output Paths)
 
 ```
 AFML/
@@ -489,14 +488,15 @@ AFML/
 │   ├── feature_importance.py    # 特征重要性分析 (MDI/MDA)
 │   ├── compare_models.py        # 模型对比脚本
 │   └── hyperparameter_optimization.py # 超参数优化 (Optuna)
-├── features_labeled.csv         # 完整训练数据 (Features + Labels + Weights)
-├── selected_features.csv        # MDA筛选后的124个有效特征
-├── feature_importance_mda.csv   # MDA重要性分数
-├── feature_importance_optimized.csv # 优化后的特征重要性
-├── best_hyperparameters.csv     # 最佳超参数配置
+├── data/output/
+│   ├── features_labeled.csv         # 完整训练数据 (Features + Labels + Weights)
+│   ├── selected_features.csv        # MDA筛选后的124个有效特征
+│   ├── feature_importance_mda.csv   # MDA重要性分数
+│   ├── feature_importance_optimized.csv # 优化后的特征重要性
+│   ├── best_hyperparameters.csv     # 最佳超参数配置
+│   └── ... (Other generated CSVs)
 └── visual_analysis/
     ├── feature_importance_comparison.png  # MDI vs MDA 对比
     ├── feature_clustering.png   # 特征聚类分析
     └── cv_splits.png            # CV 分割示意图
 ```
-
