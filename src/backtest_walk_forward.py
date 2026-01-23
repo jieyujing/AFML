@@ -183,6 +183,11 @@ def analyze_wf_performance(df, probs, output_dir="data/output", suffix=""):
     df_res['cum_pnl'] = df_res['pnl'].cumsum()
     df_res['cum_bh'] = df_res['pnl_bh'].cumsum()
     
+    # Binary (Full Size) - for comparison
+    # If prob > 0.5, take full size position (1.0 * side). If prob <= 0.5, size 0.
+    df_res['pnl_binary'] = df_res['signal'] * df_res['ret'] - (np.abs(df_res['signal']) * cost)
+    df_res['cum_binary'] = df_res['pnl_binary'].cumsum()
+
     # --- AFML STATISTICS Integration ---
     stats = bs.compute_all_statistics(
         df_res['pnl'], 
@@ -190,6 +195,14 @@ def analyze_wf_performance(df, probs, output_dir="data/output", suffix=""):
         entries_per_year=252*4, 
         benchmark_sr=0.0
     )
+    
+    avg_bet_size = df_res['size_magnitude'].mean()
+    print(f"\n📊 BET SIZING STATS:")
+    print(f"  Average Bet Size: {avg_bet_size:.4f} (Low confidence => Small sizes)")
+    print(f"  Max Bet Size:     {df_res['size_magnitude'].max():.4f}")
+    if avg_bet_size < 0.1:
+        print("  ⚠️ WARNING: Strategy curve looks flat because Avg Bet Size is very small (< 10%).")
+        print("     The model has low confidence (probabilities clustered near 0.5).")
     
     bs.print_statistics_report(stats)
     
@@ -219,7 +232,7 @@ def analyze_wf_performance(df, probs, output_dir="data/output", suffix=""):
                 bars['ret'] = bars['close'].pct_change().fillna(0)
                 bars['cum_bnh'] = bars['ret'].cumsum()
                 
-                plt.plot(bars.index, bars['cum_bnh'], label='Underlying Asset (Buy & Hold)', color='gray', alpha=0.6, linestyle=':', linewidth=1.5)
+                plt.plot(bars.index, bars['cum_bnh'], label='Underlying Asset (Buy & Hold)', color='gray', alpha=0.4, linestyle=':', linewidth=1.5)
                 print(f"Added Underlying Buy & Hold comparison ({len(bars)} bars)")
         except Exception as e:
             print(f"Warning: Failed to plot underlying asset: {e}")
@@ -227,8 +240,9 @@ def analyze_wf_performance(df, probs, output_dir="data/output", suffix=""):
     sr_str = f"{stats['sharpe_ratio']:.2f}"
     psr_str = f"{stats['psr']:.2f}"
     
-    plt.plot(df_res.index, df_res['cum_pnl'], label=f'WF Strategy (SR {sr_str} | PSR {psr_str})', color='#1f77b4', linewidth=2)
-    plt.plot(df_res.index, df_res['cum_bh'], label='Primary Model (Baseline)', color='#ff7f0e', linestyle='--', alpha=0.8)
+    plt.plot(df_res.index, df_res['cum_pnl'], label=f'WF Proba Size (SR {sr_str})', color='#1f77b4', linewidth=2.5)
+    plt.plot(df_res.index, df_res['cum_binary'], label='WF Binary Size (100% Risk)', color='#1f77b4', linestyle='--', alpha=0.5, linewidth=1.5)
+    plt.plot(df_res.index, df_res['cum_bh'], label='Primary Model (Baseline)', color='#ff7f0e', linestyle='-.', alpha=0.6)
     plt.title(f'Walk-Forward Backtest (Expanding Window) {suffix}')
     plt.xlabel('Date')
     plt.ylabel('Cumulative Return (Units)')
