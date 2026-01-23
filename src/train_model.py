@@ -28,23 +28,34 @@ def get_feature_importance(model, features):
     return fi_df
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", type=str, default=None, help="Path to input features file")
+    parser.add_argument("--meta", action="store_true", help="Enable Meta-Labeling mode (map -1 to 0, keep 1)")
+    parser.add_argument("--n_splits", type=int, default=5, help="Number of CV splits")
+    args = parser.parse_args()
+
     print("=" * 80)
-    print("Training Random Forest with Purged K-Fold CV")
+    print(f"Training Random Forest with Purged K-Fold CV (Meta Mode: {args.meta})")
     print("=" * 80)
 
     # 1. Load Data
     print("\n1. Loading Data...")
     try:
-        # Prioritize PCA features -> V2 Features -> Legacy Features
-        if os.path.exists(os.path.join("data", "output", "features_pca.csv")):
-             input_path = os.path.join("data", "output", "features_pca.csv")
-             print("   Using PCA Features (features_pca.csv)")
-        elif os.path.exists(os.path.join("data", "output", "features_v2_labeled.csv")):
-             input_path = os.path.join("data", "output", "features_v2_labeled.csv")
-             print("   Using V2 Features (features_v2_labeled.csv)")
+        if args.input:
+            input_path = args.input
+            print(f"   Using provided input: {input_path}")
         else:
-             input_path = os.path.join("data", "output", "features_labeled.csv")
-             print("   Using Legacy Features (features_labeled.csv)")
+            # Prioritize PCA features -> V2 Features -> Legacy Features
+            if os.path.exists(os.path.join("data", "output", "features_pca.csv")):
+                 input_path = os.path.join("data", "output", "features_pca.csv")
+                 print("   Using PCA Features (features_pca.csv)")
+            elif os.path.exists(os.path.join("data", "output", "features_v2_labeled.csv")):
+                 input_path = os.path.join("data", "output", "features_v2_labeled.csv")
+                 print("   Using V2 Features (features_v2_labeled.csv)")
+            else:
+                 input_path = os.path.join("data", "output", "features_labeled.csv")
+                 print("   Using Legacy Features (features_labeled.csv)")
 
         df = pd.read_csv(input_path, index_col=0, parse_dates=True)
         print(f"   Loaded data: {df.shape}")
@@ -52,13 +63,27 @@ def main():
         # Check for t1 (required for purging)
         if 't1' not in df.columns:
             print("   't1' column missing in features. Joining with labeled_events.csv...")
-            events = pd.read_csv(os.path.join("data", "output", "labeled_events.csv"), index_col=0, parse_dates=True)
-            df = df.join(events[['t1']], rsuffix='_events')
-            if 't1' not in df.columns and 't1_events' in df.columns:
-                df['t1'] = df['t1_events']
+            # Try to find corresponding labeled_events
+            # If input was features_v2_labeled_meta.csv, look for labeled_events_meta.csv
+            if "_meta" in input_path:
+                events_path = os.path.join("data", "output", "labeled_events_meta.csv")
+            else:
+                events_path = os.path.join("data", "output", "labeled_events.csv")
+            
+            if os.path.exists(events_path):
+                events = pd.read_csv(events_path, index_col=0, parse_dates=True)
+                df = df.join(events[['t1']], rsuffix='_events')
+                if 't1' not in df.columns and 't1_events' in df.columns:
+                    df['t1'] = df['t1_events']
+            else:
+                 print(f"   Warning: Could not find labeled events file at {events_path}")
         
-        df['t1'] = pd.to_datetime(df['t1'])
-        
+        if 't1' in df.columns:
+            df['t1'] = pd.to_datetime(df['t1'])
+        else:
+             print("   Error: 't1' column required for Purged K-Fold. Aborting.")
+             return
+
         # Drop rows with NaN
         original_len = len(df)
         df = df.dropna()
@@ -74,14 +99,15 @@ def main():
     # 2. Prepare X, y, weights
     target_col = 'label'
     weight_col = 'sample_weight'
-    exclude_cols = ['label', 'ret', 'sample_weight', 'avg_uniqueness', 't1', 'trgt', 'side', 'bin', 't1_events']
+    exclude_cols = ['label', 'ret', 'sample_weight', 'avg_uniqueness', 't1', 'trgt', 'side', 'bin', 't1_events', 'holding_period', 'return']
     
     # Feature Selection Logic
     pc_cols = [c for c in df.columns if c.startswith('PC_')]
     if len(pc_cols) > 0:
         print(f"   Using {len(pc_cols)} PCA components")
         feature_cols = pc_cols
-    elif os.path.exists(os.path.join("data", "output", "selected_features.csv")):
+    # NOTE: Disabling selected_features.csv logic if explicit input is provided to avoid staleness
+    elif args.input is None and os.path.exists(os.path.join("data", "output", "selected_features.csv")):
         print("\n   Found selected_features.csv - using MDA-filtered features")
         selected_df = pd.read_csv(os.path.join("data", "output", "selected_features.csv"))
         feature_cols = selected_df['feature'].tolist()
@@ -93,6 +119,11 @@ def main():
     
     X = df[feature_cols]
     y = df[target_col]
+    
+    # META LABELING TRANSFORMATION
+    if args.meta:
+        print("   Applying Meta-Labeling transformation: {-1, 0} -> 0, {1} -> 1")
+        y = y.apply(lambda x: 1 if x == 1 else 0)
     
     # Ensure labels are integers for sklearn
     y = y.astype(int)
@@ -150,7 +181,7 @@ def main():
     
     model = RandomForestClassifier(**rf_params)
     
-    n_splits = 5
+    n_splits = args.n_splits
     embargo_pct = 0.01
     cv = PurgedKFold(n_splits=n_splits, samples_info_sets=t1, embargo=embargo_pct)
     
@@ -194,7 +225,11 @@ def main():
              auc = roc_auc_score(y_test, y_pred_proba[:, 1])
         else:
              # Multiclass
-             auc = roc_auc_score(y_test, y_pred_proba, multi_class='ovr')
+             if y_pred_proba.shape[1] == len(np.unique(y)):
+                 auc = roc_auc_score(y_test, y_pred_proba, multi_class='ovr')
+             else:
+                 auc = np.nan
+                 print("    Warning: skipping AUC calc due to class mismatch")
 
         accuracy_scores.append(acc)
         log_loss_scores.append(ll)
@@ -212,7 +247,7 @@ def main():
     print("-" * 40)
     print(f"   Mean Accuracy:  {np.mean(accuracy_scores):.4f} (+/- {np.std(accuracy_scores):.4f})")
     print(f"   Mean F1 Score:  {np.mean(f1_scores):.4f} (+/- {np.std(f1_scores):.4f})")
-    print(f"   Mean ROC AUC:   {np.mean(auc_scores):.4f} (+/- {np.std(auc_scores):.4f})")
+    print(f"   Mean ROC AUC:   {np.nanmean(auc_scores):.4f} (+/- {np.nanstd(auc_scores):.4f})")
     print(f"   Mean Log Loss:  {np.mean(log_loss_scores):.4f} (+/- {np.std(log_loss_scores):.4f})")
     
     # 5. Save Feature Importance

@@ -142,56 +142,84 @@ class ProbabilisticBetSizer:
         return self.transform(events, prob_series, pred_series)
 
 
-def load_data():
+def load_data(input_path: str = None, suffix: str = ""):
     """Load the required datasets."""
     print("=" * 60)
     print("POSITION SIZING PIPELINE (AFML Chapter 10)")
     print("=" * 60)
     
-    # Load PCA features (includes labels, weights, and metadata)
-    pca_path = os.path.join("data", "output", "features_pca.csv")
-    if not os.path.exists(pca_path):
-        raise FileNotFoundError(f"PCA features not found: {pca_path}")
+    # Load features (includes labels, weights, and metadata)
+    if input_path:
+        feat_path = input_path
+        print(f"Loading features from: {feat_path}")
+    else:
+        # Defaults
+        # Check for V2 first, then PCA, then legacy
+        v2_path = os.path.join("data", "output", f"features_v2_labeled{suffix}.csv")
+        pca_path = os.path.join("data", "output", f"features_pca{suffix}.csv")
+        
+        if os.path.exists(v2_path):
+            feat_path = v2_path
+            print(f"Loading V2 features from: {feat_path}")
+        elif os.path.exists(pca_path):
+            feat_path = pca_path
+            print(f"Loading PCA features from: {feat_path}")
+        else:
+            feat_path = os.path.join("data", "output", f"features_labeled{suffix}.csv")
+            print(f"Loading Legacy features from: {feat_path}")
+
+    if not os.path.exists(feat_path):
+        raise FileNotFoundError(f"Features file not found: {feat_path}")
     
-    df_pca = pd.read_csv(pca_path)
+    df = pd.read_csv(feat_path)
     
     # Handle index
-    if 'Unnamed: 0' in df_pca.columns:
-        df_pca.rename(columns={'Unnamed: 0': 'date'}, inplace=True)
-    if 'date' in df_pca.columns:
-        df_pca['date'] = pd.to_datetime(df_pca['date'])
-        df_pca.set_index('date', inplace=True)
-    
+    if 'Unnamed: 0' in df.columns:
+        df.rename(columns={'Unnamed: 0': 'date'}, inplace=True)
+    if 'date' in df.columns:
+        df['date'] = pd.to_datetime(df['date'])
+        df.set_index('date', inplace=True)
+    else:
+        try:
+            df.index = pd.to_datetime(df.index)
+        except Exception:
+            pass
+
     # Load labeled events for t1 and avg_uniqueness
-    events_path = os.path.join("data", "output", "labeled_events.csv")
+    events_path = os.path.join("data", "output", f"labeled_events{suffix}.csv")
     if not os.path.exists(events_path):
-        raise FileNotFoundError(f"Labeled events not found: {events_path}")
+        events_path = os.path.join("data", "output", "labeled_events.csv")
     
-    events = pd.read_csv(events_path, index_col=0, parse_dates=True)
+    if os.path.exists(events_path): 
+        print(f"Loading labeled events from: {events_path}")
+        events = pd.read_csv(events_path, index_col=0, parse_dates=True)
+    else:
+        print("Warning: Labeled events file not found. Metadata might be missing.")
+        events = pd.DataFrame(index=df.index)
     
     # Load sample weights for avg_uniqueness
-    weights_path = os.path.join("data", "output", "sample_weights.csv")
+    weights_path = os.path.join("data", "output", f"sample_weights{suffix}.csv")
     if os.path.exists(weights_path):
+        print(f"Loading sample weights from: {weights_path}")
         weights = pd.read_csv(weights_path, index_col=0, parse_dates=True)
         if 'avg_uniqueness' in weights.columns:
-            events = events.join(weights[['avg_uniqueness']])
+            events = events.combine_first(weights[['avg_uniqueness']])
     
-    # Merge t1 into df_pca
-    df_pca = df_pca.join(events[['t1', 'ret', 'side', 'avg_uniqueness']], rsuffix='_events')
+    # Merge required columns into df if missing
+    for col in ['t1', 'ret', 'side', 'avg_uniqueness']:
+        if col not in df.columns and col in events.columns:
+            df[col] = events[col]
     
-    if 't1' not in df_pca.columns and 't1_events' in df_pca.columns:
-        df_pca['t1'] = df_pca['t1_events']
+    if 't1' in df.columns:
+        df['t1'] = pd.to_datetime(df['t1'])
     
-    if 't1' in df_pca.columns:
-        df_pca['t1'] = pd.to_datetime(df_pca['t1'])
+    df = df.dropna(subset=['label'])
+    df = df.sort_index()
     
-    df_pca = df_pca.dropna(subset=['label'])
-    df_pca = df_pca.sort_index()
+    print(f"Loaded {len(df)} samples")
+    print(f"Date Range: {df.index.min()} to {df.index.max()}")
     
-    print(f"Loaded {len(df_pca)} events with PCA features")
-    print(f"Date Range: {df_pca.index.min()} to {df_pca.index.max()}")
-    
-    return df_pca, events
+    return df, events
 
 
 def generate_cv_probabilities(df: pd.DataFrame, feature_cols: list) -> pd.Series:
@@ -325,12 +353,37 @@ def visualize_bet_sizing(df: pd.DataFrame, bet_sizes: pd.Series, probs: pd.Serie
 
 def main():
     """Main execution pipeline for position sizing."""
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input", type=str, default=None, help="Input features file")
+    parser.add_argument("--output", type=str, default=None, help="Output position sizes file")
+    parser.add_argument("--suffix", type=str, default="", help="Suffix for picking default files (e.g. '_meta')")
+    parser.add_argument("--meta", action="store_true", help="Enable Meta-Labeling logic")
+    args = parser.parse_args()
+
     # 1. Load Data
-    df, events = load_data()
+    df, events = load_data(input_path=args.input, suffix=args.suffix)
+    
+    # Feature Selection
+    # If PCA cols exist, use them. Else use all numerical cols except metadata
+    exclude_cols = ['label', 'ret', 'sample_weight', 'avg_uniqueness', 't1', 'trgt', 'side', 'bin', 't1_events', 'holding_period', 'return']
     feature_cols = [c for c in df.columns if c.startswith('PC_')]
     
-    print(f"\nFeatures: {len(feature_cols)} PCA components")
+    if len(feature_cols) == 0:
+        # Use all valid features
+        feature_cols = [c for c in df.columns if c not in exclude_cols]
     
+    print(f"\nFeatures: {len(feature_cols)} (Top 5: {feature_cols[:5]})")
+    
+    # META LABELING TRANSFORMATION for Training
+    if args.meta:
+        print("   Applying Meta-Labeling transformation for CV training: {-1, 0} -> 0, {1} -> 1")
+        # We need to map labels to binary for the Probabilistic Classifier
+        # But wait, df['label'] is used in generate_cv_probabilities.
+        # We should modify it IN PLACE or pass a modified instructions.
+        # Let's map it here.
+        df['label'] = df['label'].apply(lambda x: 1 if x == 1 else 0)
+
     # 2. Generate OOS Probabilities
     probs = generate_cv_probabilities(df, feature_cols)
     
@@ -351,20 +404,26 @@ def main():
     # 4. Generate Bet Sizes
     print("\nCalculating bet sizes...")
     
-    # Create prediction series (direction: +1 for prob > 0.5, -1 otherwise)
-    # Note: In Triple Barrier, label=1 means profit, label=0 means loss.
-    # The 'side' column in labeled_events tells us Long (+1) or Short (-1).
-    # For simplicity, we treat prob > 0.5 as "take the trade" with original side.
+    # Create prediction series 
+    # For Meta-Labeling, the 'side' column comes from the Primary Model.
+    # If we are betting, we bet in the direction of 'side' with size determined by Meta Model Probs.
     
     if 'side' in df.columns:
         pred_series = df.loc[probs.index, 'side']
     else:
         # Default to Long if side not available
         pred_series = pd.Series(1, index=probs.index)
+        print("Warning: 'side' column not found. Assuming Long-only.")
     
     # Prepare events DataFrame for bet sizing
-    events_for_sizing = df.loc[probs.index, ['t1', 'avg_uniqueness']].copy()
-    
+    cols_needed = ['t1']
+    if 'avg_uniqueness' in df.columns:
+        cols_needed.append('avg_uniqueness')
+        events_for_sizing = df.loc[probs.index, cols_needed].copy()
+    else:
+        events_for_sizing = df.loc[probs.index, cols_needed].copy()
+        events_for_sizing['avg_uniqueness'] = 1.0
+
     bet_sizes = bet_sizer.fit_transform(
         events=events_for_sizing,
         prob_train=probs,
@@ -381,14 +440,17 @@ def main():
     print(f"  Short Bets:    {(bet_sizes < 0).sum()} ({(bet_sizes < 0).mean():.1%})")
     
     # 6. Calculate theoretical PnL (no costs)
-    rets = df.loc[probs.index, 'ret']
-    pnl = bet_sizes * rets
-    
-    sharpe_raw = pnl.mean() / pnl.std() * np.sqrt(252 * 4) if pnl.std() > 0 else 0
-    
-    print("\nTheoretical Performance (Before Costs):")
-    print(f"  Total Return:  {pnl.sum():.4f}")
-    print(f"  Sharpe Ratio:  {sharpe_raw:.2f}")
+    if 'ret' in df.columns:
+        rets = df.loc[probs.index, 'ret']
+        pnl = bet_sizes * rets
+        sharpe_raw = pnl.mean() / pnl.std() * np.sqrt(252 * 4) if pnl.std() > 0 else 0
+        
+        print("\nTheoretical Performance (Before Costs):")
+        print(f"  Total Return:  {pnl.sum():.4f}")
+        print(f"  Sharpe Ratio:  {sharpe_raw:.2f}")
+    else:
+        print("\nWarning: 'ret' column missing. Cannot calculate PnL.")
+        rets = pd.Series(0, index=bet_sizes.index)
     
     # 7. Save Results
     output = pd.DataFrame({
@@ -399,7 +461,11 @@ def main():
     })
     output['pnl'] = output['bet_size'] * output['ret']
     
-    output_path = os.path.join("data", "output", "position_sizes.csv")
+    if args.output:
+        output_path = args.output
+    else:
+        output_path = os.path.join("data", "output", f"position_sizes{args.suffix}.csv")
+        
     output.to_csv(output_path)
     print(f"\nSaved position sizes to {output_path}")
     

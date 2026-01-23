@@ -194,8 +194,13 @@ def get_weights_by_return(triple_barrier_events, close_series, num_threads=5, ve
 # ==============================================================================
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--suffix", type=str, default="", help="Suffix for input/output files (e.g. '_meta')")
+    args = parser.parse_args()
+
     print("=" * 80)
-    print("Sample Weights Calculation - AFML Chapter 4")
+    print(f"Sample Weights Calculation - AFML Chapter 4 (Suffix: {args.suffix})")
     print("=" * 80)
 
     # 1. Load Data
@@ -206,13 +211,14 @@ def main():
         close_series = close_df["close"]
         
         # Load labeled events
-        events = pd.read_csv(os.path.join("data", "output", "labeled_events.csv"), index_col=0, parse_dates=True)
+        events_path = os.path.join("data", "output", f"labeled_events{args.suffix}.csv")
+        events = pd.read_csv(events_path, index_col=0, parse_dates=True)
         
         # Ensure t1 is datetime
         events["t1"] = pd.to_datetime(events["t1"])
         
         print(f"   Loaded {len(close_series)} price bars")
-        print(f"   Loaded {len(events)} labeled events")
+        print(f"   Loaded {len(events)} labeled events from {events_path}")
         
     except FileNotFoundError as e:
         print(f"Error: Required file not found. {e}")
@@ -232,8 +238,9 @@ def main():
     
     print("   Analysis of Uniqueness:")
     print(f"   Mean Uniqueness: {avg_uniqueness['tW'].mean():.4f}")
-    print(f"   Min Uniqueness:  {avg_uniqueness['tW'].min():.4f}")
-    print(f"   Max Uniqueness:  {avg_uniqueness['tW'].max():.4f}")
+    if not avg_uniqueness.empty:
+        print(f"   Min Uniqueness:  {avg_uniqueness['tW'].min():.4f}")
+        print(f"   Max Uniqueness:  {avg_uniqueness['tW'].max():.4f}")
     
     # 3. Calculate Sample Weights (by Return Attribution)
     print("\n3. Calculating Sample Weights (Return Attribution)...")
@@ -248,8 +255,9 @@ def main():
     
     print("   Analysis of Weights:")
     print(f"   Mean Weight: {weights.mean():.4f}")
-    print(f"   Min Weight:  {weights.min():.4f}")
-    print(f"   Max Weight:  {weights.max():.4f}")
+    if not weights.empty:
+        print(f"   Min Weight:  {weights.min():.4f}")
+        print(f"   Max Weight:  {weights.max():.4f}")
     print(f"   Count: {len(weights)}")
 
     # 4. Save Results
@@ -265,30 +273,31 @@ def main():
     
     output_dir = os.path.join("data", "output")
     os.makedirs(output_dir, exist_ok=True)
-    output_file = os.path.join(output_dir, "sample_weights.csv")
-    output_df.to_csv(output_file)
+    output_file = os.path.join(output_dir, f"sample_weights{args.suffix}.csv")
+    final_df = output_df
+    final_df.to_csv(output_file)
     print(f"   ✓ Saved weights to: {output_file}")
     
-    # 5. Update features_labeled.csv if it exists
-    features_file = os.path.join("data", "output", "features_labeled.csv")
-    if os.path.exists(features_file):
-        print(f"\n5. Updating {features_file} with weights...")
-        features_df = pd.read_csv(features_file, index_col=0, parse_dates=True)
-        
-        # Join weights
-        # We use map to update
-        features_df['sample_weight'] = weights
-        features_df['avg_uniqueness'] = avg_uniqueness['tW']
-        
-        # Handle NaNs if any (though features should be subset of events)
-        null_weights = features_df['sample_weight'].isnull().sum()
-        if null_weights > 0:
-            print(f"   Warning: {null_weights} rows in features file missing weights (filled with 0)")
+    # 5. Update features_v2_labeled{suffix}.csv or features_labeled{suffix}.csv if it exists
+    # Check V2 first, then legacy
+    for feat_file_name in [f"features_v2_labeled{args.suffix}.csv", f"features_labeled{args.suffix}.csv"]:
+        features_file = os.path.join("data", "output", feat_file_name)
+        if os.path.exists(features_file):
+            print(f"\n5. Updating {features_file} with weights...")
+            features_df = pd.read_csv(features_file, index_col=0, parse_dates=True)
+            
+            # Join weights
+            # We use map to update
+            # Note: weights index matches features index (events)
+            features_df['sample_weight'] = weights
+            features_df['avg_uniqueness'] = avg_uniqueness['tW']
+            
+            # Handle NaNs if any (though features should be subset of events)
             features_df['sample_weight'] = features_df['sample_weight'].fillna(0)
             features_df['avg_uniqueness'] = features_df['avg_uniqueness'].fillna(0)
-            
-        features_df.to_csv(features_file)
-        print(f"   ✓ Updated {features_file}")
+                
+            features_df.to_csv(features_file)
+            print(f"   ✓ Updated {features_file}")
 
     print("\n" + "=" * 80)
     print("✓ Sample Weights Calculation Complete!")

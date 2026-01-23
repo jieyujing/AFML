@@ -25,8 +25,13 @@ from signal_features import SignalFeatureGenerator
 
 def main():
     """Generate comprehensive features combining all generators."""
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--suffix", type=str, default="", help="Suffix for input/output files (e.g. '_meta')")
+    args = parser.parse_args()
+
     print("=" * 80)
-    print("FEATURE ENGINEERING 2.0 - INTEGRATED PIPELINE")
+    print(f"FEATURE ENGINEERING 2.0 - INTEGRATED PIPELINE (Suffix: {args.suffix})")
     print("=" * 80)
 
     # 1. Load dollar bars
@@ -95,11 +100,10 @@ def main():
     print("\n8. Saving feature sets...")
     
     # Save comprehensive feature set
-    # Save comprehensive feature set
     output_dir = os.path.join("data", "output")
     os.makedirs(output_dir, exist_ok=True)
-    features.to_csv(os.path.join(output_dir, "features_v2.csv"))
-    print(f"   ✓ Saved comprehensive features to: features_v2.csv")
+    features.to_csv(os.path.join(output_dir, f"features_v2{args.suffix}.csv"))
+    print(f"   ✓ Saved comprehensive features to: features_v2{args.suffix}.csv")
     
     # Save individual feature sets for analysis
     features_micro.to_csv(os.path.join(output_dir, "features_microstructure.csv"))
@@ -110,7 +114,8 @@ def main():
     # 10. Merge with labels (if available)
     print("\n9. Merging with labels...")
     try:
-        labels = pd.read_csv(os.path.join("data", "output", "labeled_events.csv"), index_col=0, parse_dates=True)
+        labels_path = os.path.join("data", "output", f"labeled_events{args.suffix}.csv")
+        labels = pd.read_csv(labels_path, index_col=0, parse_dates=True)
         # Standardize column names
         if "ret" in labels.columns:
             labels = labels.rename(columns={"ret": "return"})
@@ -121,18 +126,20 @@ def main():
             labels["holding_period"] = (labels["t1"] - labels.index).dt.total_seconds() / 3600
 
         # Merge features with labels
-        features_labeled = features.join(labels[["label", "return", "holding_period"]], how="inner")
+        features_labeled = features.join(labels[["label", "return", "holding_period", "t1"]], how="inner")
         
         # Load sample weights if available
         try:
-            weights = pd.read_csv(os.path.join("data", "output", "sample_weights.csv"), index_col=0, parse_dates=True)
+            weights_path = os.path.join("data", "output", f"sample_weights{args.suffix}.csv")
+            weights = pd.read_csv(weights_path, index_col=0, parse_dates=True)
             features_labeled = features_labeled.join(weights[["sample_weight", "avg_uniqueness"]], how="left")
-            print(f"   ✓ Merged with sample weights")
+            print(f"   ✓ Merged with sample weights from {weights_path}")
         except FileNotFoundError:
-            print(f"   ! Sample weights not found, skipping")
+            print(f"   ! Sample weights not found at {weights_path}, skipping")
         
-        features_labeled.to_csv(os.path.join("data", "output", "features_v2_labeled.csv"))
-        print(f"   ✓ Saved labeled features to: features_v2_labeled.csv")
+        output_labeled = os.path.join("data", "output", f"features_v2_labeled{args.suffix}.csv")
+        features_labeled.to_csv(output_labeled)
+        print(f"   ✓ Saved labeled features to: {output_labeled}")
         print(f"   ✓ Labeled samples: {len(features_labeled)}")
         
         # Label distribution
@@ -141,7 +148,7 @@ def main():
         print(f"   Profit (1): {(features_labeled['label'] == 1).sum()} ({(features_labeled['label'] == 1).mean()*100:.2f}%)")
         
     except FileNotFoundError:
-        print("   ! labeled_events.csv not found, skipping label merge")
+        print(f"   ! {labels_path} not found, skipping label merge")
 
     # 11. Feature Summary
     print("\n" + "=" * 80)

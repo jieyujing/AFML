@@ -289,7 +289,27 @@ def get_events(
     else:
         t1 = None
 
-    # 2. Apply triple barrier
+    # 4. Set side (position direction) if not provided
+    if side is None:
+        # Infer side from price direction at the event
+        # If price went up, assume Long (1). If down, assume Short (-1).
+        # This effectively sets up a "Trend Following" primary model.
+        # We need to look at the change leading up to the event.
+        # Since t_events are points where CUSUM triggered, the direction
+        # is determined by the return at that timestamp.
+        
+        # Get returns at the event timestamps
+        # Note: close.diff() gives change from t-1 to t
+        price_diff = close.diff()
+        side = np.sign(price_diff.loc[t_events])
+        
+        # Handle cases where diff might be 0 (rare in CUSUM but possible)
+        # Default to 1 (Long) or drop? Let's default to 1.
+        side = side.replace(0, 1)
+        
+        print(f"   Inferred 'side' from price direction (Longs: {(side==1).sum()}, Shorts: {(side==-1).sum()})")
+
+    # 5. Apply triple barrier
     events = apply_triple_barrier(
         close=close,
         events=t_events,
@@ -367,7 +387,24 @@ def drop_labels(events: pd.DataFrame, min_pct: float = 0.05) -> pd.DataFrame:
 def main():
     """
     Example usage of Triple Barrier Labeling on dollar bars.
+    Supports CLI arguments for flexible workflow configuration.
     """
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Triple Barrier Labeling")
+    parser.add_argument("--pt", type=float, default=1.0, help="Profit-taking multiplier (default: 1.0)")
+    parser.add_argument("--sl", type=float, default=1.0, help="Stop-loss multiplier (default: 1.0)")
+    parser.add_argument("--vertical", type=int, default=12, help="Vertical barrier in bars (default: 12)")
+    parser.add_argument("--min_ret", type=float, default=0.001, help="Minimum return threshold (default: 0.001)")
+    parser.add_argument("--suffix", type=str, default="", help="Suffix for output files (e.g., '_primary')")
+    parser.add_argument("--side_file", type=str, default=None, help="Optional CSV file containing 'side' column to override Momentum")
+    
+    # Check if run from other script or interactive without args
+    if len(sys.argv) == 1:
+        args = parser.parse_args([])
+    else:
+        args = parser.parse_args()
+
     print("=" * 80)
     print("Triple Barrier Labeling - AFML (Dollar Bar Implementation)")
     print("=" * 80)
@@ -386,42 +423,40 @@ def main():
     print(f"   Loaded {len(df)} bars")
     print(f"   Date range: {df.index[0]} to {df.index[-1]}")
 
-    # 2. Calculate volatility for barrier sizing
+    # 2. Calculating volatility
     print("\n2. Calculating volatility (Bar-based)...")
     vol = get_volatility(df["close"], span=100)
     print(f"   Average volatility: {vol.mean():.4f}")
-    print(f"   Volatility range: {vol.min():.4f} to {vol.max():.4f}")
 
-    # 3. Apply CUSUM Filter
+    # 3. Applying CUSUM Filter
     print("\n3. Applying CUSUM Filter (Event Sampling)...")
-    # AFML Standard setting: k=1.0 implies we only sample events when the cumulative
-    # deviation exceeds 1 standard deviation (statistically significant shifts).
-    # k can be adjusted (e.g., 0.5 for more samples, 2.0 for higher confidence).
-
-    #    * 经验法则:
-    #    * 如果采样率 < 1%：说明阈值太高，可能漏掉了有效信息。尝试降低到 0.5 * vol。
-    #    * 如果采样率 > 20%：说明阈值太低，CUSUM
-    #      过滤器几乎没有起作用（接近于全量采样）。尝试提高到 1.0 * vol 或更高。
-
     cusum_vol_multiplier = 2
-    print(
-        f"   Threshold Multiplier (k): {cusum_vol_multiplier} (Targeting 1-sigma events)"
-    )
-
     cusum_events = get_cusum_events(df["close"], threshold=vol * cusum_vol_multiplier)
     print(f"   Selected {len(cusum_events)} events from {len(df)} bars")
-    print(f"   Sampling ratio: {len(cusum_events) / len(df) * 100:.2f}%")
 
-    # 4. Set barrier parameters
+    # 4. Set barrier parameters from CLI
     print("\n4. Setting barrier parameters...")
-    pt_sl = [1, 1]  # Symmetric barriers at 1x volatility
-    vertical_barrier_bars = 12  # 12-bar holding period (Intrinsic Time)
-    min_ret = 0.001  # 0.1% minimum return threshold
+    pt_sl = [args.pt, args.sl]
+    vertical_barrier_bars = args.vertical
+    min_ret = args.min_ret
 
     print(f"   Profit-taking: {pt_sl[0]}x volatility")
     print(f"   Stop-loss: {pt_sl[1]}x volatility")
-    print(f"   Vertical barrier: {vertical_barrier_bars} bars (Intrinsic Time)")
-    print(f"   Minimum return: {min_ret * 100}%")
+    print(f"   Vertical barrier: {vertical_barrier_bars} bars")
+
+    # Handle custom Side source (for Two-Stage Stacking)
+    side = None
+    if args.side_file:
+        print(f"\n   Loading external SIDE signal from: {args.side_file}")
+        try:
+            side_df = pd.read_csv(args.side_file, index_col=0, parse_dates=True)
+            if 'side' in side_df.columns:
+                side = side_df['side']
+                print("   ✓ Loaded external 'side' signal.")
+            else:
+                print("   ⚠ Warning: 'side' column not found in file. Falling back to Momentum.")
+        except Exception as e:
+            print(f"   Error loading side file: {e}")
 
     # 5. Generate labels
     print("\n5. Generating labels...")
@@ -432,6 +467,7 @@ def main():
         target=vol,
         min_ret=min_ret,
         vertical_barrier_bars=vertical_barrier_bars,
+        side=side
     )
 
     print(f"   Generated {len(events)} labeled events")
@@ -457,7 +493,7 @@ def main():
     print("\n8. Saving labeled events...")
     output_dir = os.path.join("data", "output")
     os.makedirs(output_dir, exist_ok=True)
-    output_file = os.path.join(output_dir, "labeled_events.csv")
+    output_file = os.path.join(output_dir, f"labeled_events{args.suffix}.csv")
     events.to_csv(output_file)
     print(f"   ✓ Saved to: {output_file}")
 
@@ -473,7 +509,7 @@ def main():
     # Drop rows without labels
     df_labeled = df_labeled.dropna(subset=["label"])
 
-    final_output = os.path.join(output_dir, "dollar_bars_labeled.csv")
+    final_output = os.path.join(output_dir, f"dollar_bars_labeled{args.suffix}.csv")
     df_labeled.to_csv(final_output)
     print(f"   ✓ Saved to: {final_output}")
     print(f"   ✓ Total labeled bars: {len(df_labeled)}")

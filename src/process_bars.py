@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from scipy import stats
+from statsmodels.tsa.stattools import adfuller
 import sys
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
@@ -26,7 +27,7 @@ def load_and_prep_data(filepath):
     # Calculate approximate dollar amount per bar
     # Using average price of the bar * volume * multiplier
     # RB contract multiplier is 10
-    multiplier = 10.0
+    multiplier = 300.0
     avg_price = (df["open"] + df["high"] + df["low"] + df["close"]) / 4.0
     df["amount"] = avg_price * df["volume"] * multiplier
 
@@ -170,6 +171,29 @@ def analyze_normality(df, name):
         "skew": skew,
     }
 
+def analyze_stationarity(df, name):
+    """
+    Run Augmented Dickey-Fuller (ADF) test for stationarity.
+    """
+    # Log Returns
+    returns = np.log(df["close"] / df["close"].shift(1)).dropna()
+
+    # ADF Test
+    # Null Hypothesis: The series has a unit root (non-stationary)
+    # Alternate Hypothesis: The series has no unit root (stationary)
+    adf_result = adfuller(returns)
+    adf_stat = adf_result[0]
+    p_value = adf_result[1]
+    
+    # Critical values
+    crit_values = adf_result[4]
+
+    return {
+        "name": name,
+        "adf_stat": adf_stat,
+        "p_value": p_value,
+        "crit_1%": crit_values['1%']
+    }
 
 def save_to_csv(df, output_path, bar_type="dollar_bars"):
     """
@@ -206,7 +230,6 @@ def save_to_csv(df, output_path, bar_type="dollar_bars"):
     print(f"  ✓ Columns: {list(df_save.columns)}")
 
     return output_path
-
 
 def plot_random_sample(df, sample_size=None, bar_type="Dollar Bars"):
     """
@@ -327,9 +350,8 @@ def plot_random_sample(df, sample_size=None, bar_type="Dollar Bars"):
 
     return output_image
 
-
 def main():
-    file_path = "RB9999.XSGE-2020-1-1-To-2026-01-22-1m.csv"
+    file_path = "IF9999.CCFX-2020-1-1-To-2026-01-22-1m.csv"
 
     # 1. Load
     df_time = load_and_prep_data(file_path)
@@ -353,11 +375,9 @@ def main():
     plot_random_sample(df_dynamic, sample_size=None, bar_type="Dynamic Dollar Bars")
 
     # 6. Analysis
-    print("\n" + "=" * 60)
-    print(
-        f"{'Type':<20} | {'Count':<8} | {'JB Stat':<12} | {'Kurtosis':<10} | {'Skew':<10}"
-    )
-    print("-" * 60)
+    print("\n" + "=" * 80)
+    print(f"{ 'Type':<20} | {'Count':<8} | {'JB Stat':<12} | {'Skew':<6} | {'ADF Stat':<10} | {'p-value':<8}")
+    print("-" * 80)
 
     datasets = [
         (df_time, "Time Bars (1m)"),
@@ -366,12 +386,19 @@ def main():
     ]
 
     for df, name in datasets:
-        res = analyze_normality(df, name)
+        norm_res = analyze_normality(df, name)
+        stat_res = analyze_stationarity(df, name)
+        
+        is_stationary = stat_res['p_value'] < 0.05
+        p_val_str = f"{stat_res['p_value']:.4f}" + ("*" if is_stationary else "")
+        
         print(
-            f"{res['name']:<20} | {res['count']:<8} | {res['jb_stat']:<12.2f} | {res['kurtosis']:<10.2f} | {res['skew']:<10.2f}"
+            f"{norm_res['name']:<20} | {norm_res['count']:<8} | "
+            f"{norm_res['jb_stat']:<12.2f} | {norm_res['skew']:<6.2f} | "
+            f"{stat_res['adf_stat']:<10.2f} | {p_val_str:<8}"
         )
 
-    print("=" * 60)
+    print("=" * 80)
     print("\nConclusion:")
 
     # Simple logic to generate conclusion text
@@ -395,6 +422,15 @@ def main():
             )
     else:
         print("Dollar bars did not improve normality in this specific case (uncommon).")
+        
+    print("\nStationarity Check (* indicates p < 0.05):")
+    # Check dynamic bars stationarity
+    dyn_stat = analyze_stationarity(df_dynamic, "Dynamic")
+    if dyn_stat['p_value'] < 0.05:
+        print(f"Dynamic Dollar Bars are Stationary (p={dyn_stat['p_value']:.4f}). Ready for labeling.")
+    else:
+        print(f"WARNING: Dynamic Dollar Bars are Non-Stationary (p={dyn_stat['p_value']:.4f}).")
+        print("Suggestion: Apply Fractional Differentiation (FFD) in the Feature Engineering stage.")
 
 
 if __name__ == "__main__":
