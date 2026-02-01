@@ -111,6 +111,10 @@ See `references/1_survivorship_bias_using_as_investment_universe_the_current_one
 - `references/index.md` - Complete structure
 - `references/9_bibliography.md` - Academic references
 
+### Localized Guides
+
+- `references/afml_best_practices_cn.md` - **(Chinese)** Comprehensive deep-dive into AFML best practices, covering core logic, theoretical pillars, and DSR validation. Use this for a thorough understanding of the methodology in Chinese.
+
 ## Related Libraries
 
 - **mlfinlab**: Python implementation of book techniques

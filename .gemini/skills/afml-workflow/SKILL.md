@@ -3,54 +3,124 @@ name: afml-workflow
 description: Expert guidance for the full-cycle quantitative R&D workflow based on "Advances in Financial Machine Learning" (AFML). Use this skill when managing, executing, or explaining the end-to-end pipeline from data sampling, labeling, and feature engineering to model training, position sizing, and walk-forward backtesting.
 ---
 
-# AFML 全流程量化研发工作流
+# AFML Quant R&D Workflow
 
-本技能提供了基于 *Advances in Financial Machine Learning* (AFML) 方法论的量化研发全流程指导。
+This skill provides a rigorous, interactive workflow for Quantitative Research & Development based on Marcos Lopez de Prado's *Advances in Financial Machine Learning*.
 
-## 核心流程
+## 1. Workflow Principles
+- **Methodology First**: Every step must align with AFML principles (e.g., no time bars, purged CV, meta-labeling).
+- **Verify Then Proceed**: Never move to the next stage without validating the current stage's output.
+- **Interactive Optimization**: If metrics fail thresholds, STOP, analyze, and propose fixes to the user.
+- **Progress Tracking**: **MANDATORY**. Update `PROGRESS.md` after completing each phase. Record key metrics to maintain a persistent research log.
 
-该工作流分为四个阶段，每个阶段都有具体的脚本、逻辑和评价标准。详细信息请参阅 [references/workflow_details.md](references/workflow_details.md)。
+---
 
-### 第一阶段：数据结构化与标注 (The Foundation)
-1. **采样 (Sampling)**: 使用 Dynamic Dollar Bars。脚本: `src/process_bars.py`。
-2. **标签标注 (Labeling)**: 三重障碍法 (Triple Barrier Method)。脚本: `src/labeling.py`。
-3. **样本权重 (Sample Weights)**: 计算 Average Uniqueness。脚本: `src/sample_weights.py`。
+## 2. Phase 1: Data & Labeling (The Foundation)
 
-### 第二阶段：特征工程与正交化 (Feature Engineering)
-4. **因子生成 2.0 (Feature Generation)**: FFD, VPIN, Alpha158 等。脚本: `src/feature_engineering_v2.py`。
-5. **特征处理 (Feature Selection/Reduction)**:
-   - **PCA (推荐)**: 正交主成分。脚本: `src/feature_pca.py`。
-   - **MDA**: 平均准确度下降。脚本: `src/feature_importance.py`。
+### Step 1: Sampling (Dynamic Dollar Bars)
+- **Command**: `uv run python src/process_bars.py`
+- **Output**: `data/output/dynamic_dollar_bars.csv`
+- **Quality Check**:
+  - **Stationarity**: Check if log-returns are stationary (ADF Test p-value < 0.05).
+  - **Normality**: Check Jarque-Bera statistic. Returns should approach normality compared to time bars.
 
-### 第三阶段：模型调优与训练 (Model & Tuning)
-6. **超参数优化 (Optimization)**: Optuna + Purged K-Fold CV。脚本: `src/hyperparameter_optimization.py`。
-7. **定型训练 (Final Training)**: 元标签 (Meta-Labeling) 生产模型。脚本: `src/train_model.py`。
-8. **概率头寸管理 (Position Sizing)**: Gaussian Bet Sizing。脚本: `src/position_sizing.py`。
+### Step 2: Labeling (Triple Barrier)
+- **Command**: `uv run python src/labeling.py`
+- **Output**: `data/output/labeled_events.csv`
+- **Quality Check**:
+  - **Class Balance**: Check distribution of {-1, 0, 1}.
+  - **Barrier Touch**: Ensure vertical barriers (time-outs) are not dominating.
 
-### 第四阶段：回测与评价 (Backtesting & Evaluation)
-9. **滚动回测 (Walk-Forward Backtest)**: Expanding Window 回测。脚本: `src/backtest_walk_forward.py`。
+### Step 3: Sample Weights (Uniqueness)
+- **Command**: `uv run python src/sample_weights.py`
+- **Output**: `data/output/sample_weights.csv`
+- **Quality Check**:
+  - **Average Uniqueness**: Should be > 0.5. Low uniqueness implies high redundancy.
 
-## 执行路线图 (Mermaid)
+> **✅ Phase 1 Completion Action**: Update `PROGRESS.md`. Log the chosen sampling method and Labeling distribution.
 
+---
+
+## 3. Phase 2: Primary Directional Model (Baseline)
+
+Goal: Build a "Baseline" model sensitive to market direction (high Recall), ignoring risk/reward ratios.
+
+### Step 4: Symmetric Labeling
+- **Command**: `uv run python src/labeling.py --pt 1 --sl 1 --suffix _primary`
+- **Config**: `pt=1`, `sl=1` (Symmetric).
+- **Output**: `data/output/labeled_events_primary.csv`
+
+### Step 5: Primary Training & Signal Generation
+- **Command**: `uv run python src/train_primary.py`
+- **Goal**: Train a classifier for direction and generate full-history predictions (`side`).
+- **Output**: `data/output/predicted_side.csv` (Contains `-1` or `1` signals).
+
+> **✅ Phase 2 Completion Action**: Update `PROGRESS.md`. Log the Primary Model's directional accuracy/recall.
+
+---
+
+## 4. Phase 3: Meta-Strategy (The Core)
+
+Goal: "Second opinion" (Meta-Labeling) on the Primary signals using a high Risk:Reward ratio (1:2).
+
+### Step 6: Strategic Labeling
+- **Command**: `uv run python src/labeling.py --pt 2 --sl 1 --side_file data/output/predicted_side.csv`
+- **Logic**: Label `1` ONLY if Primary Signal is correct AND price moves 2x volatility. Otherwise `0`.
+- **Output**: `data/output/labeled_events_meta.csv`
+
+### Step 7: Meta-Features & Weights
+- **Sample Weights**: `uv run python src/sample_weights.py` (Use meta events).
+- **Feature Engineering**: `uv run python src/feature_engineering_v2.py`
+  - **Crucial**: Include `prob_primary` (Primary Model's confidence) as a feature.
+
+### Step 8: Meta-Model Training
+- **Command**: `uv run python src/train_model.py`
+- **Evaluation Criteria**:
+  - **Purged CV ROC-AUC**: > **0.55** (Higher bar for meta-model).
+- **Interactive Optimization**:
+  - If AUC < 0.55: Suggest Feature Engineering (PCA, MDA) or Hyperparameter Tuning.
+
+> **✅ Phase 3 Completion Action**: Update `PROGRESS.md`. Log the **Best Purged CV AUC** and hyperparameters.
+
+---
+
+## 5. Phase 4: Execution & Backtest
+
+### Step 9: Position Sizing
+- **Command**: `uv run python src/position_sizing.py`
+- **Logic**: $Size = Proba 	imes (Target \\\ Volatility)$ based on Meta-Model confidence.
+
+### Step 10: Walk-Forward Backtest
+- **Command**: `uv run python src/backtest_walk_forward.py`
+- **Logic**: Simulate dual signal flow: Tick -> Primary -> Side -> Meta -> Decision.
+- **Evaluation Criteria**:
+  - **Sharpe Ratio**: > **1.0**
+  - **PSR/DSR**: > **0.95**
+
+> **✅ Phase 4 Completion Action**: Update `PROGRESS.md`. Log final **Sharpe Ratio**, **PSR**, **Max Drawdown**, and Decision.
+
+---
+
+## 6. Execution Reference Map
 ```mermaid
 graph TD
-    A[Tick Data] --> B[process_bars.py]
-    B --> C[labeling.py]
-    C --> D[sample_weights.py]
-    D --> E[feature_engineering_v2.py]
-    E --> F1{特征处理分支}
-    F1 -->|PCA| G1[feature_pca.py]
-    F1 -->|MDA| G2[feature_importance.py]
-    G1 --> H[hyperparameter_optimization.py]
-    G2 --> H
-    H --> I[train_model.py]
-    I --> I2[position_sizing.py]
-    I2 --> J[backtest_walk_forward.py]
-    J --> K[Strategy Deployment]
+    A[Tick Data] --> B[Sample: Dollar Bars]
+    
+    subgraph Phase 2: Directional
+    B --> C1[Labeling 1:1]
+    C1 --> C2[Train Primary Model]
+    C2 --> C3[Generate Signal Side]
+    end
+    
+    subgraph Phase 3: Meta-Strategy
+    C3 --> D1[Labeling 1:2]
+    D1 --> D2[Sample Weights]
+    D2 --> D3[Feature Eng V2]
+    D3 --> D4[Meta Model Training]
+    end
+    
+    subgraph Phase 4: Execution
+    D4 --> E1[Position Sizing]
+    E1 --> E2[Walk-Forward Backtest]
+    end
 ```
-
-## 使用指南
-
-- **开始新阶段前**：查阅 `references/workflow_details.md` 中的预期输出和评价标准。
-- **验证结果**：在每个步骤完成后，使用工作流中定义的评价标准进行自检。
-- **模型选择**：优先选择经过 PCA 处理的特征集进行训练，以减少多重共线性影响。

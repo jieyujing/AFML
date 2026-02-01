@@ -391,9 +391,15 @@ def main():
     print("Triple Barrier Label Visualization")
     print("=" * 80)
 
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Triple Barrier Label Visualization")
+    parser.add_argument("file_path", nargs="?", default=os.path.join("data", "output", "labeled_events.csv"), help="Path to labeled events CSV")
+    args = parser.parse_args()
+
     # Load labeled events
     print("\nLoading labeled events...")
-    events = pd.read_csv(os.path.join("data", "output", "labeled_events.csv"), index_col=0, parse_dates=True)
+    events = pd.read_csv(args.file_path, index_col=0, parse_dates=True)
     print(f"✓ Loaded {len(events)} events")
 
     # Print summary

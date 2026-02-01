@@ -521,14 +521,14 @@ def main():
     # 10. Auto-run visualization
     print("\n10. Running visualization...")
     try:
-        subprocess.run([sys.executable, "src/visualize_labels.py"], check=True)
+        subprocess.run([sys.executable, "src/visualize_labels.py", output_file], check=True)
     except subprocess.CalledProcessError as e:
         print(f"   Error running visualization: {e}")
     except FileNotFoundError:
         # Fallback if running via uv/shell
         try:
             subprocess.run(
-                ["uv", "run", "python", "src/visualize_labels.py"], check=True
+                ["uv", "run", "python", "src/visualize_labels.py", output_file], check=True
             )
         except Exception as e:
             print(f"   Error running visualization via uv: {e}")

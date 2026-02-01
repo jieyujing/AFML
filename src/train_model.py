@@ -245,10 +245,16 @@ def main():
     # 4. Results Summary
     print("\n3. CV Results Summary")
     print("-" * 40)
-    print(f"   Mean Accuracy:  {np.mean(accuracy_scores):.4f} (+/- {np.std(accuracy_scores):.4f})")
-    print(f"   Mean F1 Score:  {np.mean(f1_scores):.4f} (+/- {np.std(f1_scores):.4f})")
-    print(f"   Mean ROC AUC:   {np.nanmean(auc_scores):.4f} (+/- {np.nanstd(auc_scores):.4f})")
-    print(f"   Mean Log Loss:  {np.mean(log_loss_scores):.4f} (+/- {np.std(log_loss_scores):.4f})")
+    summary = (
+        f"   Mean Accuracy:  {np.mean(accuracy_scores):.4f} (+/- {np.std(accuracy_scores):.4f})\n"
+        f"   Mean F1 Score:  {np.mean(f1_scores):.4f} (+/- {np.std(f1_scores):.4f})\n"
+        f"   Mean ROC AUC:   {np.nanmean(auc_scores):.4f} (+/- {np.nanstd(auc_scores):.4f})\n"
+        f"   Mean Log Loss:  {np.mean(log_loss_scores):.4f} (+/- {np.std(log_loss_scores):.4f})\n"
+    )
+    print(summary)
+    
+    with open(os.path.join("data", "output", "model_summary.txt"), "w") as f:
+        f.write(summary)
     
     # 5. Save Feature Importance
     print("\n4. Saving Feature Importance...")

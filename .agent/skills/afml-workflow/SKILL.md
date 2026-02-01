@@ -3,54 +3,116 @@ name: afml-workflow
 description: Expert guidance for the full-cycle quantitative R&D workflow based on "Advances in Financial Machine Learning" (AFML). Use this skill when managing, executing, or explaining the end-to-end pipeline from data sampling, labeling, and feature engineering to model training, position sizing, and walk-forward backtesting.
 ---
 
-# AFML 全流程量化研发工作流
+# AFML Quant R&D Workflow
 
-本技能提供了基于 *Advances in Financial Machine Learning* (AFML) 方法论的量化研发全流程指导。
+This skill provides a rigorous, interactive workflow for Quantitative Research & Development based on Marcos Lopez de Prado's *Advances in Financial Machine Learning*.
 
-## 核心流程
+## 1. Workflow Principles
+- **Methodology First**: Every step must align with AFML principles (e.g., no time bars, purged CV, meta-labeling).
+- **Verify Then Proceed**: Never move to the next stage without validating the current stage's output.
+- **Interactive Optimization**: If metrics fail thresholds, STOP, analyze, and propose fixes to the user.
+- **Progress Tracking**: **MANDATORY**. Update `PROGRESS.md` after completing each phase. Record key metrics (e.g., ADF p-value, CV AUC, Sharpe Ratio) to maintain a persistent research log.
 
-该工作流分为四个阶段，每个阶段都有具体的脚本、逻辑和评价标准。详细信息请参阅 [references/workflow_details.md](references/workflow_details.md)。
+---
 
-### 第一阶段：数据结构化与标注 (The Foundation)
-1. **采样 (Sampling)**: 使用 Dynamic Dollar Bars。脚本: `src/process_bars.py`。
-2. **标签标注 (Labeling)**: 三重障碍法 (Triple Barrier Method)。脚本: `src/labeling.py`。
-3. **样本权重 (Sample Weights)**: 计算 Average Uniqueness。脚本: `src/sample_weights.py`。
+## 2. Phase 1: Data & Labeling (The Foundation)
 
-### 第二阶段：特征工程与正交化 (Feature Engineering)
-4. **因子生成 2.0 (Feature Generation)**: FFD, VPIN, Alpha158 等。脚本: `src/feature_engineering_v2.py`。
-5. **特征处理 (Feature Selection/Reduction)**:
-   - **PCA (推荐)**: 正交主成分。脚本: `src/feature_pca.py`。
-   - **MDA**: 平均准确度下降。脚本: `src/feature_importance.py`。
+### Step 1: Sampling (Dynamic Dollar Bars)
+- **Command**: `uv run python src/process_bars.py`
+- **Quality Check**:
+  - **Stationarity**: Check if log-returns are stationary (ADF Test p-value < 0.05).
+  - **Normality**: Check Jarque-Bera statistic. Returns should approach normality compared to time bars.
+- **Optimization Strategy**:
+  - *Issue*: Data is non-stationary. -> *Fix*: Suggest **Fractional Differentiation (FFD)** (`src/feature_engineering_v2.py`).
+  - *Issue*: Too few samples. -> *Fix*: Decrease dollar threshold.
 
-### 第三阶段：模型调优与训练 (Model & Tuning)
-6. **超参数优化 (Optimization)**: Optuna + Purged K-Fold CV。脚本: `src/hyperparameter_optimization.py`。
-7. **定型训练 (Final Training)**: 元标签 (Meta-Labeling) 生产模型。脚本: `src/train_model.py`。
-8. **概率头寸管理 (Position Sizing)**: Gaussian Bet Sizing。脚本: `src/position_sizing.py`。
+### Step 2: Labeling (Triple Barrier)
+- **Command**: `uv run python src/labeling.py`
+- **Quality Check**:
+  - **Class Balance**: Check distribution of {-1, 0, 1}. Classes should not be extremely skewed (<10% minority).
+  - **Barrier Touch**: Ensure vertical barriers (time-outs) are not dominating (>90%) the events.
+- **Optimization Strategy**:
+  - *Issue*: Too many zeros. -> *Fix*: Relax barrier width (volatility multiplier) or extend vertical barrier limit.
 
-### 第四阶段：回测与评价 (Backtesting & Evaluation)
-9. **滚动回测 (Walk-Forward Backtest)**: Expanding Window 回测。脚本: `src/backtest_walk_forward.py`。
+### Step 3: Sample Weights (Uniqueness)
+- **Command**: `uv run python src/sample_weights.py`
+- **Quality Check**:
+  - **Average Uniqueness**: Should be > 0.5. Low uniqueness implies high redundancy.
 
-## 执行路线图 (Mermaid)
+> **✅ Phase 1 Completion Action**: Update `PROGRESS.md`. Log the chosen sampling method, ADF stats, and Labeling distribution.
 
+---
+
+## 3. Phase 2: Feature Engineering
+
+### Step 4 & 5: Generation & Selection
+- **Command**: `uv run python src/feature_engineering_v2.py`
+- **Command**: `uv run python src/feature_pca.py` (Recommended) OR `src/feature_importance.py`
+- **Quality Check**:
+  - **Correlation**: PCA components should be orthogonal.
+  - **Information**: Top 20 features should explain significant variance.
+
+> **✅ Phase 2 Completion Action**: Update `PROGRESS.md`. Log the feature set size (e.g., "50 PCA components explaining 95% variance") or top selected features.
+
+---
+
+## 4. Phase 3: Model Training & Evaluation (CRITICAL)
+
+### Step 6: Hyperparameter Optimization
+- **Command**: `uv run python src/hyperparameter_optimization.py`
+- **Evaluation Criteria (The "Bar")**:
+  - **Purged CV ROC-AUC**: > **0.53** (Minimum viable signal)
+  - **Log Loss**: Minimizing trend.
+- **INTERACTIVE OPTIMIZATION LOOP**:
+  - **IF AUC < 0.53**:
+    1. **STOP** and inform the user: "Model performance is below the random-guess threshold (0.53)."
+    2. **Diagnose**:
+       - **Overfitting**: High Train AUC (0.8+) vs Low CV AUC (0.5).
+         - *Proposal*: "Increase regularization, reduce tree depth, apply stricter MDA feature selection."
+       - **No Signal**: Low Train AUC (~0.5) and Low CV AUC (~0.5).
+         - *Proposal*: "Feature set may be insufficient. Suggest adding Microstructure features (VPIN) or changing Labeling barriers."
+    3. **Action**: Ask user, "Would you like to adjust the feature set or hyperparameters before proceeding?"
+
+### Step 7: Final Training
+- **Command**: `uv run python src/train_model.py`
+- **Check**: Ensure production model matches CV performance.
+
+> **✅ Phase 3 Completion Action**: Update `PROGRESS.md`. Log the **Best Purged CV AUC** and the best model hyperparameters.
+
+---
+
+## 5. Phase 4: Backtesting & Strategy (The Truth)
+
+### Step 8: Walk-Forward Backtest
+- **Command**: `uv run python src/backtest_walk_forward.py`
+- **Evaluation Criteria**:
+  - **Sharpe Ratio**: > **1.0** (Annualized)
+  - **Probabilistic Sharpe Ratio (PSR)**: > **0.95** (95% confidence skill > 0)
+  - **Deflated Sharpe Ratio (DSR)**: > **0.95** (Adjusted for multiple testing)
+- **INTERACTIVE OPTIMIZATION LOOP**:
+  - **IF Sharpe < 1.0**:
+    1. **Analyze**:
+       - *High Volatility?* -> Suggest: "Tighten **Bet Sizing** parameters or use Volatility Targeting."
+       - *Low Win Rate?* -> Suggest: "Raise the **Meta-Labeling** probability threshold (e.g., min_prob from 0.5 to 0.6)."
+    2. **Action**: Propose running `src/bet_sizing.py` with different parameters.
+
+> **✅ Phase 4 Completion Action**: Update `PROGRESS.md`. Log the final **Sharpe Ratio**, **PSR**, **Max Drawdown**, and the decision (Deploy/Refine).
+
+---
+
+## 6. Execution Reference Map
 ```mermaid
 graph TD
-    A[Tick Data] --> B[process_bars.py]
-    B --> C[labeling.py]
-    C --> D[sample_weights.py]
-    D --> E[feature_engineering_v2.py]
-    E --> F1{特征处理分支}
-    F1 -->|PCA| G1[feature_pca.py]
-    F1 -->|MDA| G2[feature_importance.py]
-    G1 --> H[hyperparameter_optimization.py]
-    G2 --> H
-    H --> I[train_model.py]
-    I --> I2[position_sizing.py]
-    I2 --> J[backtest_walk_forward.py]
-    J --> K[Strategy Deployment]
+    Data[Raw Data] -->|process_bars| Bars[Dollar Bars]
+    Bars -->|labeling| Labels[3-Barrier Labels]
+    Labels -->|Update PROGRESS.md| Features[Features]
+    Features -->|PCA/MDA| Selected[Selected Features]
+    Selected -->|Update PROGRESS.md| Optimization{AUC > 0.53?}
+    Optimization -- No --> Refine[Refine Features/Params]
+    Optimization -- Yes --> Model[Final Model]
+    Model -->|Update PROGRESS.md| Bets[Positions]
+    Bets -->|WalkForward| Backtest{Sharpe > 1.0?}
+    Backtest -- No --> Adjust[Adjust Sizing/Thresholds]
+    Backtest -- Yes --> Deploy[Ready for Production]
+    Deploy -->|Update PROGRESS.md| End[Done]
 ```
-
-## 使用指南
-
-- **开始新阶段前**：查阅 `references/workflow_details.md` 中的预期输出和评价标准。
-- **验证结果**：在每个步骤完成后，使用工作流中定义的评价标准进行自检。
-- **模型选择**：优先选择经过 PCA 处理的特征集进行训练，以减少多重共线性影响。

@@ -24,62 +24,62 @@
 
 ---
 
-## 第二阶段：特征工程与正交化 (Feature Engineering)
+## 第二阶段：基准模型构建 (Phase 2: Primary Directional Model)
 
-### 4. 因子生成 2.0 (Feature Generation)
+此阶段目标是构建一个对市场方向敏感的“基准模型” (Baseline)，不考虑具体盈亏比，只关注方向预测准确率。
+
+### 2a. 对称标注 (Symmetric Labeling)
+*   **脚本**: `uv run python src/labeling.py --pt 1 --sl 1 --suffix _primary`
+*   **配置**: `pt_sl = [1, 1]`。使用对称障碍，最大化捕捉市场波动规律，避免盈亏比偏好扭曲训练数据。
+*   **预期输出**: `data/output/labeled_events_primary.csv`
+
+### 2b. 基模型训练与信号生成 (Primary Training)
+*   **脚本**: `uv run python src/train_primary.py` (需创建)
+*   **核心逻辑**: 训练一个高 Recall 的分类器，并对历史数据生成全量预测信号 (`side`)。
+*   **输入**: 基础特征集 + 1:1 标签。
+*   **预期输出**: `data/output/predicted_side.csv` (包含由模型判断的 `-1` 或 `1` 方向)。
+
+---
+
+## 第三阶段：元策略构建 (Phase 3: Meta-Strategy)
+
+此阶段是核心。利用 Baseline 判断的方向，在 1:2 的高盈亏比下进行“二次审核” (Meta-Labeling)。
+
+### 3a. 策略标注 (Strategic Labeling)
+*   **脚本**: `uv run python src/labeling.py --pt 2 --sl 1 --side_file data/output/predicted_side.csv`
+*   **核心逻辑**: 
+    1. 读取基模型的预测方向作为 `side`。
+    2. 设置 **Risk:Reward = 1:2** (`pt`=2, `sl`=1)。
+    3. 只有当基模型看涨且随后价格真涨了 2 倍波动率，才标记为 `1`；否则为 `0`。
+*   **预期输出**: `data/output/labeled_events_meta.csv`
+
+### 3b. 样本权重 (Sample Weights)
+*   **脚本**: `uv run python src/sample_weights.py`
+*   **输入**: 使用 Meta 阶段的 `labeled_events_meta.csv`。
+
+### 3c. 特征工程 (Feature Engineering)
 *   **脚本**: `uv run python src/feature_engineering_v2.py`
-*   **核心逻辑**: 集成 Alpha158、**FFD (分数阶差分)**、微观结构 (VPIN) 和信号强度因子。
-*   **预期输出**: `data/output/features_v2_labeled.csv`
-*   **评价标准**: 特征维度应在 200+，涵盖量、价、波动率及知情交易信息。
+*   **核心**: 将基模型的预测概率 (`prob_primary`) 也加入作为特征之一。
 
-### 5. 特征处理分支 (Feature Selection / Reduction)
-*   **分支 A (推荐)**: `uv run python src/feature_pca.py`
-    *   **预期输出**: `data/output/features_pca.csv`
-    *   **评价**: 50 个左右的正交主成分，保留 95% 解释方差。
-*   **分支 B**: `uv run python src/feature_importance.py`
-    *   **预期输出**: `data/output/selected_features_v2.csv`
-    *   **评价**: 通过 MDA (平均准确度下降) 筛选出正贡献特征。
-
----
-
-## 第三阶段：模型调优与训练 (Model & Tuning)
-
-### 6. 超参数优化 (Optimization)
-*   **脚本**: `uv run python src/hyperparameter_optimization.py`
-*   **核心逻辑**: 使用 **Optuna** 结合 **Purged K-Fold CV**。
-*   **输入**: 上一阶段选择的特征集（推荐 PCA）。
-*   **预期输出**: `data/output/best_hyperparameters.csv`
-*   **评价标准**: Purged CV ROC AUC > 0.53；Optuna 优化曲线收敛。
-
-### 7. 定型训练 (Final Training)
+### 3d. 元模型训练 (Meta-Model Training)
 *   **脚本**: `uv run python src/train_model.py`
-*   **核心逻辑**: 训练包含元标签 (Meta-Labeling) 的生产模型。
-*   **预期输出**: 最终模型文件及 `feature_importance_optimized.csv`。
-*   **评价标准**: OOS (样本外) 指标稳定，特征归因符合金融逻辑。
-
-### 7.5 概率头寸管理 (Probabilistic Position Sizing)
-*   **脚本**: `uv run python src/position_sizing.py`
-*   **核心逻辑**: 基于 AFML Chapter 10，将模型概率转换为仓位大小。
-    - **Gaussian Bet Sizing**: 使用 z = (p - 0.5) / σ_p，通过 CDF 映射到 [-1, 1]
-    - **Concurrency Scaling**: 使用 `avg_uniqueness` 缩减重叠仓位
-*   **预期输出**: `data/output/position_sizes.csv`
-*   **评价标准**: 
-    - 仓位分布呈现 Sigmoid-like 形态
-    - 高置信度交易 (p > 0.7) 获得接近 1.0 的仓位
-    - 低置信度交易 (p ≈ 0.5) 仓位接近 0
+*   **模型**: LightGBM 或 RandomForest。
+*   **目标**: 预测“基模型这次是否靠谱”。
+*   **评价**: Purged CV ROC-AUC > 0.55。
 
 ---
 
-## 第四阶段：回测与评价 (Backtesting & Evaluation)
+## 第四阶段：实盘部署与回测 (Phase 4: Execution)
 
-### 8. 滚动回测 (Walk-Forward Backtest)
+### 4a. 概率头寸管理 (Position Sizing)
+*   **脚本**: `uv run python src/position_sizing.py`
+*   **核心逻辑**: 
+    - 结合 Meta Model 的置信度 ($p$) 和 1:2 的赔率。
+    - $Size = Proba \times (Target \ Volatility)$
+
+### 4b. 滚动回测 (Walk-Forward)
 *   **脚本**: `uv run python src/backtest_walk_forward.py`
-*   **核心逻辑**: 模拟真实交易，动态更新模型，进行 Expanding Window 回测。
-*   **预期输出**: `visual_analysis/backtest_walk_forward.png`
-*   **评价标准**: 
-    - **Sharpe Ratio > 1.0** (关键指标)
-    - **Probabilistic Sharpe Ratio (PSR) > 0.95**
-    - **Max Drawdown < 15%**
+*   **核心**: 模拟双层信号流： Tick -> Primary(1:1) -> Side -> Meta(1:2) -> Decision。
 
 ---
 
@@ -87,19 +87,25 @@
 
 ```mermaid
 graph TD
-    A[Tick Data] --> B[process_bars.py]
-    B --> C[labeling.py]
-    C --> D[sample_weights.py]
-    D --> E[feature_engineering_v2.py]
-    E --> F1{特征处理分支}
-    F1 -->|PCA| G1[feature_pca.py]
-    F1 -->|MDA| G2[feature_importance.py]
-    G1 --> H[hyperparameter_optimization.py]
-    G2 --> H
-    H --> I[train_model.py]
-    I --> I2[position_sizing.py]
-    I2 --> J[backtest_walk_forward.py]
-    J --> K[Strategy Deployment]
+    A[Tick Data] --> B[Sample: Dollar Bars]
+    
+    subgraph Phase 2: Directional
+    B --> C1[Labeling 1:1]
+    C1 --> C2[Train Primary Model]
+    C2 --> C3[Generate Signal Side]
+    end
+    
+    subgraph Phase 3: Meta-Strategy
+    C3 --> D1[Labeling 1:2]
+    D1 --> D2[Sample Weights]
+    D2 --> D3[Feature Eng V2]
+    D3 --> D4[Meta Model Training]
+    end
+    
+    subgraph Phase 4: Execution
+    D4 --> E1[Position Sizing]
+    E1 --> E2[Walk-Forward Backtest]
+    end
 ```
 
 ---
