@@ -3,6 +3,7 @@ trigger: always_on
 ---
 
 # Quant R&D Rules (量化研发与 AI 协作规范 v1.1)
+## 0. respond with Chinese
 
 ## 1. Core Workflow (核心工作流)
 
