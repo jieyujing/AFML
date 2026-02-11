@@ -1,225 +1,95 @@
-# AFML - Advances in Financial Machine Learning
+# AFML 量化研发工厂 (AFML Quant Factory)
 
-本项目实现了 Marcos López de Prado 所著《Advances in Financial Machine Learning》一书中的核心算法，专注于量化金融领域的机器学习研究。
+[![Python](https://img.shields.io/badge/Python-3.13+-blue.svg)](https://www.python.org/)
+[![Polars](https://img.shields.io/badge/Polars-High--Performance-orange.svg)](https://pola.rs/)
+[![AFML](https://img.shields.io/badge/Methodology-AFML-red.svg)](https://www.cambridge.org/core/books/advances-in-financial-machine-learning/2A6E941A5C4010174241517565B1705D)
 
-## 项目概述
+本项目是一个基于 Marcos López de Prado 的经典著作《Advances in Financial Machine Learning (AFML)》构建的高性能量化研发框架。它旨在为量化研究者提供一套遵循金融严谨性、防止过拟合且具备工业级性能的工具链。
 
-AFML 是一个完整的量化金融 ML 管线，包含从数据预处理到模型训练的完整流程。项目采用 Python 语言，使用 pandas、numpy、scikit-learn 等主流数据科学库。
+## 🌟 核心特性
 
-### 核心功能
+- **🚀 高性能引擎**: 全面采用 [Polars](https://pola.rs/) 进行数据处理。在保持 Pandas 般便利性的同时，在大规模金融数据处理上实现了数倍乃至数十倍的性能提升。
+- **🏗️ 严谨的 AFML 架构**: 严格遵循 Lopez de Prado 提出的金融机器学习方法论，包括但不限于：
+  - **金融数据结构**: 支持 Dollar Bars, Volume Bars, Tick Bars 等。
+  - **三重障碍法 (Triple-Barrier Method)**: 结合 CUSUM 过滤器和动态波动率调整的标签标注。
+  - **平稳性处理**: 自动分式微分 (Fractional Differentiation) 搜索，在保留价格记忆的同时确保统计平稳性。
+  - **样本权重**: 基于并发度的唯一性权重 (Uniqueness Weights) 与时间衰减 (Time Decay)。
+  - **净化交叉验证**: 提供 Purged & Embargoed K-Fold 交叉验证，彻底消除标签泄漏。
+  - **元标签 (Meta-Labeling)**: 采用辅助模型过滤主模型信号，显著提高策略精确度。
+- **🛡️ 统计验证 (Anti-Overfitting)**: 内置 Probabilistic Sharpe Ratio (PSR) 和 Deflated Sharpe Ratio (DSR)，有效防范“由于多次检验导致的伪发现”。
+- **🧩 模块化设计**:
+  - 提供 Scikit-Learn 兼容的面向对象 (OO) 接口。
+  - 完善的 Pipeline 编排能力，支持从原始分笔数据到策略验收的全流程自动化。
 
-- **Dollar Bars 生成**：使用固定或动态阈值生成美元Bars，降低市场微观结构噪音
-- **三重障碍标签法 (Triple Barrier)**：实现止盈、止损、时间限制三位一体的标签生成
-- **特征工程**：整合 Alpha158 基准特征集与分数阶差分 (FFD) 增强特征
-- **样本权重计算**：基于唯一性 (Uniqueness) 和时间衰减的权重体系
-- **交叉验证**：Purged K-Fold CV，防止前视偏差和信息泄露
-- **元标签 (Meta-Labeling)**：二级模型过滤一级模型信号，提升策略质量
+## 📂 项目结构
 
-## 项目结构
-
-```
+```text
 AFML/
-├── src/                          # 核心源代码
-│   ├── process_bars.py          # Dollar Bars 生成
-│   ├── labeling.py              # Triple Barrier 标签生成
-│   ├── features.py              # 特征工程 (Alpha158 + FFD)
-│   ├── sample_weights.py        # 样本权重计算
-│   ├── cv_setup.py              # Purged K-Fold 交叉验证
-│   ├── train_model.py           # Random Forest 模型训练
-│   ├── feature_importance.py    # 特征重要性分析 (MDI/MDA)
-│   ├── compare_models.py        # 模型对比
-│   ├── hyperparameter_optimization.py # 超参数优化 (Optuna)
-│   ├── meta_labeling.py         # 元标签策略
-│   ├── bet_sizing.py            # 仓位管理
-│   ├── visualize_labels.py      # 标签可视化
-│   └── visualize_weights.py     # 权重可视化
-├── tests/                       # 测试文件
-├── visual_analysis/             # 可视化输出
-├── data/                        # 数据文件
-├── pyproject.toml              # 项目配置
-├── README.md                   # 项目说明
-└── AGENTS.md                   # AI 代理开发指南
+├── src/
+│   ├── afml/                # 核心库 (面向对象设计)
+│   │   ├── polars/          # 高性能 Polars 引擎实现
+│   │   ├── stationarity.py  # 平稳性检测与 FFD 自动搜索
+│   │   ├── metrics.py       # DSR, PSR 等金融指标
+│   │   ├── labeling.py      # 三重障碍法标注
+│   │   └── ...              # 交叉验证、权重计算、元标签等
+│   └── afml_polars_pipeline.py # 端到端高性能研发流程示例
+├── data/                    # 原始数据与生成的人造数据 (已 Gitignore)
+├── tests/                   # 单元测试与集成测试
+├── config/                  # 处理器默认配置文件
+├── PROGRESS.md              # 项目开发进度追踪
+└── AGENTS.md                # 针对 AI 协作的规范文档
 ```
 
-## 快速开始
+## 🛠️ 快速开始
 
-### 环境配置
+### 1. 环境准备
+
+本项目使用 `uv` 进行依赖管理。请确保已安装 `uv`:
 
 ```bash
-# 安装依赖
+# 推荐使用 uv 同步环境
 uv sync
-
-# 运行完整管线
-uv run python src/process_bars.py   # 1. 生成 Dollar Bars
-uv run python src/labeling.py         # 2. 生成标签
-uv run python src/features.py         # 3. 特征工程
-uv run python src/sample_weights.py   # 4. 计算样本权重
-uv run python src/meta_labeling.py    # 5. 运行 Meta-Labeling
 ```
 
-### 核心参数配置
+### 2. 运行端到端 Pipeline
 
-| 组件 | 参数 | 默认值 | 说明 |
-|------|------|--------|------|
-| Dollar Bars | `daily_target` | 4 bars/day | 每日目标Bars数量 |
-| 标签生成 | `vertical_barrier` | 12 bars | 持仓时间限制 (~3天) |
-| 标签生成 | `volatility_span` | 100 bars | 波动率计算窗口 |
-| 特征工程 | `windows` | [5,10,20,30,50] | 滚动窗口参数 |
-| 交叉验证 | `embargo` | 1% | 禁运期比例 |
-| 交叉验证 | `n_splits` | 5 | K-Fold 折数 |
+运行内置的高性能 Pipeline，体验从数据加载、平稳性处理到 DSR 策略验收的全流程：
 
-## 数据流
-
-```
-原始价格数据
-    ↓
-process_bars.py (Dollar Bars)
-    ↓
-labeling.py (Triple Barrier Labels)
-    ↓
-features.py (Feature Engineering)
-    ↓
-sample_weights.py (Sample Weights)
-    ↓
-训练数据 (features_labeled.csv)
-    ↓
-cv_setup.py (Purged K-Fold)
-    ↓
-train_model.py / meta_labeling.py (模型训练)
+```bash
+uv run python src/afml_polars_pipeline.py [你的 tick 数据路径].csv
 ```
 
-## 核心模块说明
+### 3. 使用 OO 接口示例
 
-### 1. Dollar Bars (process_bars.py)
+```python
+from afml.polars import PolarsDollarBarsProcessor, PolarsTripleBarrierLabeler
 
-将原始时间序列转换为美元Bars，相比传统时间Bars具有更好的统计特性。
+# 1. 生成 Dollar Bars
+processor = PolarsDollarBarsProcessor(daily_target=4)
+df_bars = processor.fit_transform(raw_df)
 
-**输出**: `dynamic_dollar_bars.csv` (~3,927 bars)
+# 2. 标注标签
+labeler = PolarsTripleBarrierLabeler(pt_sl=[1.0, 1.0], vertical_barrier_bars=12)
+labeler.fit(df_bars["close"])
+labels = labeler.label(df_bars["close"], events)
+```
 
-### 2. Triple Barrier Labeling (labeling.py)
+## 📈 开发进度
 
-为每个事件设置三个障碍：
-- **上障碍**：止盈位 (1x 波动率)
-- **下障碍**：止损位 (1x 波动率)
-- **垂直障碍**：时间限制 (12 bars)
+目前项目已完成核心 OO 重构与 Polars 迁移。
 
-**标签分布**: Loss (-1): ~53%, Profit (1): ~47%
+- [x] **Polars 迁移**: 95%+ 完成，支持大规模并行计算。
+- [x] **平稳性模块**: 已实现自动搜索最小 $d$ 值。
+- [x] **策略验证**: 已集成 DSR/PSR 验收机制。
+- [ ] **进阶特性**: 计划加入结构性断点检测 (Structural Breaks) 等。
 
-**输出**: `labeled_events.csv`, `dollar_bars_labeled.csv`
+详见 [PROGRESS.md](./PROGRESS.md)。
 
-### 3. 特征工程 (features.py)
+## 📚 参考资料
 
-**A. Alpha158 基准特征集**:
-- ROC/Returns 特征 (整数差分)
-- 短期技术指标 (5-50期)
+- Marcos López de Prado, *Advances in Financial Machine Learning*, Wiley, 2018.
+- Marcos López de Prado, *Machine Learning for Asset Managers*, Cambridge University Press, 2020.
 
-**B. FFD 增强特征** (记忆保留):
-- Fractional Differentiated Level: 保留80%价格记忆
-- FFD Momentum / Volatility / Slope
+---
 
-**C. 市场状态特征**:
-- Volatility (波动率)
-- Serial Correlation (序列相关性)
-- Market Entropy (市场熵)
-
-**输出**: `features_labeled.csv` (~180+ 特征)
-
-### 4. 样本权重 (sample_weights.py)
-
-计算考虑以下因素的权重：
-- **Concurrency**: 样本重叠程度
-- **Average Uniqueness**: 生命周期内独立程度
-- **Time Decay**: 时间衰减因子
-
-**输出**: `sample_weights.csv`
-
-### 5. 交叉验证 (cv_setup.py)
-
-**Purged K-Fold CV** 机制：
-- **Purging**: 剔除训练集中与测试集时间重叠的样本
-- **Embargo**: 测试集后设置禁运期，防止信息泄露
-
-**验证结果**: 5-Fold 分割无泄漏
-
-### 6. 模型训练 (train_model.py)
-
-**算法**: Random Forest Classifier
-
-**关键参数**:
-- `n_estimators`: 1000-1800
-- `max_depth`: 5-13
-- `class_weight`: balanced_subsample
-
-**输出**: `feature_importance.csv`
-
-### 7. 特征重要性 (feature_importance.py)
-
-**方法**:
-- **MDI** (Mean Decrease Impurity): 快速样本内方法
-- **MDA** (Mean Decrease Accuracy): 稳健样本外方法 (推荐)
-
-**Top 5 特征**:
-1. KSFT (K线形态)
-2. KSFT2 (K线形态标准化)
-3. KMID2 (K线中点标准化)
-4. KMID (K线中点)
-5. RESI5 (5期线性回归残差)
-
-**输出**: `feature_importance_mda.csv`, `selected_features.csv`
-
-### 8. 超参数优化 (hyperparameter_optimization.py)
-
-使用 **Optuna** 框架进行贝叶斯优化。
-
-**优化结果**: AUC 从 0.5122 提升至 0.5241 (+2.32%)
-
-### 9. Meta-Labeling (meta_labeling.py)
-
-二级模型策略：
-- **一级模型**: 预测交易方向
-- **二级模型**: 过滤一级模型信号
-
-**策略对比**:
-| 策略 | 收益率 | Sharpe | 交易次数 |
-|------|--------|--------|----------|
-| Base (Primary) | -16.35% | -5.02 | 147 |
-| Meta (Binary) | -4.65% | -2.96 | 35 |
-
-## 关键发现
-
-### 优点
-
-- Dollar Bars 有效降低 Jarque-Bera 统计量
-- 标签分布平衡 (53/47)
-- Purged CV 消除前视偏差
-- FFD 特征保留价格记忆
-- MDA 有效识别噪音特征
-
-### 注意事项
-
-- 模型预测能力接近随机 (AUC ~0.52)
-- 需引入市场状态特征改善 Meta-Model
-- 短期技术指标优于长期指标
-
-## 依赖环境
-
-- Python >= 3.13
-- pandas >= 2.3.3
-- numpy >= 2.4.1
-- scikit-learn >= 1.5.0
-- matplotlib >= 3.10.8
-- scipy >= 1.17.0
-- seaborn >= 0.13.2
-- statsmodels >= 0.14.6
-
-## 开发指南
-
-详见 [AGENTS.md](AGENTS.md)
-
-## 参考文献
-
-- López de Prado, M. (2018). Advances in Financial Machine Learning. Wiley.
-
-## License
-
-MIT
+> **注意**: 金融研发具有高风险性，本库仅供学习与研究参考。在使用任何策略进行实盘交易前，请务必进行充分的离线验证。

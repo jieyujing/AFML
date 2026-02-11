@@ -1,0 +1,24 @@
+# Default configuration for AFML processors
+# These values are loaded automatically by ConfigurableProcessorMixin
+
+dollar_bars:
+  daily_target: 4
+  ema_span: 20
+
+labeling:
+  pt_sl: [1.0, 1.0]
+  vertical_barrier_bars: 12
+  min_ret: 0.001
+
+features:
+  windows: [5, 10, 20, 30, 50]
+
+sample_weights:
+  decay: 0.9
+
+cv:
+  n_splits: 5
+  embargo: 0.01
+
+bet_sizing:
+  step_size: 0.0

@@ -4,6 +4,8 @@ trigger: always_on
 
 # Quant R&D Rules (量化研发与 AI 协作规范)
 
+## 0. Respond with Chinese
+
 ## 1. Core Workflow (核心工作流)
 
 - **[Pre-task] Methodology Retrieval ([前置] 方法论检索)**
@@ -43,9 +45,6 @@ At the end of the conversation, output the following format:
 > **Skill Usage List:**
 
 > - `afml skill`: [Description of methodology applied, e.g., "Used Chapter 3 Triple-Barrier Labeling"]
-
-> - `mlfinlab skill`: [Description of class definitions referenced, e.g., "Referenced FinancialDataStructure object"]
-
 
 
 ## 4. Project Tracking (项目进度追踪)

@@ -160,14 +160,64 @@ AFML/
 
 ## Module Dependencies
 
-Key module relationships:
+### Legacy Modules (src/)
+These modules provide functional APIs for the pipeline:
 
-- `labeling.py`: Triple barrier labeling (foundational)
-- `features.py`: Feature engineering (depends on labeling)
-- `sample_weights.py`: Uniqueness/decay weights (depends on labeling)
-- `cv_setup.py`: Cross-validation (used by meta_labeling)
-- `meta_labeling.py`: Two-layer ML (depends on all above)
+- `process_bars.py`: Dollar Bars generation (functional style)
+- `labeling.py`: Triple barrier labeling (functional style)
+- `features.py`: Feature engineering (functional style)
+- `sample_weights.py`: Uniqueness/decay weights (functional style)
+- `cv_setup.py`: Cross-validation (functional style)
+- `meta_labeling.py`: Two-layer ML (functional style)
 - `bet_sizing.py`: Position sizing (utility module)
+
+### OO Module (src/afml/)
+New object-oriented API with sklearn-compatible interfaces:
+
+```python
+from afml import (
+    DollarBarsProcessor,    # Generate dollar bars
+    TripleBarrierLabeler,   # Apply triple barrier labeling
+    FeatureEngineer,       # Generate features
+    SampleWeightCalculator,# Calculate sample weights
+    BetSizer,              # Calculate bet sizes
+    MetaLabelingPipeline,  # Meta-labeling workflow
+    PurgedKFoldCV,         # Cross-validation
+)
+```
+
+All processors follow sklearn conventions:
+- `fit(X)` - Fit the processor
+- `transform(X)` - Transform data
+- `fit_transform(X)` - Fit and transform in one step
+
+Example usage:
+```python
+# OO-style pipeline
+processor = DollarBarsProcessor(daily_target=4)
+df_bars = processor.fit_transform(df)
+
+labeler = TripleBarrierLabeler(pt_sl=[1.0, 1.0], vertical_barrier_bars=12)
+labeler.fit(df_bars["close"])
+events = labeler.label(df_bars["close"], cusum_events)
+
+engineer = FeatureEngineer(windows=[5, 10, 20, 30, 50])
+features = engineer.fit_transform(df_bars)
+
+weights = SampleWeightCalculator(decay=0.9).fit_transform(events, labels)
+```
+
+### Module Relationships
+
+```
+src/process_bars.py ─────────────────────────────────────► src/afml/dollar_bars.py
+src/labeling.py ─────────────────────────────────────────► src/afml/labeling.py
+src/features.py ─────────────────────────────────────────► src/afml/features.py
+src/sample_weights.py ────────────────────────────────────► src/afml/sample_weights.py
+src/cv_setup.py ─────────────────────────────────────────► src/afml/cv.py
+src/meta_labeling.py ────────────────────────────────────► src/afml/meta_labeling.py
+src/bet_sizing.py ───────────────────────────────────────► src/afml/bet_sizing.py
+```
 
 ## Testing Guidelines
 
