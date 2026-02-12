@@ -180,3 +180,8 @@ Thumbs.db
 
 # MLflow / Qlib
 mlruns/
+
+# Quantitative Research Outputs
+data/
+visual_analysis/
+*.csv

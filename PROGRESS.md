@@ -26,6 +26,9 @@
     - Standardized names (e.g., `DollarBarsProcessor` now points to Polars version by default).
     - Removed legacy pandas-based files and the `polars/` subdirectory.
     - Eliminated pandas dependencies from `stationarity.py` and `metrics.py`.
+- **[2026-02-12] Environment & Configuration**:
+    - Updated `.gitignore` to ignore `data/`, `visual_analysis/`, and `*.csv` files to keep the repository clean.
+    - Moved `examples/afml_polars_pipeline.py` to the root directory as the primary entry point.
 
 ## Current Status
 - **AFML Implementation**: Core pipeline is now rigorous, verified, and fully optimized for Polars.
