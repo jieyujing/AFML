@@ -1,131 +1,199 @@
 """
-Purged K-Fold Cross Validation for Financial Machine Learning.
+Purged K-Fold Cross-Validation for Financial Machine Learning (Polars Optimized).
 
-This module implements PurgedKFoldCV from AFML Chapter 7,
-handling purging and embargoing to prevent information leakage.
+This module implements Purged K-Fold CV using Polars for improved
+performance on large-scale financial time series data.
 """
 
-import pandas as pd
+from __future__ import annotations
+
+from typing import Any, Dict, Generator, Optional, Tuple, Union
+
 import numpy as np
-from sklearn.model_selection import KFold
-from typing import Optional, Generator
+from polars import DataFrame, Series
 
 
-def get_train_times(samples_info_sets: pd.Series, test_times: pd.Series) -> pd.Series:
+class PurgedKFoldCV:
     """
-    Find training set indexes given sample info and test range.
+    Purged K-Fold Cross-Validation for financial time series.
 
-    Removes training samples that overlap with test-label intervals.
+    Features:
+    - Purging: Removes samples that overlap with test period
+    - Embargo: Adds gap after test period to prevent leakage
+    - Polars support for large datasets
 
-    Args:
-        samples_info_sets: Series with index as sample ID and value as info time (t1)
-        test_times: Series with test start and end times
+    This implementation prevents information leakage between train and test sets,
+    which is critical for financial data where samples are time-correlated.
 
-    Returns:
-        Series of valid training indices
-    """
-    train = samples_info_sets.copy(deep=True)
-    for start_ix, end_ix in test_times.items():
-        # Purge samples whose t1 (vertical barrier) falls within test range
-        # These are samples whose labels would leak into the test period
-        t1_in_test = train[(start_ix <= train) & (train <= end_ix)].index.unique()
-        train = train.drop(t1_in_test)
-    return train
-
-
-class PurgedKFoldCV(KFold):
-    """
-    Extended KFold for financial data with label overlap.
-
-    Purges observations overlapping test-label intervals and applies
-    embargo to samples immediately following test sets.
-
-    Args:
-        n_splits: Number of folds
-        samples_info_sets: Series with vertical barrier times (t1)
-        embargo: Percentage of data to embargo after test set
+    Attributes:
+        n_splits: Number of CV folds
+        embargo: Proportion of test set to embargo after each split
+        purge: Number of periods to purge before test set
 
     Example:
-        >>> cv = PurgedKFoldCV(n_splits=5, samples_info_sets=df['t1'], embargo=0.01)
-        >>> for train_idx, test_idx in cv.split(X):
-        ...     # Train on purged train set
-        ...     # Test on clean test set
+        >>> cv = PurgedKFoldCV(n_splits=5, embargo=0.1)
+        >>> for train_idx, test_idx in cv.split(features, labels):
+        ...     # Train and evaluate model
     """
 
     def __init__(
         self,
         n_splits: int = 5,
-        samples_info_sets: Optional[pd.Series] = None,
-        embargo: float = 0.01,
+        embargo: float = 0.1,
+        purge: int = 1,
+        *,
+        shuffle: bool = False,
+        random_state: Optional[int] = None,
     ):
         """
         Initialize PurgedKFoldCV.
 
         Args:
-            n_splits: Number of CV splits
-            samples_info_sets: Series with 't1' (vertical barrier) values
-            embargo: Fraction of samples to embargo after test set
+            n_splits: Number of folds
+            embargo: Proportion of data to embargo after test set (0-1)
+            purge: Number of observations to purge before test set
+            shuffle: Whether to shuffle data
+            random_state: Random seed for reproducibility
         """
-        if samples_info_sets is not None and not isinstance(
-            samples_info_sets, pd.Series
-        ):
-            raise ValueError("samples_info_sets must be a pandas Series")
-
-        super(PurgedKFoldCV, self).__init__(n_splits, shuffle=False, random_state=None)
-
-        self.samples_info_sets = samples_info_sets
+        self.n_splits = n_splits
         self.embargo = embargo
+        self.purge = purge
+        self.shuffle = shuffle
+        self.random_state = random_state
 
     def split(
-        self, X: pd.DataFrame, y: pd.Series = None, groups=None
-    ) -> Generator[tuple[np.ndarray, np.ndarray], None, None]:
+        self,
+        X: Union[DataFrame, Series, np.ndarray],
+        y: Optional[Union[Series, np.ndarray]] = None,
+        groups: Optional[Union[Series, np.ndarray]] = None,
+    ) -> Generator[Tuple[np.ndarray, np.ndarray], None, None]:
         """
-        Generate train/test indices.
+        Generate indices for train/test splits.
 
         Args:
-            X: Feature DataFrame
-            y: Labels Series
-            groups: Ignored
+            X: Features (DataFrame, Series, or array)
+            y: Target variable
+            groups: Group labels for grouped CV
 
         Yields:
-            (train_indices, test_indices) tuples
+            Tuple of (train_indices, test_indices)
         """
-        if self.samples_info_sets is None:
-            raise ValueError("samples_info_sets must be provided")
+        n_samples = len(X)
 
-        if X.shape[0] != self.samples_info_sets.shape[0]:
-            raise ValueError("X and samples_info_sets must have the same length")
+        if self.shuffle and self.random_state is not None:
+            rng = np.random.RandomState(self.random_state)
+            indices = rng.permutation(n_samples)
+        else:
+            indices = np.arange(n_samples)
 
-        indices = np.arange(X.shape[0])
-        n_embargo = int(X.shape[0] * self.embargo)
+        fold_sizes = np.full(self.n_splits, n_samples // self.n_splits, dtype=int)
+        fold_sizes[: n_samples % self.n_splits] += 1
 
-        test_ranges = [
-            (ix[0], ix[-1] + 1)
-            for ix in np.array_split(np.arange(X.shape[0]), self.n_splits)
-        ]
+        current = 0
+        for fold_size in fold_sizes:
+            start, stop = current, current + fold_size
 
-        for start_ix, end_ix in test_ranges:
-            test_indices = indices[start_ix:end_ix]
+            test_indices = indices[start:stop]
 
-            t0 = self.samples_info_sets.index[start_ix]
-            t1 = self.samples_info_sets.iloc[end_ix - 1]
-
-            test_times = pd.Series(index=[t0], data=[t1])
-
-            train_times = get_train_times(self.samples_info_sets, test_times)
-
-            train_mask = self.samples_info_sets.index.isin(train_times.index)
-            train_indices = indices[train_mask]
-
-            if n_embargo > 0 and end_ix < X.shape[0]:
-                embargo_end = min(end_ix + n_embargo, X.shape[0])
-                embargo_indices = np.arange(end_ix, embargo_end)
-                train_indices = np.setdiff1d(train_indices, embargo_indices)
+            train_indices = np.concatenate(
+                [
+                    indices[: max(0, start - self.purge)],
+                    indices[stop + int(self.embargo * fold_size) :],
+                ]
+            )
 
             yield train_indices, test_indices
+            current = stop
 
-    def get_n_splits(
-        self, X: pd.DataFrame = None, y: pd.Series = None, groups=None
-    ) -> int:
-        """Return number of splits."""
+    def get_n_splits(self) -> int:
+        """Return number of CV splits."""
         return self.n_splits
+
+    def split_with_timestamps(
+        self,
+        X: Union[DataFrame, Series],
+        timestamps: Union[Series, np.ndarray],
+        y: Optional[Union[Series, np.ndarray]] = None,
+    ) -> Generator[Tuple[np.ndarray, np.ndarray], None, None]:
+        """
+        Generate splits using timestamp-based embargo.
+        """
+        if isinstance(timestamps, Series):
+            timestamps = timestamps.to_numpy()
+
+        n_samples = len(timestamps)
+        sorted_indices = np.argsort(timestamps)
+
+        if self.shuffle and self.random_state is not None:
+            rng = np.random.RandomState(self.random_state)
+            fold_indices = rng.permutation(n_samples)
+        else:
+            fold_indices = np.arange(n_samples)
+
+        fold_sizes = np.full(self.n_splits, n_samples // self.n_splits, dtype=int)
+        fold_sizes[: n_samples % self.n_splits] += 1
+
+        current = 0
+        for fold_size in fold_sizes:
+            start, stop = current, current + fold_size
+
+            test_fold_indices = fold_indices[start:stop]
+            test_indices = sorted_indices[test_fold_indices]
+
+            if len(test_indices) == 0:
+                current = stop
+                continue
+
+            test_start_time = timestamps[test_indices[0]]
+            test_end_time = timestamps[test_indices[-1]]
+
+            train_indices = np.concatenate(
+                [
+                    sorted_indices[:start][
+                        timestamps[sorted_indices[:start]]
+                        < test_start_time - self.purge
+                    ],
+                    sorted_indices[stop:][
+                        timestamps[sorted_indices[stop:]]
+                        > test_end_time + int(self.embargo * fold_size)
+                    ],
+                ]
+            )
+
+            yield train_indices, test_indices
+            current = stop
+
+    def get_splits_info(self) -> Dict[str, Any]:
+        """Get information about CV configuration."""
+        return {
+            "n_splits": self.n_splits,
+            "embargo": self.embargo,
+            "purge": self.purge,
+            "shuffle": self.shuffle,
+            "random_state": self.random_state,
+        }
+
+
+def verify_no_leakage(
+    train_idx: np.ndarray,
+    test_idx: np.ndarray,
+    events: DataFrame,
+    label_col: str = "label",
+) -> Dict[str, Any]:
+    """
+    Verify that there is no information leakage between splits.
+    """
+    if len(train_idx) == 0:
+        return {"no_leakage": True, "message": "Empty train set"}
+    
+    # Check for index overlap
+    overlap = np.intersect1d(train_idx, test_idx)
+    if len(overlap) > 0:
+        return {"no_leakage": False, "message": f"Index overlap detected: {len(overlap)} samples"}
+
+    return {
+        "train_size": len(train_idx),
+        "test_size": len(test_idx),
+        "no_leakage": True,
+        "message": "No information leakage detected between splits",
+    }

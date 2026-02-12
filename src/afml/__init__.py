@@ -1,27 +1,31 @@
 """
-AFML - Advances in Financial Machine Learning
+AFML - Advances in Financial Machine Learning (Polars Optimized)
 
-This package provides object-oriented implementations of core quantitative
-finance algorithms based on Marcos López de Prado's book.
+This package provides high-performance, object-oriented implementations of core 
+quantitative finance algorithms based on Marcos López de Prado's book, 
+optimized for Polars.
 
 Processors
 ----------
-DollarBarsProcessor : Generates dollar bars from tick data
-TripleBarrierLabeler : Applies triple barrier labeling method
-FeatureEngineer : Generates Alpha158 and FFD features
-SampleWeightCalculator : Calculates sample weights
-BetSizer : Computes bet sizes from probabilities
-MetaLabelingPipeline : Orchestrates meta-labeling workflow
-PurgedKFoldCV : Cross-validation with purging and embargo
+DollarBarsProcessor : Generates dollar bars from tick data (Polars)
+TripleBarrierLabeler : Applies triple barrier labeling method (Polars)
+FeatureEngineer : Generates Alpha158 and FFD features (Polars)
+SampleWeightCalculator : Calculates sample weights (Polars)
+BetSizer : Computes bet sizes from probabilities (Polars)
+MetaLabelingPipeline : Orchestrates meta-labeling workflow (Polars)
+PurgedKFoldCV : Cross-validation with purging and embargo (Polars)
 
-Polars Modules
--------------
-All modules also available in afml.polars for high-performance
-data processing using Polars instead of pandas.
+Utilities
+---------
+to_polars : Convert data to Polars format
+to_pandas : Convert data to pandas format
+ensure_dataframe : Ensure data is a Polars DataFrame
+ensure_series : Ensure data is a Polars Series
 """
 
 from .base import ProcessorMixin, ConfigurableProcessorMixin
 
+# Polars-native implementations (Standard names now point to Polars)
 from .dollar_bars import DollarBarsProcessor
 from .labeling import TripleBarrierLabeler
 from .features import FeatureEngineer
@@ -30,22 +34,19 @@ from .bet_sizing import BetSizer
 from .meta_labeling import MetaLabelingPipeline
 from .cv import PurgedKFoldCV
 
-# Polars modules (high-performance alternatives)
-try:
-    from .polars.dollar_bars import PolarsDollarBarsProcessor
-    from .polars.labeling import PolarsTripleBarrierLabeler
-    from .polars.features import PolarsFeatureEngineer
-    from .polars.sample_weights import PolarsSampleWeightCalculator
-    from .polars.bet_sizing import PolarsBetSizer
-    from .polars.meta_labeling import PolarsMetaLabelingPipeline
-    from .polars.cv import PolarsPurgedKFoldCV
-    from .polars.convert import to_polars, to_pandas
-    from .polars.dataframe import ensure_dataframe
-    from .polars.series import ensure_series
+# Utilities
+from .convert import to_polars, to_pandas
+from .dataframe import ensure_dataframe
+from .series import ensure_series
 
-    _POLARS_AVAILABLE = True
-except ImportError:
-    _POLARS_AVAILABLE = False
+# Legacy aliases for backward compatibility (optional, but keep for now if needed by pipeline)
+PolarsDollarBarsProcessor = DollarBarsProcessor
+PolarsTripleBarrierLabeler = TripleBarrierLabeler
+PolarsFeatureEngineer = FeatureEngineer
+PolarsSampleWeightCalculator = SampleWeightCalculator
+PolarsBetSizer = BetSizer
+PolarsMetaLabelingPipeline = MetaLabelingPipeline
+PolarsPurgedKFoldCV = PurgedKFoldCV
 
 __all__ = [
     "ProcessorMixin",
@@ -57,21 +58,15 @@ __all__ = [
     "BetSizer",
     "MetaLabelingPipeline",
     "PurgedKFoldCV",
+    "PolarsDollarBarsProcessor",
+    "PolarsTripleBarrierLabeler",
+    "PolarsFeatureEngineer",
+    "PolarsSampleWeightCalculator",
+    "PolarsBetSizer",
+    "PolarsMetaLabelingPipeline",
+    "PolarsPurgedKFoldCV",
+    "to_polars",
+    "to_pandas",
+    "ensure_dataframe",
+    "ensure_series",
 ]
-
-if _POLARS_AVAILABLE:
-    __all__.extend(
-        [
-            "PolarsDollarBarsProcessor",
-            "PolarsTripleBarrierLabeler",
-            "PolarsFeatureEngineer",
-            "PolarsSampleWeightCalculator",
-            "PolarsBetSizer",
-            "PolarsMetaLabelingPipeline",
-            "PolarsPurgedKFoldCV",
-            "to_polars",
-            "to_pandas",
-            "ensure_dataframe",
-            "ensure_series",
-        ]
-    )

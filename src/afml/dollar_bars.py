@@ -1,38 +1,52 @@
 """
-Dollar Bars Processor for Financial Machine Learning.
+Dollar Bars Processor for Financial Machine Learning (Polars Optimized).
 
-This module implements Dollar Bars generation - transforming raw tick data
-into bars based on dollar volume thresholds.
+This module implements Dollar Bars generation using Polars for improved
+performance on large-scale financial time series data.
 """
 
-import pandas as pd
+from __future__ import annotations
+
+from typing import Any, Dict, Optional, Union
+
 import numpy as np
-from typing import Optional
+import polars as pl
+from polars import DataFrame, LazyFrame
 
 from .base import ProcessorMixin
 
 
 class DollarBarsProcessor(ProcessorMixin):
     """
-    Processor for generating dollar bars from tick data.
+    Processor for generating dollar bars from tick data using Polars.
 
     Dollar bars aggregate ticks based on a dollar amount threshold, providing
     more statistically reliable bars than time-based sampling.
+
+    This implementation uses Polars for improved performance on large datasets,
+    with support for lazy evaluation and multi-threaded operations.
 
     Attributes:
         daily_target: Target number of bars per trading day
         ema_span: Span for EMA calculation (used in dynamic mode)
         threshold_: Computed dollar threshold after fitting
+        threshold_type: Either 'fixed' or 'dynamic'
 
     Example:
         >>> processor = DollarBarsProcessor(daily_target=4)
         >>> dollar_bars = processor.fit_transform(raw_df)
+
+        >>> # For large datasets, use lazy mode
+        >>> processor = DollarBarsProcessor(daily_target=4, lazy=True)
+        >>> dollar_bars = processor.fit_transform(lazy_df).collect()
     """
 
     def __init__(
         self,
         daily_target: int = 4,
         ema_span: int = 20,
+        *,
+        lazy: bool = False,
     ):
         """
         Initialize the DollarBarsProcessor.
@@ -40,15 +54,20 @@ class DollarBarsProcessor(ProcessorMixin):
         Args:
             daily_target: Target number of bars per trading day (default: 4)
             ema_span: Span for EMA calculation in dynamic mode (default: 20)
+            lazy: Whether to use lazy evaluation (default: False)
         """
         super().__init__()
         self.daily_target = daily_target
         self.ema_span = ema_span
+        self.lazy = lazy
         self.threshold_: Optional[float] = None
         self.threshold_type: str = "fixed"
+        self._daily_thresholds: Optional[Dict[str, float]] = None
 
     def fit(
-        self, df: pd.DataFrame, y: Optional[pd.Series] = None
+        self,
+        df: Union[DataFrame, LazyFrame],
+        y: Optional[Any] = None,
     ) -> "DollarBarsProcessor":
         """
         Calculate threshold parameters from the input data.
@@ -60,17 +79,37 @@ class DollarBarsProcessor(ProcessorMixin):
         Returns:
             self
         """
+        if isinstance(df, LazyFrame):
+            df = df.collect()
+
+        # Calculate amount if not present
         if "amount" not in df.columns:
-            # Calculate amount if not present
             multiplier = 300.0
-            avg_price = (df["open"] + df["high"] + df["low"] + df["close"]) / 4.0
-            df = df.copy()
-            df["amount"] = avg_price * df["volume"] * multiplier
+            df = df.with_columns(
+                (
+                    (
+                        (
+                            pl.col("open")
+                            + pl.col("high")
+                            + pl.col("low")
+                            + pl.col("close")
+                        )
+                        / 4.0
+                    )
+                    * pl.col("volume")
+                    * multiplier
+                ).alias("amount")
+            )
 
         # Calculate average daily volume
-        df_daily = df.set_index("datetime").resample("D")["amount"].sum()
-        df_daily = df_daily[df_daily > 0]  # Filter out zero-volume days
-        avg_daily_volume = df_daily.mean()
+        df_daily = (
+            df.sort("datetime")
+            .group_by_dynamic("datetime", every="1d")
+            .agg(pl.col("amount").sum().alias("daily_amount"))
+            .filter(pl.col("daily_amount") > 0)
+        )
+
+        avg_daily_volume = df_daily["daily_amount"].mean()
 
         # Store fixed threshold
         self.threshold_ = avg_daily_volume / self.daily_target
@@ -78,7 +117,10 @@ class DollarBarsProcessor(ProcessorMixin):
 
         return self
 
-    def fit_dynamic(self, df: pd.DataFrame) -> "DollarBarsProcessor":
+    def fit_dynamic(
+        self,
+        df: Union[DataFrame, LazyFrame],
+    ) -> "DollarBarsProcessor":
         """
         Fit using dynamic threshold based on EMA of daily volume.
 
@@ -88,44 +130,67 @@ class DollarBarsProcessor(ProcessorMixin):
         Returns:
             self
         """
+        if isinstance(df, LazyFrame):
+            df = df.collect()
+
+        # Calculate amount if not present
         if "amount" not in df.columns:
             multiplier = 300.0
-            avg_price = (df["open"] + df["high"] + df["low"] + df["close"]) / 4.0
-            df = df.copy()
-            df["amount"] = avg_price * df["volume"] * multiplier
+            df = df.with_columns(
+                (
+                    (
+                        (
+                            pl.col("open")
+                            + pl.col("high")
+                            + pl.col("low")
+                            + pl.col("close")
+                        )
+                        / 4.0
+                    )
+                    * pl.col("volume")
+                    * multiplier
+                ).alias("amount")
+            )
 
         # Calculate daily stats
-        daily_stats = (
-            df.set_index("datetime")
-            .resample("D")["amount"]
-            .sum()
-            .to_frame(name="daily_amt")
+        df_daily = (
+            df.sort("datetime")
+            .group_by_dynamic("datetime", every="1d")
+            .agg(pl.col("amount").sum().alias("daily_amount"))
+            .with_columns(
+                pl.col("daily_amount")
+                .replace(0, None)
+                .ewm_mean(span=self.ema_span, adjust=False)
+                .alias("ema_amt")
+            )
         )
 
-        # Calculate EMA threshold
-        daily_stats["ema_amt"] = (
-            daily_stats["daily_amt"]
-            .replace(0, np.nan)
-            .ewm(span=self.ema_span, adjust=False)
-            .mean()
+        # Calculate threshold with shift
+        df_daily = df_daily.with_columns(
+            (pl.col("ema_amt").shift(1) / self.daily_target).alias("threshold")
         )
-        daily_stats["threshold"] = daily_stats["ema_amt"].shift(1) / self.daily_target
 
-        # Store daily thresholds for transform
-        global_mean = daily_stats["daily_amt"][daily_stats["daily_amt"] > 0].mean()
+        # Calculate global mean for initial threshold
+        global_mean = df_daily.filter(pl.col("daily_amount") > 0)["daily_amount"].mean()
         start_threshold = global_mean / self.daily_target
-        daily_stats["threshold"] = daily_stats["threshold"].fillna(start_threshold)
 
-        # Create mapping
-        daily_stats["date"] = daily_stats.index.date
-        self._daily_thresholds = daily_stats.set_index("date")["threshold"].to_dict()
+        # Fill NaN thresholds with start_threshold
+        df_daily = df_daily.with_columns(pl.col("threshold").fill_nan(start_threshold))
+
+        # Create mapping from date to threshold
+        df_daily = df_daily.with_columns(pl.col("datetime").dt.date().alias("date"))
+
+        self._daily_thresholds = dict(zip(df_daily["date"], df_daily["threshold"]))
 
         self.threshold_type = "dynamic"
         self.threshold_ = start_threshold
 
         return self
 
-    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+    def transform(
+        self,
+        df: Union[DataFrame, LazyFrame],
+    ) -> Union[DataFrame, LazyFrame]:
         """
         Generate dollar bars from raw tick data.
 
@@ -133,78 +198,138 @@ class DollarBarsProcessor(ProcessorMixin):
             df: DataFrame with 'datetime', 'open', 'high', 'low', 'close', 'volume' columns
 
         Returns:
-            DataFrame with dollar bars
+            DataFrame or LazyFrame with dollar bars
         """
         if self.threshold_ is None:
             raise ValueError("Processor has not been fitted. Call fit() first.")
 
-        # Ensure amount column exists
-        if "amount" not in df.columns:
-            multiplier = 300.0
-            avg_price = (df["open"] + df["high"] + df["low"] + df["close"]) / 4.0
-            df = df.copy()
-            df["amount"] = avg_price * df["volume"] * multiplier
-
-        if self.threshold_type == "fixed":
-            return self._transform_fixed(df)
+        if isinstance(df, LazyFrame):
+            result = self._transform_fixed(df.lazy())
+            return result.lazy() if self.lazy else result.collect()
         else:
-            return self._transform_dynamic(df)
+            if self.threshold_type == "fixed":
+                return self._transform_fixed(df)
+            else:
+                return self._transform_dynamic(df)
 
-    def _transform_fixed(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _transform_fixed(
+        self,
+        df: Union[DataFrame, LazyFrame],
+    ) -> Union[DataFrame, LazyFrame]:
         """Generate fixed dollar bars."""
         threshold = self.threshold_
 
-        # Cumulative sum and group assignment
-        cum_amount = df["amount"].cumsum()
-        group_ids = (cum_amount.shift(1).fillna(0) // threshold).astype(int)
+        if isinstance(df, LazyFrame):
+            df = df.collect()
+
+        # Calculate amount if not present
+        if "amount" not in df.columns:
+            multiplier = 300.0
+            df = df.with_columns(
+                (
+                    (
+                        (
+                            pl.col("open")
+                            + pl.col("high")
+                            + pl.col("low")
+                            + pl.col("close")
+                        )
+                        / 4.0
+                    )
+                    * pl.col("volume")
+                    * multiplier
+                ).alias("amount")
+            )
+
+        # Cumulative sum and bar assignment
+        df = df.with_columns(pl.col("amount").cum_sum().alias("cum_amount"))
+
+        # Assign bar IDs
+        df = df.with_columns(
+            ((pl.col("cum_amount") / threshold).floor().cast(pl.Int64)).alias("bar_id")
+        )
 
         # Aggregate bars
-        dollar_bars = df.groupby(group_ids).apply(
-            self._aggregate_bar, include_groups=False
+        dollar_bars = (
+            df.group_by("bar_id")
+            .agg(
+                pl.col("datetime").last().alias("datetime"),
+                pl.col("open").first().alias("open"),
+                pl.col("high").max().alias("high"),
+                pl.col("low").min().alias("low"),
+                pl.col("close").last().alias("close"),
+                pl.col("volume").sum().alias("volume"),
+                pl.col("amount").sum().alias("amount"),
+            )
+            .drop("bar_id")
+            .sort("datetime")
         )
-        dollar_bars = dollar_bars.reset_index(drop=True)
 
         return dollar_bars
 
-    def _transform_dynamic(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _transform_dynamic(
+        self,
+        df: Union[DataFrame, LazyFrame],
+    ) -> Union[DataFrame, LazyFrame]:
         """Generate dynamic dollar bars with daily EMA threshold."""
-        # Map thresholds
-        df = df.copy()
-        df["date"] = df["datetime"].dt.date
-        df["dynamic_threshold"] = df["date"].map(self._daily_thresholds)
-        df["dynamic_threshold"] = df["dynamic_threshold"].fillna(self.threshold_)
+        if isinstance(df, LazyFrame):
+            df = df.collect()
 
-        # Normalize amount
-        df["norm_amount"] = df["amount"] / df["dynamic_threshold"]
-        df["cum_norm_amount"] = df["norm_amount"].cumsum()
+        # Add date column for threshold mapping
+        df = df.with_columns(pl.col("datetime").dt.date().alias("date"))
 
-        group_ids = (df["cum_norm_amount"].shift(1).fillna(0)).astype(int)
+        # Map dynamic thresholds
+        if self._daily_thresholds is None:
+            raise ValueError("Dynamic thresholds not fitted. Call fit_dynamic() first.")
 
-        dollar_bars = df.groupby(group_ids).apply(
-            self._aggregate_bar, include_groups=False
+        # Create expression for threshold lookup
+        date_to_threshold = pl.lit(self._daily_thresholds)
+        df = df.with_columns(
+            pl.struct(
+                [
+                    pl.col("date")
+                    .map_dict(date_to_threshold, default=self.threshold_)
+                    .alias("dynamic_threshold")
+                ]
+            )
         )
-        dollar_bars = dollar_bars.reset_index(drop=True)
+
+        # Fill any remaining NaN with default threshold
+        df = df.with_columns(pl.col("dynamic_threshold").fill_nan(self.threshold_))
+
+        # Normalize amount and cumulative sum
+        df = df.with_columns(
+            (pl.col("amount") / pl.col("dynamic_threshold")).alias("norm_amount")
+        ).with_columns(pl.col("norm_amount").cum_sum().alias("cum_norm_amount"))
+
+        # Assign bar IDs
+        df = df.with_columns(
+            pl.col("cum_norm_amount").floor().cast(pl.Int64).alias("bar_id")
+        )
+
+        # Aggregate bars
+        dollar_bars = (
+            df.group_by("bar_id")
+            .agg(
+                pl.col("datetime").last().alias("datetime"),
+                pl.col("open").first().alias("open"),
+                pl.col("high").max().alias("high"),
+                pl.col("low").min().alias("low"),
+                pl.col("close").last().alias("close"),
+                pl.col("volume").sum().alias("volume"),
+                pl.col("amount").sum().alias("amount"),
+            )
+            .drop("bar_id")
+            .sort("datetime")
+        )
 
         return dollar_bars
-
-    @staticmethod
-    def _aggregate_bar(group: pd.DataFrame) -> pd.Series:
-        """Aggregate a group of ticks into a single bar."""
-        return pd.Series(
-            {
-                "datetime": group["datetime"].iloc[-1],
-                "open": group["open"].iloc[0],
-                "high": group["high"].max(),
-                "low": group["low"].min(),
-                "close": group["close"].iloc[-1],
-                "volume": group["volume"].sum(),
-                "amount": group["amount"].sum(),
-            }
-        )
 
     def fit_transform(
-        self, df: pd.DataFrame, y: Optional[pd.Series] = None
-    ) -> pd.DataFrame:
+        self,
+        df: Union[DataFrame, LazyFrame],
+        y: Optional[Any] = None,
+    ) -> Union[DataFrame, LazyFrame]:
         """
         Fit and transform in one step (fixed threshold).
 
@@ -218,7 +343,10 @@ class DollarBarsProcessor(ProcessorMixin):
         self.fit(df)
         return self.transform(df)
 
-    def fit_transform_dynamic(self, df: pd.DataFrame) -> pd.DataFrame:
+    def fit_transform_dynamic(
+        self,
+        df: Union[DataFrame, LazyFrame],
+    ) -> Union[DataFrame, LazyFrame]:
         """
         Fit with dynamic threshold and transform.
 
@@ -231,8 +359,16 @@ class DollarBarsProcessor(ProcessorMixin):
         self.fit_dynamic(df)
         return self.transform(df)
 
-    def get_threshold_info(self) -> dict:
-        """Get information about the computed threshold."""
+    def get_threshold_info(self) -> Dict[str, Any]:
+        """
+        Get information about the computed threshold.
+
+        Returns:
+            Dict with threshold information
+
+        Raises:
+            ValueError: If processor has not been fitted
+        """
         if self.threshold_ is None:
             raise ValueError("Processor has not been fitted.")
         return {
@@ -240,4 +376,5 @@ class DollarBarsProcessor(ProcessorMixin):
             "threshold_type": self.threshold_type,
             "daily_target": self.daily_target,
             "ema_span": self.ema_span,
+            "lazy": self.lazy,
         }

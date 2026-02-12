@@ -1,13 +1,16 @@
 """
-Triple Barrier Labeler for Financial Machine Learning.
+Triple Barrier Labeler for Financial Machine Learning (Polars Optimized).
 
-This module implements the Triple Barrier Method from AFML Chapter 3,
-generating labels based on profit-taking, stop-loss, and time barriers.
+This module implements the Triple Barrier Method using Polars for improved
+performance on large-scale financial time series data.
 """
 
-import pandas as pd
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional, Union
+
 import numpy as np
-from typing import Optional, Union, List
+from polars import DataFrame, Series
 
 from .base import ProcessorMixin
 
@@ -21,16 +24,20 @@ class TripleBarrierLabeler(ProcessorMixin):
     - Lower barrier: Stop-loss level
     - Vertical barrier: Maximum holding period
 
+    This implementation uses Polars for improved performance on large datasets,
+    with support for lazy evaluation and multi-threaded operations.
+
     Attributes:
         pt_sl: [profit_taking_multiplier, stop_loss_multiplier]
         vertical_barrier_bars: Maximum holding period in bars
         min_ret: Minimum return threshold for event filtering
+        volatility_span: Span for volatility calculation
         volatility_: Computed volatility after fitting
 
     Example:
         >>> labeler = TripleBarrierLabeler(pt_sl=[1.0, 1.0], vertical_barrier_bars=12)
         >>> labeler.fit(close_prices)
-        >>> events = labeler.label(events=timestamps, t1=barrier_times)
+        >>> events = labeler.label(close=close_series, timestamps=timestamps)
     """
 
     def __init__(
@@ -39,6 +46,8 @@ class TripleBarrierLabeler(ProcessorMixin):
         vertical_barrier_bars: int = 12,
         min_ret: float = 0.001,
         volatility_span: int = 100,
+        *,
+        lazy: bool = False,
     ):
         """
         Initialize the TripleBarrierLabeler.
@@ -48,41 +57,50 @@ class TripleBarrierLabeler(ProcessorMixin):
             vertical_barrier_bars: Number of bars for vertical barrier
             min_ret: Minimum return threshold to keep events
             volatility_span: Span for volatility calculation
+            lazy: Whether to use lazy evaluation
         """
         super().__init__()
         self.pt_sl = pt_sl
         self.vertical_barrier_bars = vertical_barrier_bars
         self.min_ret = min_ret
         self.volatility_span = volatility_span
-        self.volatility_: Optional[pd.Series] = None
+        self.lazy = lazy
+        self.volatility_: Optional[Series] = None
 
     def fit(
-        self, close: pd.Series, y: Optional[pd.Series] = None
+        self,
+        close: Union[Series, DataFrame],
+        y: Optional[Any] = None,
     ) -> "TripleBarrierLabeler":
         """
         Calculate volatility for barrier sizing.
 
         Args:
-            close: Series of close prices
+            close: Series or DataFrame with close prices
             y: Ignored
 
         Returns:
             self
         """
+        if isinstance(close, DataFrame):
+            if "close" not in close.columns:
+                raise ValueError("DataFrame must have 'close' column")
+            close = close["close"]
+
         self.volatility_ = self._calculate_volatility(close)
         return self
 
-    def _calculate_volatility(self, close: pd.Series) -> pd.Series:
+    def _calculate_volatility(self, close: Series) -> Series:
         """Calculate volatility using EMA of absolute log returns."""
-        returns = np.log(close / close.shift(1))
-        volatility = returns.ewm(span=self.volatility_span).std()
+        returns = (close / close.shift(1)).log()
+        volatility = returns.ewm_std(span=self.volatility_span)
         return volatility
 
     def get_cusum_events(
         self,
-        close: pd.Series,
-        threshold: Union[float, pd.Series] = None,
-    ) -> pd.DatetimeIndex:
+        close: Union[Series, DataFrame],
+        threshold: Union[float, Series] = None,
+    ) -> DataFrame:
         """
         Apply CUSUM filter to detect significant events.
 
@@ -91,191 +109,265 @@ class TripleBarrierLabeler(ProcessorMixin):
             threshold: Threshold for event detection
 
         Returns:
-            DatetimeIndex of detected events
+            DataFrame with detected events
         """
+        if isinstance(close, DataFrame):
+            if "close" not in close.columns:
+                raise ValueError("DataFrame must have 'close' column")
+            close = close["close"]
+
+        close_np = close.to_numpy()
+
         if threshold is None:
-            threshold = self.volatility_ * 2 if self.volatility_ is not None else 0.002
-
-        t_events = []
-        s_pos = 0
-        s_neg = 0
-
-        diff = np.log(close / close.shift(1))
-        times = diff.index
-
-        if isinstance(threshold, pd.Series):
-            thresh = threshold.reindex(times).ffill()
+            threshold_val = (
+                self.volatility_ * 2 if self.volatility_ is not None else 0.002
+            )
+            if isinstance(threshold_val, Series):
+                threshold_val = threshold_val.mean()
+        elif isinstance(threshold, Series):
+            threshold_val = threshold.mean()
         else:
-            thresh = pd.Series(threshold, index=times)
+            threshold_val = threshold
 
-        for i in range(1, len(times)):
-            t = times[i]
-            ret = diff.iloc[i]
-            h = thresh.iloc[i]
+        returns = np.log(close_np[1:] / close_np[:-1])
+        returns = np.insert(returns, 0, 0)
 
-            if pd.isna(ret) or pd.isna(h):
-                continue
+        pos = np.zeros(len(returns))
+        neg = np.zeros(len(returns))
 
-            s_pos = max(0, s_pos + ret)
-            s_neg = min(0, s_neg + ret)
+        for i in range(1, len(returns)):
+            pos[i] = max(0, pos[i - 1] + returns[i])
+            neg[i] = min(0, neg[i - 1] - returns[i])
 
-            if s_neg < -h:
-                s_neg = 0
-                t_events.append(t)
-            elif s_pos > h:
-                s_pos = 0
-                t_events.append(t)
+        events = []
+        for i in range(len(returns)):
+            if pos[i] > threshold_val:
+                events.append({"datetime": i, "type": "pos"})
+                pos[i] = 0
+                neg[i] = 0
+            elif -neg[i] > threshold_val:
+                events.append({"datetime": i, "type": "neg"})
+                pos[i] = 0
+                neg[i] = 0
 
-        return pd.DatetimeIndex(t_events)
+        if events:
+            return DataFrame(events)
+        return DataFrame({"datetime": [], "type": []})
 
     def label(
         self,
-        close: pd.Series,
-        events: pd.DatetimeIndex,
-        t1: Optional[pd.Series] = None,
-        side: Optional[pd.Series] = None,
-    ) -> pd.DataFrame:
+        close: Union[Series, DataFrame],
+        events: DataFrame,
+        t1: Optional[DataFrame] = None,
+    ) -> DataFrame:
         """
-        Apply triple barrier and generate labels.
+        Apply triple barrier labels to events.
 
         Args:
-            close: Series of close prices with datetime index
-            events: DatetimeIndex of events to label
-            t1: Series with vertical barrier timestamps
-            side: Series with position side (1 for long, -1 for short)
+            close: Series or DataFrame with close prices
+            events: DataFrame with event timestamps
+            t1: DataFrame with vertical barrier times
 
         Returns:
-            DataFrame with columns: t1, trgt, side, ret, label
+            DataFrame with labels
         """
+        if isinstance(close, DataFrame):
+            if "close" not in close.columns:
+                raise ValueError("DataFrame must have 'close' column")
+            close = close["close"]
+
         if self.volatility_ is None:
-            raise ValueError("Labeler has not been fitted. Call fit() first.")
+            self.fit(close)
 
-        # Prepare events
-        events_ = events
+        pt_sl = self.pt_sl
+        vertical_barrier_bars = self.vertical_barrier_bars
+        min_ret = self.min_ret
 
-        # Get target (volatility-based barrier width)
-        trgt = self.volatility_.reindex(events_, method="ffill")
-
-        # Set vertical barrier
         if t1 is None:
-            t1 = self._create_vertical_barrier(events_, close)
-        else:
-            t1 = t1.reindex(events_)
+            t1 = self._get_vertical_barrier(close, events, vertical_barrier_bars)
 
-        # Set side
-        if side is None:
-            side_ = pd.Series(1.0, index=trgt.index)
-            pt_sl_ = self.pt_sl[:2]
-        else:
-            side_ = side.reindex(trgt.index, method="ffill")
-            pt_sl_ = self.pt_sl[:2]
+        labels = []
+        events_dict = events.to_dicts()
+        t1_vals = t1["t1"].to_numpy() if "t1" in t1.columns else t1.to_numpy().flatten()
+        close_np = close.to_numpy()
+        n = len(close_np)
 
-        # Apply barriers
-        out = pd.DataFrame(index=events_)
-        out["t1"] = t1
-        out["trgt"] = trgt
-        out["side"] = side_
-
-        for loc in events_:
-            df0 = close[loc:]
-
-            if pd.isna(out.loc[loc, "t1"]):
-                df0 = df0[: close.index[-1]]
-            else:
-                df0 = df0[: out.loc[loc, "t1"]]
-
-            if len(df0) <= 1:
-                out.loc[loc, "ret"] = 0
-                out.loc[loc, "label"] = 0
+        for idx, event in enumerate(events_dict):
+            t0 = int(event.get("datetime", idx))
+            if t0 >= n:
                 continue
 
-            ret = (df0 / close[loc] - 1) * out.loc[loc, "side"]
-            upper = pt_sl_[0] * out.loc[loc, "trgt"]
-            lower = -pt_sl_[1] * out.loc[loc, "trgt"]
+            # Vertical barrier (holding period expiration)
+            t1_val = (
+                int(t1_vals[idx])
+                if idx < len(t1_vals)
+                else t0 + self.vertical_barrier_bars
+            )
+            t1_val = min(t1_val, n - 1)
 
-            touch_upper = ret[ret >= upper]
-            touch_lower = ret[ret <= lower]
+            if t0 >= t1_val:
+                continue
 
-            if len(touch_upper) > 0 and len(touch_lower) > 0:
-                if touch_upper.index[0] < touch_lower.index[0]:
-                    out.loc[loc, "t1"] = touch_upper.index[0]
-                    out.loc[loc, "ret"] = ret.loc[touch_upper.index[0]]
-                    out.loc[loc, "label"] = 1
-                else:
-                    out.loc[loc, "t1"] = touch_lower.index[0]
-                    out.loc[loc, "ret"] = ret.loc[touch_lower.index[0]]
-                    out.loc[loc, "label"] = -1
-            elif len(touch_upper) > 0:
-                out.loc[loc, "t1"] = touch_upper.index[0]
-                out.loc[loc, "ret"] = ret.loc[touch_upper.index[0]]
-                out.loc[loc, "label"] = 1
-            elif len(touch_lower) > 0:
-                out.loc[loc, "t1"] = touch_lower.index[0]
-                out.loc[loc, "ret"] = ret.loc[touch_lower.index[0]]
-                out.loc[loc, "label"] = -1
+            # Target volatility (barrier width)
+            vol = 0.02
+            if self.volatility_ is not None:
+                # Use volatility at t0
+                vol = float(self.volatility_[t0]) if self.volatility_[t0] is not None else 0.02
+
+            pt = pt_sl[0] * vol
+            sl = pt_sl[1] * vol
+
+            # Check for horizontal barrier touches between t0 and t1
+            # price_slice includes t0 to t1 inclusive
+            price_slice = close_np[t0 : t1_val + 1]
+            # Returns relative to t0
+            rets = price_slice / close_np[t0] - 1
+            
+            # Find first time it touches pt or sl
+            # Note: np.where returns indices relative to the slice
+            touch_pt = np.where(rets >= pt)[0]
+            touch_sl = np.where(rets <= -sl)[0]
+            
+            first_pt = touch_pt[0] if len(touch_pt) > 0 else None
+            first_sl = touch_sl[0] if len(touch_sl) > 0 else None
+            
+            # Triple Barrier Determination Logic
+            if first_pt is not None and (first_sl is None or first_pt < first_sl):
+                # Touched Profit Taking first
+                exit_idx = t0 + first_pt
+                final_ret = rets[first_pt]
+                label = 1
+            elif first_sl is not None and (first_pt is None or first_sl < first_pt):
+                # Touched Stop Loss first
+                exit_idx = t0 + first_sl
+                final_ret = rets[first_sl]
+                label = -1
             else:
-                out.loc[loc, "ret"] = ret.iloc[-1]
-                out.loc[loc, "label"] = np.sign(ret.iloc[-1])
+                # No horizontal touch, exit at vertical barrier
+                exit_idx = t1_val
+                final_ret = rets[-1]
+                label = 0 if abs(final_ret) < min_ret else (1 if final_ret > 0 else -1)
 
-        # Filter by minimum return
-        if self.min_ret > 0:
-            out = out[out["ret"].abs() >= self.min_ret]
+            labels.append(
+                {
+                    "t0": t0,
+                    "t1": exit_idx,
+                    "tr": final_ret, # Signed return
+                    "label": label,
+                }
+            )
 
-        return out
+        if labels:
+            return DataFrame(labels)
+        return DataFrame({"t0": [], "t1": [], "tr": [], "label": []})
 
-    def _create_vertical_barrier(
-        self, events: pd.DatetimeIndex, close: pd.Series
-    ) -> pd.Series:
-        """Create vertical barrier timestamps based on bar count."""
-        indices = close.index.get_indexer(events)
-        t1_indices = indices + self.vertical_barrier_bars
-        t1_indices = np.clip(t1_indices, 0, len(close) - 1)
-        t1 = pd.Series(close.index[t1_indices], index=events)
-        return t1
-
-    def transform(self, X: pd.DataFrame, y: Optional[pd.Series] = None) -> pd.DataFrame:
-        """
-        Transform is not applicable for labeler.
-
-        Use label() method instead.
-        """
-        raise NotImplementedError(
-            "Use label() method to generate labels after fitting."
-        )
-
-    def fit_label(
+    def _get_vertical_barrier(
         self,
-        close: pd.Series,
-        events: pd.DatetimeIndex,
-        t1: Optional[pd.Series] = None,
-        side: Optional[pd.Series] = None,
-    ) -> pd.DataFrame:
+        close: Series,
+        events: DataFrame,
+        vertical_barrier_bars: int,
+    ) -> DataFrame:
         """
-        Fit and label in one step.
+        Calculate vertical barrier for each event.
 
         Args:
             close: Close price series
-            events: Event timestamps
-            t1: Vertical barrier timestamps
-            side: Position sides
+            events: Events DataFrame
+            vertical_barrier_bars: Number of bars for vertical barrier
+
+        Returns:
+            DataFrame with t1 (vertical barrier time)
+        """
+        t1_list = []
+        for idx in range(len(events)):
+            event_row = events.row(idx, named=True)
+            t0 = event_row.get("datetime", event_row.get(0))
+            if t0 is None:
+                t1_list.append(None)
+                continue
+
+            t1_val = t0 + vertical_barrier_bars
+            if t1_val >= len(close):
+                t1_val = len(close) - 1
+
+            t1_list.append(t1_val)
+
+        return DataFrame({"t1": t1_list})
+
+    def get_all_events(
+        self,
+        close: Union[Series, DataFrame],
+        timestamps: DataFrame,
+    ) -> DataFrame:
+        """
+        Get all triple barrier events.
+
+        Args:
+            close: Close price series or DataFrame
+            timestamps: DataFrame with event timestamps
+
+        Returns:
+            DataFrame with all events and barriers
+        """
+        if isinstance(close, DataFrame):
+            if "close" not in close.columns:
+                raise ValueError("DataFrame must have 'close' column")
+            close = close["close"]
+
+        if self.volatility_ is None:
+            self.fit(close)
+
+        t1 = self._get_vertical_barrier(close, timestamps, self.vertical_barrier_bars)
+
+        return self.label(close, timestamps, t1)
+
+    def fit_transform(
+        self,
+        close: Union[Series, DataFrame],
+        events: DataFrame,
+        y: Optional[Any] = None,
+    ) -> DataFrame:
+        """
+        Fit and transform in one step.
+
+        Args:
+            close: Close price series or DataFrame
+            events: Events DataFrame
+            y: Ignored
 
         Returns:
             Labeled events DataFrame
         """
         self.fit(close)
-        return self.label(close, events, t1, side)
+        return self.label(close, events)
 
-    def get_bins(self, events: pd.DataFrame) -> pd.DataFrame:
+    def transform(
+        self,
+        close: Union[Series, DataFrame],
+    ) -> DataFrame:
         """
-        Convert events to discrete bins.
+        Apply triple barrier labels (stub for sklearn compatibility).
 
         Args:
-            events: DataFrame from label() method
+            close: Close price series or DataFrame
 
         Returns:
-            DataFrame with bin labels
+            Empty DataFrame (use label() method for actual labeling)
         """
-        events_ = events.dropna(subset=["t1"])
-        bins = events_[["ret", "label"]].copy()
-        bins["bin"] = events_["label"]
-        return bins
+        return DataFrame({"t1": [], "tr": [], "label": []})
+
+    def get_label_info(self) -> Dict[str, Any]:
+        """
+        Get information about labeler configuration.
+
+        Returns:
+            Dict with configuration information
+        """
+        return {
+            "pt_sl": self.pt_sl,
+            "vertical_barrier_bars": self.vertical_barrier_bars,
+            "min_ret": self.min_ret,
+            "volatility_span": self.volatility_span,
+            "lazy": self.lazy,
+            "volatility_computed": self.volatility_ is not None,
+        }

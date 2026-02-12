@@ -1,273 +1,217 @@
 """
-Meta-Labeling Pipeline for Financial Machine Learning.
+Meta-Labeling Pipeline for Financial Machine Learning (Polars Optimized).
 
-This module implements the Meta-Labeling workflow from AFML Chapter 3 & 4,
-orchestrating primary and secondary models for filtered predictions.
+This module implements Meta-Labeling using Polars for improved
+performance on large-scale financial time series data.
 """
 
-import pandas as pd
-from typing import Optional, List
-from sklearn.ensemble import RandomForestClassifier
+from __future__ import annotations
 
-from .base import ProcessorMixin
-from .cv import PurgedKFoldCV
+from typing import Any, Dict, List, Optional, Union
+
+import numpy as np
+from polars import DataFrame, LazyFrame, Series
+
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 
-class MetaLabelingPipeline(ProcessorMixin):
+class MetaLabelingPipeline:
     """
-    Orchestrates meta-labeling workflow.
+    Meta-Labeling Pipeline for filtering primary model predictions.
 
-    Trains a primary model for direction prediction, then uses a secondary
-    model to filter the primary model's signals.
+    Two-layer approach:
+    1. Primary Model: Predicts direction (long/short)
+    2. Meta Model: Filters primary predictions to improve precision
+
+    This implementation uses Polars for improved performance on large datasets.
 
     Attributes:
-        primary_model: Primary classifier
-        secondary_model: Meta-label classifier
-        primary_params: Hyperparameters for primary model
-        secondary_params: Hyperparameters for secondary model
-        n_splits: Number of CV splits
-        embargo: Embargo percentage for PurgedKFold
+        primary_model: sklearn-compatible model for direction prediction
+        meta_model: sklearn-compatible model for meta-labeling
+        primary_params: Parameters for primary model
+        meta_params: Parameters for meta model
 
     Example:
-        >>> pipeline = MetaLabelingPipeline(n_splits=5)
+        >>> pipeline = MetaLabelingPipeline()
         >>> pipeline.fit(X, y)
-        >>> predictions = pipeline.predict(X_new)
+        >>> predictions = pipeline.predict(X)
     """
 
     def __init__(
         self,
-        primary_model=None,
-        secondary_model=None,
-        n_splits: int = 5,
-        embargo: float = 0.01,
+        primary_model: str = "random_forest",
+        meta_model: str = "logistic",
+        primary_params: Optional[Dict] = None,
+        meta_params: Optional[Dict] = None,
+        *,
+        random_state: int = 42,
     ):
         """
-        Initialize the MetaLabelingPipeline.
+        Initialize MetaLabelingPipeline.
 
         Args:
-            primary_model: Primary classifier instance
-            secondary_model: Secondary classifier instance
-            n_splits: Number of PurgedKFold splits
-            embargo: Embargo percentage
+            primary_model: Type of primary model ('random_forest', 'lr')
+            meta_model: Type of meta model ('random_forest', 'lr')
+            primary_params: Parameters for primary model
+            meta_params: Parameters for meta model
+            random_state: Random seed
         """
-        super().__init__()
-        self.primary_model = (
-            primary_model
-            if primary_model is not None
-            else RandomForestClassifier(n_estimators=100, random_state=42)
+        self.primary_model = primary_model
+        self.meta_model = meta_model
+        self.primary_params = primary_params or {
+            "n_estimators": 100,
+            "max_depth": 5,
+            "random_state": random_state,
+        }
+        self.meta_params = meta_params or {
+            "C": 1.0,
+            "random_state": random_state,
+        }
+        self.random_state = random_state
+
+        self._primary_clf = self._create_primary_model()
+        self._meta_clf = self._create_meta_model()
+
+        self._is_fitted = False
+        self._feature_names: Optional[List[str]] = None
+
+    def _create_primary_model(self) -> Any:
+        """Create primary classifier."""
+        if self.primary_model == "random_forest":
+            return RandomForestClassifier(**self.primary_params)
+        elif self.primary_model == "lr":
+            return LogisticRegression(**self.meta_params)
+        else:
+            return RandomForestClassifier(**self.primary_params)
+
+    def _create_meta_model(self) -> Any:
+        """Create meta classifier."""
+        return HistGradientBoostingClassifier(
+            max_iter=100,
+            max_depth=5,
+            random_state=self.random_state,
         )
-        self.secondary_model = (
-            secondary_model
-            if secondary_model is not None
-            else RandomForestClassifier(n_estimators=100, max_depth=5, random_state=42)
-        )
-        self.n_splits = n_splits
-        self.embargo = embargo
-        self.cv_ = None
-        self.primary_probs_: Optional[pd.DataFrame] = None
-        self.meta_clf_ = None
 
     def fit(
-        self, df: pd.DataFrame, features: List[str], y: pd.Series
+        self,
+        X: Union[DataFrame, LazyFrame, np.ndarray],
+        y: Union[Series, np.ndarray],
+        *,
+        sample_weight: Optional[np.ndarray] = None,
     ) -> "MetaLabelingPipeline":
         """
-        Train both primary and secondary models.
-
-        Args:
-            df: DataFrame with features and metadata
-            features: List of feature column names
-            y: Labels
-
-        Returns:
-            self
+        Fit primary and meta models.
         """
-        X = df[features]
-        weights = df.get("sample_weight")
+        X_array, feature_names = self._prepare_features(X)
 
-        # Setup PurgedKFold
-        self.cv_ = PurgedKFoldCV(
-            n_splits=self.n_splits,
-            samples_info_sets=df["t1"],
-            embargo=self.embargo,
-        )
+        if isinstance(y, (DataFrame, LazyFrame)):
+            if "label" in y.columns:
+                y = y["label"]
+            y = y.to_numpy()
+        elif isinstance(y, Series):
+            y = y.to_numpy()
 
-        # Train primary model with OOS predictions
-        primary_preds = pd.Series(0, index=df.index, name="primary_pred")
-        self.primary_probs_ = pd.DataFrame(0.0, index=df.index, columns=[-1, 0, 1])
-        tested_indices = []
+        # 1. Fit primary model
+        self._primary_clf.fit(X_array, y, sample_weight=sample_weight)
+        
+        # 2. Get primary predictions and confidence
+        primary_pred = self._primary_clf.predict(X_array)
+        primary_proba_all = self._primary_clf.predict_proba(X_array)
+        primary_confidence = np.max(primary_proba_all, axis=1)
 
-        for train_idx, test_idx in self.cv_.split(X):
-            X_train, y_train = X.iloc[train_idx], y.iloc[train_idx]
-            X_test = X.iloc[test_idx]
-            w_train = weights.iloc[train_idx] if weights is not None else None
+        # 3. Define Meta-Labeling target
+        y_meta = ((primary_pred == y) & (primary_pred != 0)).astype(int)
 
-            self.primary_model.fit(X_train, y_train, sample_weight=w_train)
+        # 4. Fit meta model
+        meta_features = np.column_stack([X_array, primary_confidence])
+        self._meta_clf.fit(meta_features, y_meta, sample_weight=sample_weight)
 
-            preds = self.primary_model.predict(X_test)
-            probs = self.primary_model.predict_proba(X_test)
-
-            primary_preds.iloc[test_idx] = preds
-            classes = self.primary_model.classes_
-
-            for j, cls in enumerate(classes):
-                if cls in [-1, 0, 1]:
-                    self.primary_probs_.loc[df.index[test_idx], cls] = probs[:, j]
-
-            tested_indices.extend(test_idx)
-
-        # Generate meta-labels and train secondary model
-        df_meta = df.iloc[tested_indices].copy()
-        primary_preds = primary_preds.iloc[tested_indices]
-        meta_labels = self._generate_meta_labels(
-            df_meta, primary_preds, y.iloc[tested_indices]
-        )
-
-        # Train secondary model with enhanced features
-        X_meta = df_meta.loc[meta_labels.index, features].copy()
-        X_meta = self._add_confidence_feature(
-            X_meta, primary_preds, self.primary_probs_
-        )
-
-        self.meta_clf_ = self.secondary_model
-        self.meta_clf_.fit(X_meta, meta_labels)
+        self._is_fitted = True
+        self._feature_names = feature_names
 
         return self
 
-    def _generate_meta_labels(
+    def _prepare_features(
         self,
-        df: pd.DataFrame,
-        primary_preds: pd.Series,
-        y_true: pd.Series,
-    ) -> pd.Series:
-        """
-        Generate meta-labels from primary predictions.
+        X: Union[DataFrame, LazyFrame, np.ndarray],
+    ) -> tuple[np.ndarray, Optional[List[str]]]:
+        """Prepare features for sklearn models."""
+        if isinstance(X, (DataFrame, LazyFrame)):
+            feature_names = X.columns
+            if isinstance(X, LazyFrame):
+                X = X.collect()
+            X_array = X.to_numpy()
+        else:
+            feature_names = None
+            X_array = np.array(X)
 
-        Args:
-            df: DataFrame
-            primary_preds: Primary model predictions
-            y_true: True labels
+        return X_array, feature_names
 
-        Returns:
-            Meta-labels
-        """
-        mask = primary_preds != 0
-        meta_labels = (primary_preds[mask] == y_true[mask]).astype(int)
-        return meta_labels
-
-    def _add_confidence_feature(
+    def predict(
         self,
-        X: pd.DataFrame,
-        preds: pd.Series,
-        probs: pd.DataFrame,
-    ) -> pd.DataFrame:
-        """Add primary model confidence as feature."""
-        confidences = []
-        for idx in X.index:
-            pred_class = preds.loc[idx]
-            conf = probs.loc[idx, pred_class]
-            confidences.append(conf)
+        X: Union[DataFrame, LazyFrame, np.ndarray],
+    ) -> np.ndarray:
+        """Generate binary predictions using meta-labeling."""
+        if not self._is_fitted:
+            raise ValueError("Pipeline must be fitted before predict")
 
-        X["primary_model_prob"] = confidences
-        return X
+        X_array, _ = self._prepare_features(X)
 
-    def predict(self, X: pd.DataFrame) -> pd.Series:
-        """
-        Return filtered predictions from meta-model.
+        primary_pred = self._primary_clf.predict(X_array)
+        primary_proba_all = self._primary_clf.predict_proba(X_array)
+        primary_confidence = np.max(primary_proba_all, axis=1)
 
-        Args:
-            X: Feature DataFrame
+        meta_features = np.column_stack([X_array, primary_confidence])
+        meta_pred = self._meta_clf.predict(meta_features)
 
-        Returns:
-            Filtered predictions
-        """
-        if self.meta_clf_ is None:
-            raise ValueError("Pipeline has not been fitted.")
+        # Signal filter
+        final_pred = primary_pred * meta_pred
 
-        # Get primary predictions
-        primary_preds = self.primary_model.predict(X)
+        return final_pred
 
-        # Get meta probabilities
-        X_meta = X.copy()
-        probs = self.primary_model.predict_proba(X)
-        classes = self.primary_model.classes_
+    def score(
+        self,
+        X: Union[DataFrame, LazyFrame, np.ndarray],
+        y: Union[Series, np.ndarray],
+        *,
+        sample_weight: Optional[np.ndarray] = None,
+    ) -> Dict[str, float]:
+        """Evaluate model performance."""
+        if isinstance(y, (DataFrame, LazyFrame)):
+            if "label" in y.columns:
+                y = y["label"]
+            y = y.to_numpy()
+        elif isinstance(y, Series):
+            y = y.to_numpy()
 
-        confidences = []
-        for i, idx in enumerate(X.index):
-            pred_class = primary_preds[i]
-            if pred_class in classes:
-                cls_idx = list(classes).index(pred_class)
-                confidences.append(probs[i, cls_idx])
-            else:
-                confidences.append(0.5)
+        y_binary = (y > 0).astype(int)
+        predictions = self.predict(X)
+        predictions_binary = (predictions > 0).astype(int)
 
-        X_meta["primary_model_prob"] = confidences
+        return {
+            "accuracy": accuracy_score(y_binary, predictions_binary),
+            "precision": precision_score(y_binary, predictions_binary, zero_division=0),
+            "recall": recall_score(y_binary, predictions_binary, zero_division=0),
+            "f1": f1_score(y_binary, predictions_binary, zero_division=0),
+        }
 
-        # Get meta predictions
-        meta_preds = self.meta_clf_.predict(X_meta)
+    def _sharpe_ratio(self, returns: np.ndarray, risk_free: float = 0.0) -> float:
+        """Calculate Sharpe ratio."""
+        excess_returns = returns - risk_free
+        if np.std(excess_returns) == 0:
+            return 0.0
+        return np.mean(excess_returns) / np.std(excess_returns) * np.sqrt(252)
 
-        # Filter primary predictions
-        filtered = primary_preds.copy()
-        for i, idx in enumerate(X.index):
-            if meta_preds[i] == 0:
-                filtered.iloc[i] = 0
+    def _sortino_ratio(self, returns: np.ndarray) -> float:
+        """Calculate Sortino ratio."""
+        downside_returns = returns[returns < 0]
+        downside_std = np.std(downside_returns) if len(downside_returns) > 0 else 1e-10
+        return np.mean(returns) / downside_std * np.sqrt(252)
 
-        return filtered
-
-    def predict_proba(self, X: pd.DataFrame) -> pd.DataFrame:
-        """
-        Return prediction probabilities.
-
-        Args:
-            X: Feature DataFrame
-
-        Returns:
-            DataFrame with probabilities
-        """
-        if self.meta_clf_ is None:
-            raise ValueError("Pipeline has not been fitted.")
-
-        X_meta = X.copy()
-        probs = self.primary_model.predict_proba(X)
-        classes = self.primary_model.classes_
-
-        confidences = []
-        for i, idx in enumerate(X.index):
-            pred_class = self.primary_model.predict(X.iloc[[i]])[0]
-            if pred_class in classes:
-                cls_idx = list(classes).index(pred_class)
-                confidences.append(probs[i, cls_idx])
-            else:
-                confidences.append(0.5)
-
-        X_meta["primary_model_prob"] = confidences
-
-        return pd.DataFrame(
-            self.meta_clf_.predict_proba(X_meta),
-            index=X.index,
-            columns=self.meta_clf_.classes_,
-        )
-
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """
-        Transform is not applicable for pipeline.
-
-        Use predict() or predict_proba() instead.
-        """
-        raise NotImplementedError("Use predict() or predict_proba() methods.")
-
-    def fit_transform(
-        self, X: pd.DataFrame, y: Optional[pd.Series] = None
-    ) -> pd.Series:
-        """
-        Fit and predict in one step.
-
-        Args:
-            X: Feature DataFrame
-            y: Labels
-
-        Returns:
-            Predictions
-        """
-        features = [c for c in X.columns if c not in ["t1", "label", "ret"]]
-        self.fit(X, features, y)
-        return self.predict(X)
+    def _max_drawdown(self, cumulative_returns: np.ndarray) -> float:
+        """Calculate maximum drawdown."""
+        peak = np.maximum.accumulate(cumulative_returns)
+        drawdown = peak - cumulative_returns
+        return np.max(drawdown)

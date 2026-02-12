@@ -7,14 +7,14 @@ raw data to predictions.
 
 import numpy as np
 import polars as pl
-from afml.polars import (
-    PolarsDollarBarsProcessor,
-    PolarsTripleBarrierLabeler,
-    PolarsFeatureEngineer,
-    PolarsSampleWeightCalculator,
-    PolarsPurgedKFoldCV,
-    PolarsMetaLabelingPipeline,
-    PolarsBetSizer,
+from afml import (
+    DollarBarsProcessor,
+    TripleBarrierLabeler,
+    FeatureEngineer,
+    SampleWeightCalculator,
+    PurgedKFoldCV,
+    MetaLabelingPipeline,
+    BetSizer,
     to_polars,
 )
 
@@ -50,8 +50,8 @@ def generate_sample_data(n_rows: int = 10000) -> pl.DataFrame:
 
 def test_dollar_bars(df: pl.DataFrame) -> pl.DataFrame:
     """Test Dollar Bars generation."""
-    print("Testing PolarsDollarBarsProcessor...")
-    processor = PolarsDollarBarsProcessor(daily_target=4, lazy=False)
+    print("Testing DollarBarsProcessor...")
+    processor = DollarBarsProcessor(daily_target=4, lazy=False)
     dollar_bars = processor.fit_transform(df)
     print(f"  Generated {len(dollar_bars)} dollar bars")
     print(f"  Threshold: {processor.threshold_:.2f}")
@@ -60,8 +60,8 @@ def test_dollar_bars(df: pl.DataFrame) -> pl.DataFrame:
 
 def test_triple_barrier(df: pl.DataFrame) -> pl.DataFrame:
     """Test Triple Barrier labeling."""
-    print("\nTesting PolarsTripleBarrierLabeler...")
-    labeler = PolarsTripleBarrierLabeler(
+    print("\nTesting TripleBarrierLabeler...")
+    labeler = TripleBarrierLabeler(
         pt_sl=[1.0, 1.0],
         vertical_barrier_bars=12,
     )
@@ -75,8 +75,8 @@ def test_triple_barrier(df: pl.DataFrame) -> pl.DataFrame:
 
 def test_features(df: pl.DataFrame) -> pl.DataFrame:
     """Test Feature engineering."""
-    print("\nTesting PolarsFeatureEngineer...")
-    engineer = PolarsFeatureEngineer(
+    print("\nTesting FeatureEngineer...")
+    engineer = FeatureEngineer(
         windows=[5, 10, 20, 30, 50],
         ffd_d=0.5,
     )
@@ -88,8 +88,8 @@ def test_features(df: pl.DataFrame) -> pl.DataFrame:
 
 def test_sample_weights(events: pl.DataFrame) -> pl.DataFrame:
     """Test Sample Weight calculation."""
-    print("\nTesting PolarsSampleWeightCalculator...")
-    calculator = PolarsSampleWeightCalculator(decay=0.9)
+    print("\nTesting SampleWeightCalculator...")
+    calculator = SampleWeightCalculator(decay=0.9)
     weights = calculator.fit_transform(events)
     print(f"  Generated {len(weights)} weights")
     print(f"  Mean weight: {weights['weight'].mean():.4f}")
@@ -98,8 +98,8 @@ def test_sample_weights(events: pl.DataFrame) -> pl.DataFrame:
 
 def test_cv(df: pl.DataFrame) -> None:
     """Test Purged K-Fold CV."""
-    print("\nTesting PolarsPurgedKFoldCV...")
-    cv = PolarsPurgedKFoldCV(n_splits=3, embargo=0.1, purge=1)
+    print("\nTesting PurgedKFoldCV...")
+    cv = PurgedKFoldCV(n_splits=3, embargo=0.1, purge=1)
 
     X = df.select(pl.all().exclude("datetime"))
     y = (df["close"].pct_change().shift(-1) > 0).cast(pl.Int8)
@@ -127,7 +127,7 @@ def test_pipeline(df: pl.DataFrame) -> None:
     assert len(feature_cols) > 0, "Feature engineering failed"
 
     # 3. Generate Labels
-    labeler = PolarsTripleBarrierLabeler(pt_sl=[1.0, 1.0], vertical_barrier_bars=12)
+    labeler = TripleBarrierLabeler(pt_sl=[1.0, 1.0], vertical_barrier_bars=12)
     labeler.fit(features["close"])
     cusum_events = labeler.get_cusum_events(features["close"])
     events = labeler.label(features["close"], cusum_events)

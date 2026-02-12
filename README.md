@@ -20,19 +20,20 @@
 - **🧩 模块化设计**:
   - 提供 Scikit-Learn 兼容的面向对象 (OO) 接口。
   - 完善的 Pipeline 编排能力，支持从原始分笔数据到策略验收的全流程自动化。
+- **👁️ 可视化分析**: 
+  - 支持全流程图表生成 (`--visualize`)，包括 Dollar Bars 统计、Triple Barrier 标注可视化、特征平稳性热图、交叉验证时间轴、元标签性能评估及策略净值曲线。
 
 ## 📂 项目结构
 
 ```text
-AFML/
 ├── src/
-│   ├── afml/                # 核心库 (面向对象设计)
-│   │   ├── polars/          # 高性能 Polars 引擎实现
+│   ├── afml/                # 核心库 (Polars Native)
 │   │   ├── stationarity.py  # 平稳性检测与 FFD 自动搜索
 │   │   ├── metrics.py       # DSR, PSR 等金融指标
 │   │   ├── labeling.py      # 三重障碍法标注
+│   │   ├── dollar_bars.py   # 金融条柱生成
 │   │   └── ...              # 交叉验证、权重计算、元标签等
-│   └── afml_polars_pipeline.py # 端到端高性能研发流程示例
+├── examples/                # 示例脚本 (端到端 pipeline)
 ├── data/                    # 原始数据与生成的人造数据 (已 Gitignore)
 ├── tests/                   # 单元测试与集成测试
 ├── config/                  # 处理器默认配置文件
@@ -56,29 +57,29 @@ uv sync
 运行内置的高性能 Pipeline，体验从数据加载、平稳性处理到 DSR 策略验收的全流程：
 
 ```bash
-uv run python src/afml_polars_pipeline.py [你的 tick 数据路径].csv
+uv run python examples/afml_polars_pipeline.py [你的 tick 数据路径].csv --visualize
 ```
 
 ### 3. 使用 OO 接口示例
 
 ```python
-from afml.polars import PolarsDollarBarsProcessor, PolarsTripleBarrierLabeler
+from afml import DollarBarsProcessor, TripleBarrierLabeler
 
 # 1. 生成 Dollar Bars
-processor = PolarsDollarBarsProcessor(daily_target=4)
+processor = DollarBarsProcessor(daily_target=4)
 df_bars = processor.fit_transform(raw_df)
 
 # 2. 标注标签
-labeler = PolarsTripleBarrierLabeler(pt_sl=[1.0, 1.0], vertical_barrier_bars=12)
+labeler = TripleBarrierLabeler(pt_sl=[1.0, 1.0], vertical_barrier_bars=12)
 labeler.fit(df_bars["close"])
 labels = labeler.label(df_bars["close"], events)
 ```
 
 ## 📈 开发进度
 
-目前项目已完成核心 OO 重构与 Polars 迁移。
+目前项目已全面完成 Polars 迁移与架构简化。
 
-- [x] **Polars 迁移**: 95%+ 完成，支持大规模并行计算。
+- [x] **Polars Native**: 全库采用 Polars 实现，无冗余代码。
 - [x] **平稳性模块**: 已实现自动搜索最小 $d$ 值。
 - [x] **策略验证**: 已集成 DSR/PSR 验收机制。
 - [ ] **进阶特性**: 计划加入结构性断点检测 (Structural Breaks) 等。
