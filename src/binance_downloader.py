@@ -17,7 +17,7 @@ from typing import List, Optional
 import requests
 
 
-# 常量配置
+# 常量配置 
 BASE_URL = "https://data.binance.vision/data/futures/um/daily/aggTrades/BTCUSDT"
 DEFAULT_DATA_DIR = "data/BTCUSDT/aggTrades"
 MAX_RETRIES = 3

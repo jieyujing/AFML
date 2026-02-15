@@ -146,27 +146,23 @@ class FeatureEngineer(ProcessorMixin):
         self,
         df: Union[DataFrame, LazyFrame],
     ) -> Union[DataFrame, LazyFrame]:
-        """Add rolling window features."""
+        """Add rolling window features (batched with_columns for performance)."""
         close = pl.col("close")
         high = pl.col("high")
         low = pl.col("low")
 
+        # Batch all rolling expressions into a single with_columns call
+        exprs = []
         for w in self.windows:
-            # Rolling mean
-            df = df.with_columns(
-                close.rolling_mean(window_size=w).alias(f"close_ma_{w}")
-            )
-
-            # Rolling std (volatility)
-            df = df.with_columns(
-                close.rolling_std(window_size=w).alias(f"close_std_{w}")
-            )
-
-            # Rolling min/max
-            df = df.with_columns(
+            exprs.extend([
+                close.rolling_mean(window_size=w).alias(f"close_ma_{w}"),
+                close.rolling_std(window_size=w).alias(f"close_std_{w}"),
                 high.rolling_max(window_size=w).alias(f"high_max_{w}"),
                 low.rolling_min(window_size=w).alias(f"low_min_{w}"),
-            )
+            ])
+
+        if exprs:
+            df = df.with_columns(exprs)
 
         return df
 

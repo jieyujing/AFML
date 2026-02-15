@@ -79,34 +79,27 @@ class DollarBarsProcessor(ProcessorMixin):
         Returns:
             self
         """
-        if isinstance(df, LazyFrame):
-            df = df.collect()
+        # Ensure we work with LazyFrame for aggregation to save memory
+        df_lazy = df if isinstance(df, LazyFrame) else df.lazy()
 
-        # Calculate amount if not present
-        if "amount" not in df.columns:
-            multiplier = 300.0
-            df = df.with_columns(
+        # Consistently calculate amount
+        if "amount" not in df_lazy.collect_schema().names():
+            df_lazy = df_lazy.with_columns(
                 (
                     (
-                        (
-                            pl.col("open")
-                            + pl.col("high")
-                            + pl.col("low")
-                            + pl.col("close")
-                        )
-                        / 4.0
-                    )
-                    * pl.col("volume")
-                    * multiplier
+                        (pl.col("open") + pl.col("high") + pl.col("low") + pl.col("close")) / 4.0
+                    ) * pl.col("volume")
                 ).alias("amount")
             )
 
         # Calculate average daily volume
         df_daily = (
-            df.sort("datetime")
-            .group_by_dynamic("datetime", every="1d")
+            df_lazy
+            .with_columns(pl.col("datetime").dt.date().alias("date"))
+            .group_by("date")
             .agg(pl.col("amount").sum().alias("daily_amount"))
             .filter(pl.col("daily_amount") > 0)
+            .collect(streaming=True)  # Collect only the daily stats
         )
 
         avg_daily_volume = df_daily["daily_amount"].mean()
@@ -130,39 +123,35 @@ class DollarBarsProcessor(ProcessorMixin):
         Returns:
             self
         """
-        if isinstance(df, LazyFrame):
-            df = df.collect()
+        # Ensure we work with LazyFrame
+        df_lazy = df if isinstance(df, LazyFrame) else df.lazy()
 
-        # Calculate amount if not present
-        if "amount" not in df.columns:
-            multiplier = 300.0
-            df = df.with_columns(
+        # Consistently calculate amount
+        if "amount" not in df_lazy.collect_schema().names():
+            df_lazy = df_lazy.with_columns(
                 (
                     (
-                        (
-                            pl.col("open")
-                            + pl.col("high")
-                            + pl.col("low")
-                            + pl.col("close")
-                        )
-                        / 4.0
-                    )
-                    * pl.col("volume")
-                    * multiplier
+                        (pl.col("open") + pl.col("high") + pl.col("low") + pl.col("close")) / 4.0
+                    ) * pl.col("volume")
                 ).alias("amount")
             )
 
-        # Calculate daily stats
+        # Calculate daily stats (collect only daily aggregates)
         df_daily = (
-            df.sort("datetime")
-            .group_by_dynamic("datetime", every="1d")
+            df_lazy
+            .with_columns(pl.col("datetime").dt.date().alias("date"))
+            .group_by("date")
             .agg(pl.col("amount").sum().alias("daily_amount"))
-            .with_columns(
-                pl.col("daily_amount")
-                .replace(0, None)
-                .ewm_mean(span=self.ema_span, adjust=False)
-                .alias("ema_amt")
-            )
+            .sort("date")  # Sort needed for EMA
+            .collect(streaming=True)
+        )
+        
+        # Proceed with Eager DataFrame for EMA calculation (cheap on daily data)
+        df_daily = df_daily.with_columns(
+            pl.col("daily_amount")
+            .replace(0, None)
+            .ewm_mean(span=self.ema_span, adjust=False)
+            .alias("ema_amt")
         )
 
         # Calculate threshold with shift
@@ -176,10 +165,7 @@ class DollarBarsProcessor(ProcessorMixin):
 
         # Fill NaN thresholds with start_threshold
         df_daily = df_daily.with_columns(pl.col("threshold").fill_nan(start_threshold))
-
-        # Create mapping from date to threshold
-        df_daily = df_daily.with_columns(pl.col("datetime").dt.date().alias("date"))
-
+        
         self._daily_thresholds = dict(zip(df_daily["date"], df_daily["threshold"]))
 
         self.threshold_type = "dynamic"
@@ -218,40 +204,32 @@ class DollarBarsProcessor(ProcessorMixin):
     ) -> Union[DataFrame, LazyFrame]:
         """Generate fixed dollar bars."""
         threshold = self.threshold_
+        
+        # Ensure we work with LazyFrame
+        df_lazy = df if isinstance(df, LazyFrame) else df.lazy()
 
-        if isinstance(df, LazyFrame):
-            df = df.collect()
-
-        # Calculate amount if not present
-        if "amount" not in df.columns:
-            multiplier = 300.0
-            df = df.with_columns(
+        # Consistently calculate amount
+        schema_names = df_lazy.collect_schema().names()
+        if "amount" not in schema_names:
+            df_lazy = df_lazy.with_columns(
                 (
                     (
-                        (
-                            pl.col("open")
-                            + pl.col("high")
-                            + pl.col("low")
-                            + pl.col("close")
-                        )
-                        / 4.0
-                    )
-                    * pl.col("volume")
-                    * multiplier
+                        (pl.col("open") + pl.col("high") + pl.col("low") + pl.col("close")) / 4.0
+                    ) * pl.col("volume")
                 ).alias("amount")
             )
 
-        # Cumulative sum and bar assignment
-        df = df.with_columns(pl.col("amount").cum_sum().alias("cum_amount"))
+        # Cumulative sum and bar assignment (Lazy)
+        df_lazy = df_lazy.with_columns(pl.col("amount").cum_sum().alias("cum_amount"))
 
         # Assign bar IDs
-        df = df.with_columns(
+        df_lazy = df_lazy.with_columns(
             ((pl.col("cum_amount") / threshold).floor().cast(pl.Int64)).alias("bar_id")
         )
 
         # Aggregate bars
-        dollar_bars = (
-            df.group_by("bar_id")
+        dollar_bars_lazy = (
+            df_lazy.group_by("bar_id")
             .agg(
                 pl.col("datetime").last().alias("datetime"),
                 pl.col("open").first().alias("open"),
@@ -264,6 +242,145 @@ class DollarBarsProcessor(ProcessorMixin):
             .drop("bar_id")
             .sort("datetime")
         )
+
+        if self.lazy:
+            return dollar_bars_lazy
+        else:
+            # Use streaming collect for memory safety on large datasets
+            return dollar_bars_lazy.collect(streaming=True)
+
+    def transform_chunked(
+        self,
+        parquet_path: str,
+        chunk_size: int = 50_000_000,
+    ) -> DataFrame:
+        """
+        Generate dollar bars from a massive parquet file using chunked processing.
+
+        This avoids the OOM issue caused by cum_sum() over billions of rows.
+        We process data in chunks, compute cum_sum within each chunk (offset by
+        the running total from previous chunks), assign bar_ids, and aggregate
+        using vectorized Polars group_by. Partial bars at chunk boundaries are
+        carried forward and merged.
+
+        Args:
+            parquet_path: Path to the parquet file (or glob for directory)
+            chunk_size: Number of rows per chunk (default: 50M)
+
+        Returns:
+            DataFrame with dollar bars (columns: datetime, open, high, low, close, volume, amount)
+        """
+        if self.threshold_ is None:
+            raise ValueError("Processor has not been fitted. Call fit() first.")
+
+        threshold = self.threshold_
+        all_bar_dfs: list[DataFrame] = []
+
+        from pathlib import Path as _Path
+
+        path_obj = _Path(parquet_path)
+        if path_obj.is_dir():
+            scan_path = str(path_obj / "*.parquet")
+        else:
+            scan_path = parquet_path
+
+        # Get total rows for progress reporting
+        total_rows = pl.scan_parquet(scan_path).select(pl.len()).collect().item()
+        n_chunks = (total_rows + chunk_size - 1) // chunk_size
+        print(f"    Total rows: {total_rows:,}, chunk_size: {chunk_size:,}, chunks: {n_chunks}")
+
+        # Running state across chunks
+        cum_offset = 0.0  # Cumulative amount from all previous chunks
+        rows_processed = 0
+
+        for chunk_idx in range(n_chunks):
+            # Read a chunk using slice (only materializes chunk_size rows)
+            chunk = (
+                pl.scan_parquet(scan_path)
+                .slice(rows_processed, chunk_size)
+                .collect()
+            )
+
+            if len(chunk) == 0:
+                break
+
+            # Ensure 'amount' column exists
+            if "amount" not in chunk.columns:
+                chunk = chunk.with_columns(
+                    (
+                        (
+                            (pl.col("open") + pl.col("high") + pl.col("low") + pl.col("close")) / 4.0
+                        ) * pl.col("volume")
+                    ).alias("amount")
+                )
+
+            # Compute cumulative sum within chunk, offset by previous chunks
+            chunk = chunk.with_columns(
+                (pl.col("amount").cum_sum() + cum_offset).alias("cum_amount")
+            )
+
+            # Update offset for next chunk
+            chunk_total = chunk["amount"].sum()
+            cum_offset += chunk_total
+
+            # Assign bar IDs (global, because cum_amount includes offset)
+            chunk = chunk.with_columns(
+                (pl.col("cum_amount") / threshold).floor().cast(pl.Int64).alias("bar_id")
+            )
+
+            # Aggregate bars within this chunk (vectorized)
+            chunk_bars = (
+                chunk.group_by("bar_id")
+                .agg(
+                    pl.col("datetime").last().alias("datetime"),
+                    pl.col("open").first().alias("open"),
+                    pl.col("high").max().alias("high"),
+                    pl.col("low").min().alias("low"),
+                    pl.col("close").last().alias("close"),
+                    pl.col("volume").sum().alias("volume"),
+                    pl.col("amount").sum().alias("amount"),
+                )
+                .sort("bar_id")
+            )
+
+            all_bar_dfs.append(chunk_bars)
+
+            rows_processed += len(chunk)
+            del chunk  # Free memory
+
+            if (chunk_idx + 1) % 5 == 0 or (chunk_idx + 1) == n_chunks:
+                # Count bars accumulated so far
+                total_bars = sum(len(b) for b in all_bar_dfs)
+                print(
+                    f"    Chunk {chunk_idx + 1}/{n_chunks}: "
+                    f"{rows_processed:,}/{total_rows:,} rows, "
+                    f"~{total_bars:,} bar segments so far"
+                )
+
+        # Merge all chunk results — bars that span chunk boundaries need re-aggregation
+        # The same bar_id may appear in consecutive chunks (the bar was split)
+        print("    Merging bar segments across chunk boundaries...")
+        combined = pl.concat(all_bar_dfs)
+        del all_bar_dfs
+
+        # Re-aggregate by bar_id to merge split bars
+        dollar_bars = (
+            combined.group_by("bar_id")
+            .agg(
+                pl.col("datetime").last().alias("datetime"),
+                pl.col("open").first().alias("open"),
+                pl.col("high").max().alias("high"),
+                pl.col("low").min().alias("low"),
+                pl.col("close").last().alias("close"),
+                pl.col("volume").sum().alias("volume"),
+                pl.col("amount").sum().alias("amount"),
+            )
+            .sort("bar_id")
+            .drop("bar_id")
+        )
+
+        del combined
+        print(f"    Chunked processing complete: {len(dollar_bars):,} bars total")
 
         return dollar_bars
 
@@ -272,44 +389,41 @@ class DollarBarsProcessor(ProcessorMixin):
         df: Union[DataFrame, LazyFrame],
     ) -> Union[DataFrame, LazyFrame]:
         """Generate dynamic dollar bars with daily EMA threshold."""
-        if isinstance(df, LazyFrame):
-            df = df.collect()
+        # Ensure we work with LazyFrame
+        df_lazy = df if isinstance(df, LazyFrame) else df.lazy()
 
         # Add date column for threshold mapping
-        df = df.with_columns(pl.col("datetime").dt.date().alias("date"))
+        df_lazy = df_lazy.with_columns(pl.col("datetime").dt.date().alias("date"))
 
         # Map dynamic thresholds
         if self._daily_thresholds is None:
             raise ValueError("Dynamic thresholds not fitted. Call fit_dynamic() first.")
 
         # Create expression for threshold lookup
-        date_to_threshold = pl.lit(self._daily_thresholds)
-        df = df.with_columns(
-            pl.struct(
-                [
-                    pl.col("date")
-                    .map_dict(date_to_threshold, default=self.threshold_)
-                    .alias("dynamic_threshold")
-                ]
-            )
+        date_to_threshold = self._daily_thresholds
+        
+        df_lazy = df_lazy.with_columns(
+            pl.col("date")
+            .replace(date_to_threshold, default=self.threshold_)
+            .alias("dynamic_threshold")
         )
 
         # Fill any remaining NaN with default threshold
-        df = df.with_columns(pl.col("dynamic_threshold").fill_nan(self.threshold_))
+        df_lazy = df_lazy.with_columns(pl.col("dynamic_threshold").fill_nan(self.threshold_))
 
         # Normalize amount and cumulative sum
-        df = df.with_columns(
+        df_lazy = df_lazy.with_columns(
             (pl.col("amount") / pl.col("dynamic_threshold")).alias("norm_amount")
         ).with_columns(pl.col("norm_amount").cum_sum().alias("cum_norm_amount"))
 
         # Assign bar IDs
-        df = df.with_columns(
+        df_lazy = df_lazy.with_columns(
             pl.col("cum_norm_amount").floor().cast(pl.Int64).alias("bar_id")
         )
 
         # Aggregate bars
-        dollar_bars = (
-            df.group_by("bar_id")
+        dollar_bars_lazy = (
+            df_lazy.group_by("bar_id")
             .agg(
                 pl.col("datetime").last().alias("datetime"),
                 pl.col("open").first().alias("open"),
@@ -323,7 +437,10 @@ class DollarBarsProcessor(ProcessorMixin):
             .sort("datetime")
         )
 
-        return dollar_bars
+        if self.lazy:
+            return dollar_bars_lazy
+        else:
+            return dollar_bars_lazy.collect(streaming=True)
 
     def fit_transform(
         self,

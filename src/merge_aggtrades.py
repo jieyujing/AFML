@@ -8,23 +8,23 @@ def load_zip_as_df(f_zip: Path) -> pl.DataFrame:
     with zipfile.ZipFile(f_zip, "r") as z:
         with z.open(z.namelist()[0]) as f:
             df = pl.read_csv(f.read())
-            df = df.rename(
-                {
-                    "transact_time": "time",
-                    "quantity": "qty",
-                }
-            )
-            df = df.with_columns(
-                [
-                    pl.col("time").cast(pl.Datetime("ms")).alias("timestamp"),
-                    pl.col("price").cast(pl.Float64),
-                    pl.col("qty").cast(pl.Float64),
-                    pl.when(pl.col("is_buyer_maker") == False)
-                    .then(1)
-                    .otherwise(-1)
-                    .alias("side"),
-                ]
-            ).select(["timestamp", "price", "qty", "side"])
+            
+            # Select requests fields with correct types
+            df = df.select([
+                pl.col("agg_trade_id").cast(pl.Int64),
+                pl.col("price").cast(pl.Float64),
+                pl.col("quantity").cast(pl.Float64),
+                pl.col("first_trade_id").cast(pl.Int64),
+                pl.col("last_trade_id").cast(pl.Int64),
+                pl.col("transact_time").cast(pl.Int64),
+                pl.col("is_buyer_maker").cast(pl.Boolean),
+            ])
+
+            # Add timestamp and amount columns
+            df = df.with_columns([
+                pl.col("transact_time").cast(pl.Datetime("ms")).alias("timestamp"),
+                (pl.col("price") * pl.col("quantity")).alias("amount")
+            ])
 
     return df
 

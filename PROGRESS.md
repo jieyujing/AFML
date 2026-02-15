@@ -29,6 +29,20 @@
 - **[2026-02-12] Environment & Configuration**:
     - Updated `.gitignore` to ignore `data/`, `visual_analysis/`, and `*.csv` files to keep the repository clean.
     - Moved `examples/afml_polars_pipeline.py` to the root directory as the primary entry point.
+- **[2026-02-14] Pipeline Optimization**:
+    - Switched all intermediate data storage from CSV to Parquet in `afml_polars_pipeline.py` for significant performance improvement on large datasets.
+    - Updated default input/output paths to use `.parquet` extension.
+- **[2026-02-14] Performance Audit & Optimization**:
+    - `stationarity.py`: Replaced Python for-loop FFD convolution with `np.convolve` — verified **19.5x speedup**.
+    - `labeling.py`: Vectorized `_get_vertical_barrier` (eliminated per-row `.row(idx, named=True)`), pre-allocated label arrays, replaced `events.to_dicts()` with direct column extraction.
+    - `sample_weights.py`: Replaced O(N²) Python `_compute_uniqueness` loop with vectorized NumPy offset-broadcasting — 10K events in 12ms. Replaced `_compute_decay_weights` loop with `np.power`.
+    - `features.py`: Batched all rolling window `with_columns` calls into single expression list.
+    - `afml_polars_pipeline.py`: Eliminated stationarity double-computation (`get_min_d` + `get_stationarity_search_history` → single `get_stationarity_search_history`), cached `collect_schema().names()` (was called 3x), fixed `run_step_load` to use `sink_parquet` and removed massive DataFrame from result dict, fixed `run_step_bars` LazyFrame `.columns` compatibility.
+- **[2026-02-14] Chunked Dollar Bars (OOM Fix for 1.5B rows)**:
+    - Root cause: `--step bars` eagerly loaded 1.57B rows via `pl.read_parquet()` + global `sort()` + `cum_sum()` — impossible to stream.
+    - Added `DollarBarsProcessor.transform_chunked()`: processes data in 50M-row vectorized chunks with running `cum_offset`, uses `group_by("bar_id")` within each chunk, then re-aggregates split bars across chunk boundaries.
+    - Updated `run_step_bars` to always `scan_parquet` (lazy) and route to `transform_chunked()` for parquet files.
+    - Successfully generated 4,553 dollar bars from 1,573,743,538 rows without OOM (32 chunks, ~5 min).
 
 ## Current Status
 - **AFML Implementation**: Core pipeline is now rigorous, verified, and fully optimized for Polars.

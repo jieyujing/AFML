@@ -108,8 +108,8 @@ class AFMLVisualizer:
         if bars_df.is_empty():
             return {"error": "Empty DataFrame"}
 
-        # Increase figure height to accommodate JB statistics table
-        fig, axes = plt.subplots(4, 1, figsize=(12, 16))
+        # Increase figure height to accommodate JB statistics table and volume
+        fig, axes = plt.subplots(5, 1, figsize=(12, 18), gridspec_kw={'height_ratios': [1, 1, 2, 1, 1]})
 
         # Convert to pandas for easier plotting with seaborn/matplotlib
         pdf = bars_df.to_pandas()
@@ -170,13 +170,27 @@ class AFMLVisualizer:
 
             ax.set_title(f"Candlestick Chart (Last {len(ohlc)} Bars)")
             ax.set_ylabel("Price")
-            ax.set_xlabel("Bar Index")
+            # Remove x-labels for candlestick as volume is below
+            ax.set_xticks([]) 
             ax.grid(True, alpha=0.3)
+
+            # 4. Volume Chart (Last N bars)
+            ax_vol = axes[3]
+            # Color volume bars based on close >= open
+            colors = ["green" if c >= o else "red" for c, o in zip(ohlc["close"], ohlc["open"])]
+            ax_vol.bar(ohlc.index, ohlc["volume"], color=colors, alpha=0.6, width=0.6)
+            ax_vol.set_title("Volume")
+            ax_vol.set_ylabel("Volume")
+            ax_vol.set_xlabel("Bar Index")
+            ax_vol.set_xlim(ax.get_xlim()) # Sync x-axis limits
+            ax_vol.grid(True, alpha=0.3)
+
         else:
             ax.text(0.5, 0.5, "Insufficient Data for K-line", ha="center")
+            axes[3].text(0.5, 0.5, "Insufficient Data for Volume", ha="center")
 
-        # 4. JB Statistics Panel
-        ax_stats = axes[3]
+        # 5. JB Statistics Panel
+        ax_stats = axes[4]
         ax_stats.axis("off")
 
         # Compute JB statistics for dollar bars

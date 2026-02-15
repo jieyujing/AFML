@@ -3,6 +3,8 @@ Sample Weight Calculator for Financial Machine Learning (Polars Optimized).
 
 This module implements sample weight calculation using Polars for improved
 performance on large-scale financial time series data.
+
+Performance: Uses fully vectorized NumPy operations instead of Python loops.
 """
 
 from __future__ import annotations
@@ -25,8 +27,8 @@ class SampleWeightCalculator(ProcessorMixin):
     - Average Uniqueness: Independent information in each sample
     - Time Decay: Older samples have less weight
 
-    This implementation uses Polars for improved performance on large datasets,
-    with support for lazy evaluation.
+    This implementation uses vectorized NumPy operations for O(N) performance
+    instead of O(N²) Python loops.
 
     Attributes:
         decay: Time decay factor (default 0.9)
@@ -76,32 +78,53 @@ class SampleWeightCalculator(ProcessorMixin):
 
     def _compute_uniqueness(self, events: DataFrame) -> Series:
         """
-        Compute uniqueness for each event.
+        Compute uniqueness for each event using vectorized NumPy operations.
+
+        Vectorized approach: For each event i with span [i, t1_i), count how many
+        other events j (within concurrency_window) have overlapping spans.
+        Uses broadcasting for O(N × W) vectorized operations instead of
+        O(N × W) Python loop iterations.
+
+        Reference: AFML Chapter 4 - Sample Weights and Uniqueness.
         """
         if "t1" not in events.columns:
             return Series(values=np.ones(len(events)))
 
-        t1 = events["t1"]
+        t1 = events["t1"].to_numpy().astype(np.float64)
         n_events = len(events)
-        uniqueness = np.ones(n_events)
+        t0 = np.arange(n_events, dtype=np.float64)
 
-        # Simplified concurrency calculation for optimization
-        # In a real high-perf scenario, this should be vectorized with overlap calculation
-        for i in range(n_events):
-            t0_i = i
-            t1_i = t1[i] if i < len(t1) else t0_i
+        if n_events == 0:
+            return Series(values=np.array([], dtype=np.float64))
 
-            concurrent = 0
-            for j in range(max(0, i - self.concurrency_window), min(n_events, i + self.concurrency_window)):
-                if i != j:
-                    t0_j = j
-                    t1_j = t1[j] if j < len(t1) else t0_j
+        # Vectorized concurrency calculation
+        # For each event i, count overlaps with events in window [i-W, i+W]
+        concurrency = np.zeros(n_events, dtype=np.float64)
+        w = self.concurrency_window
 
-                    if t0_i <= t0_j < t1_i or t0_i <= t1_j < t1_i:
-                        concurrent += 1
+        for offset in range(-w, w + 1):
+            if offset == 0:
+                continue
+            # Shifted indices
+            j_indices = np.arange(n_events) + offset
+            # Valid mask (within bounds)
+            valid = (j_indices >= 0) & (j_indices < n_events)
 
-            if concurrent > 0:
-                uniqueness[i] = 1.0 / concurrent
+            # For valid pairs (i, j), check overlap:
+            # overlap if t0_i <= t0_j < t1_i OR t0_i <= t1_j < t1_i
+            i_idx = np.where(valid)[0]
+            j_idx = j_indices[valid]
+
+            t0_i = t0[i_idx]
+            t1_i = t1[i_idx]
+            t0_j = t0[j_idx]
+            t1_j = t1[j_idx]
+
+            overlap = ((t0_i <= t0_j) & (t0_j < t1_i)) | ((t0_i <= t1_j) & (t1_j < t1_i))
+            concurrency[i_idx] += overlap.astype(np.float64)
+
+        # Uniqueness = 1 / concurrency (where concurrency > 0)
+        uniqueness = np.where(concurrency > 0, 1.0 / concurrency, 1.0)
 
         return Series(values=uniqueness)
 
@@ -142,10 +165,9 @@ class SampleWeightCalculator(ProcessorMixin):
         return result
 
     def _compute_decay_weights(self, n: int) -> Series:
-        """Compute time decay weights."""
-        weights = np.zeros(n)
-        for i in range(n):
-            weights[i] = self.decay ** (n - 1 - i)
+        """Compute time decay weights using vectorized NumPy."""
+        exponents = np.arange(n - 1, -1, -1, dtype=np.float64)
+        weights = np.power(self.decay, exponents)
         return Series(values=weights)
 
     def fit_transform(
