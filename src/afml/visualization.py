@@ -414,7 +414,7 @@ class AFMLVisualizer:
         self, labeled_df: pl.DataFrame, filename: str = "label_distribution.png"
     ):
         """
-        Plot distribution of labels.
+        Plot distribution of labels with detailed statistics.
 
         Args:
             labeled_df: DataFrame with 'label' and 'tr'/'ret'.
@@ -423,21 +423,93 @@ class AFMLVisualizer:
         if labeled_df.is_empty() or "label" not in labeled_df.columns:
             return
 
-        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+        # Create layout: 2 plots + 1 stats panel
+        fig = plt.figure(figsize=(18, 6))
+        gs = fig.add_gridspec(1, 3, width_ratios=[1, 1, 0.6])
+
+        ax1 = fig.add_subplot(gs[0])
+        ax2 = fig.add_subplot(gs[1])
+        ax3 = fig.add_subplot(gs[2])
 
         pdf = labeled_df.to_pandas()
 
-        # 1. Count
-        sns.countplot(x="label", data=pdf, ax=axes[0])
-        axes[0].set_title("Label Counts")
+        # 1. Count Plot
+        # Ensure labels are integers for consistent plotting
+        try:
+            pdf["label"] = pdf["label"].astype(int)
+        except Exception:
+            pass  # Fallback if conversion fails
+
+        # Use simple colors: Red (-1), Blue (0), Green (1)
+        # Add string keys for robustness
+        palette = {-1: "red", 0: "blue", 1: "green", "-1": "red", "0": "blue", "1": "green"}
+        sns.countplot(x="label", data=pdf, ax=ax1, palette=palette, hue="label", legend=False)
+        ax1.set_title("Label Counts")
+
+        # Add counts on top of bars
+        for p in ax1.patches:
+            height = int(p.get_height())
+            ax1.annotate(
+                f"{height}",
+                (p.get_x() + p.get_width() / 2.0, height),
+                ha="center",
+                va="bottom",
+            )
 
         # 2. Return Distribution by Label
-        if "tr" in pdf.columns:
-            sns.boxplot(x="label", y="tr", data=pdf, ax=axes[1])
-            axes[1].set_title("Return Distribution by Label")
-        elif "ret" in pdf.columns:
-            sns.boxplot(x="label", y="ret", data=pdf, ax=axes[1])
-            axes[1].set_title("Return Distribution by Label")
+        return_col = "tr" if "tr" in pdf.columns else "ret"
+        if return_col in pdf.columns:
+            sns.boxplot(x="label", y=return_col, data=pdf, ax=ax2, palette=palette)
+            ax2.set_title("Return Distribution by Label")
+            ax2.axhline(0, color="gray", linestyle="--", linewidth=1, alpha=0.5)
+
+        # 3. Statistics Panel
+        ax3.axis("off")
+        ax3.set_title("Statistics", fontweight="bold", pad=20)
+
+        total = len(pdf)
+        counts = pdf["label"].value_counts().sort_index()
+
+        stat_lines = [
+            f"Total ROI Samples: {total}",
+            "-" * 25,
+        ]
+
+        # Label Counts & Percentages
+        label_names = {-1: "Stop Loss", 0: "Vertical", 1: "Take Profit"}
+        for label in [-1, 0, 1]:
+            count = counts.get(label, 0)
+            pct = (count / total * 100) if total > 0 else 0
+            name = label_names.get(label, str(label))
+            stat_lines.append(f"{name} ({label}): {count:5d} ({pct:5.1f}%)")
+
+        stat_lines.append("-" * 25)
+
+        # Vertical Barrier Rate
+        vertical_rate = (counts.get(0, 0) / total * 100) if total > 0 else 0
+        stat_lines.append(f"Vertical Barrier Rate: {vertical_rate:.1f}%")
+
+        # Sampling Frequency (if t0 is present)
+        if "t0" in pdf.columns:
+            # Sort by t0 just in case
+            pdf_sorted = pdf.sort_values("t0")
+            intervals = pdf_sorted["t0"].diff().dropna()
+            if not intervals.empty:
+                avg_interval = intervals.mean()
+                median_interval = intervals.median()
+                stat_lines.append(f"Avg Sampling Interval: {avg_interval:.1f} bars")
+                stat_lines.append(f"Med Sampling Interval: {median_interval:.1f} bars")
+
+        # Add text to axis
+        ax3.text(
+            0.05,
+            0.95,
+            "\n\n".join(stat_lines),
+            transform=ax3.transAxes,
+            fontsize=12,
+            family="monospace",
+            verticalalignment="top",
+        )
 
         self.save_plot(filename)
 

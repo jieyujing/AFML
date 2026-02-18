@@ -15,7 +15,7 @@ Performance: Uses np.convolve for FFD instead of Python loop (10-100x faster).
 import numpy as np
 import polars as pl
 from statsmodels.tsa.stattools import adfuller
-from typing import Union, Tuple, Optional
+from typing import Union, Tuple
 
 
 def get_weights_ffd(d: float, thres: float, lim: int) -> np.ndarray:
@@ -36,9 +36,7 @@ def get_weights_ffd(d: float, thres: float, lim: int) -> np.ndarray:
 
 
 def frac_diff_ffd(
-    series: Union[pl.Series, np.ndarray],
-    d: float,
-    thres: float = 1e-4
+    series: Union[pl.Series, np.ndarray], d: float, thres: float = 1e-4
 ) -> np.ndarray:
     """
     Apply Fractional Differentiation (FFD) to a series.
@@ -65,17 +63,16 @@ def frac_diff_ffd(
     # The naive loop computes: output[i] = dot(x[i-W+1:i+1], w)
     # This is a cross-correlation, equivalent to np.convolve(x, w[::-1], 'valid')
     # Result has length len(x) - width + 1, starting at index width-1
-    conv_valid = np.convolve(x, w[::-1], mode='valid')
+    conv_valid = np.convolve(x, w[::-1], mode="valid")
 
     output = np.full_like(x, np.nan, dtype=np.float64)
-    output[width - 1:] = conv_valid
+    output[width - 1 :] = conv_valid
 
     return output
 
 
 def check_stationarity(
-    series: Union[pl.Series, np.ndarray],
-    p_val_thres: float = 0.05
+    series: Union[pl.Series, np.ndarray], p_val_thres: float = 0.05
 ) -> Tuple[bool, float, dict]:
     """
     Check for stationarity using Augmented Dickey-Fuller (ADF) test.
@@ -91,14 +88,14 @@ def check_stationarity(
         return False, 1.0, {}
 
     try:
-        result = adfuller(x, maxlag=None, regression='c', autolag='AIC')
+        result = adfuller(x, maxlag=None, regression="c", autolag="AIC")
         p_value = result[1]
         stats = {
-            'adf_stat': result[0],
-            'p_value': result[1],
-            'used_lag': result[2],
-            'n_obs': result[3],
-            'critical_values': result[4]
+            "adf_stat": result[0],
+            "p_value": result[1],
+            "used_lag": result[2],
+            "n_obs": result[3],
+            "critical_values": result[4],
         }
         return p_value < p_val_thres, p_value, stats
     except Exception as e:
@@ -111,7 +108,7 @@ def get_min_d(
     max_d: float = 1.0,
     step_size: float = 0.1,
     p_val_thres: float = 0.05,
-    min_len: int = 100
+    min_len: int = 100,
 ) -> Tuple[float, float]:
     """
     Find minimum fractional differentiation d that satisfies stationarity.
@@ -131,7 +128,7 @@ def get_min_d(
     if is_stat:
         return 0.0, p_val
 
-    possible_ds = np.arange(step_size, max_d + step_size/100, step_size)
+    possible_ds = np.arange(step_size, max_d + step_size / 100, step_size)
 
     for d in possible_ds:
         d = round(d, 2)
@@ -149,7 +146,7 @@ def get_stationarity_search_history(
     series: Union[pl.Series, np.ndarray],
     max_d: float = 1.0,
     step_size: float = 0.05,
-    p_val_thres: float = 0.05
+    p_val_thres: float = 0.05,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Get the history of ADF p-values for different d values.
@@ -164,7 +161,7 @@ def get_stationarity_search_history(
 
     x = x[~np.isnan(x)]
 
-    d_vals = np.arange(0.0, max_d + step_size/100, step_size)
+    d_vals = np.arange(0.0, max_d + step_size / 100, step_size)
     p_vals = []
 
     for d in d_vals:

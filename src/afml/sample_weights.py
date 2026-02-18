@@ -12,7 +12,6 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 import numpy as np
-import polars as pl
 from polars import DataFrame, Series
 
 from .base import ProcessorMixin
@@ -33,6 +32,8 @@ class SampleWeightCalculator(ProcessorMixin):
     Attributes:
         decay: Time decay factor (default 0.9)
         concurrency_window: Window for concurrency calculation
+        concurrency_: Computed concurrency values after fitting
+        uniqueness_: Computed uniqueness values after fitting
     """
 
     def __init__(
@@ -55,6 +56,8 @@ class SampleWeightCalculator(ProcessorMixin):
         self.concurrency_window = concurrency_window
         self.lazy = lazy
         self._unique_idx: Optional[Series] = None
+        self.concurrency_: Optional[Series] = None
+        self.uniqueness_: Optional[Series] = None
 
     def fit(
         self,
@@ -74,6 +77,10 @@ class SampleWeightCalculator(ProcessorMixin):
             self
         """
         self._unique_idx = self._compute_uniqueness(events)
+        self.uniqueness_ = self._unique_idx
+        self.concurrency_ = Series(
+            values=np.ones(len(events)) / self._unique_idx.to_numpy()
+        )
         return self
 
     def _compute_uniqueness(self, events: DataFrame) -> Series:
@@ -120,7 +127,9 @@ class SampleWeightCalculator(ProcessorMixin):
             t0_j = t0[j_idx]
             t1_j = t1[j_idx]
 
-            overlap = ((t0_i <= t0_j) & (t0_j < t1_i)) | ((t0_i <= t1_j) & (t1_j < t1_i))
+            overlap = ((t0_i <= t0_j) & (t0_j < t1_i)) | (
+                (t0_i <= t1_j) & (t1_j < t1_i)
+            )
             concurrency[i_idx] += overlap.astype(np.float64)
 
         # Uniqueness = 1 / concurrency (where concurrency > 0)
@@ -154,11 +163,12 @@ class SampleWeightCalculator(ProcessorMixin):
             decay_weights = Series(values=np.ones(len(events)))
 
         weights = (uniqueness * decay_weights).to_list()
+        avg_uniqueness = uniqueness.to_list()
 
         result = DataFrame(
             {
-                "weight": weights,
-                "uniqueness": uniqueness.to_list(),
+                "sample_weight": weights,
+                "avg_uniqueness": avg_uniqueness,
             }
         )
 

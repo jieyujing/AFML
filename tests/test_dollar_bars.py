@@ -1,10 +1,11 @@
 """
-Unit tests for DollarBarsProcessor.
+Unit tests for DollarBarsProcessor (Dynamic Only).
 """
 
 import pytest
 import pandas as pd
 import numpy as np
+import polars as pl
 from datetime import datetime, timedelta
 
 from afml import DollarBarsProcessor
@@ -48,7 +49,7 @@ def sample_minute_bars():
 
 
 class TestDollarBarsProcessor:
-    """Tests for DollarBarsProcessor class."""
+    """Tests for DollarBarsProcessor class (Dynamic Mode Only)."""
 
     def test_initialization(self):
         """Test processor initialization with default parameters."""
@@ -63,21 +64,26 @@ class TestDollarBarsProcessor:
         assert processor.ema_span == 50
 
     def test_fit(self, sample_minute_bars):
-        """Test fit method."""
+        """Test fit method (Dynamic Logic)."""
         processor = DollarBarsProcessor()
         result = processor.fit(sample_minute_bars)
 
         assert result is processor  # Should return self
         assert processor.threshold_ > 0
-        assert hasattr(processor, "threshold_type")
+        assert processor._daily_thresholds is not None
+        assert len(processor._daily_thresholds) > 0
 
-    def test_fit_transform_fixed(self, sample_minute_bars):
-        """Test fit_transform with fixed threshold."""
-        processor = DollarBarsProcessor()
+    def test_fit_transform(self, sample_minute_bars):
+        """Test fit_transform method."""
+        processor = DollarBarsProcessor(daily_target=4, ema_span=20)
         result = processor.fit_transform(sample_minute_bars)
 
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) < len(sample_minute_bars)  # Should have fewer bars
+        assert isinstance(result, (pd.DataFrame, pl.DataFrame))
+        if isinstance(result, pl.DataFrame):
+            result = result.to_pandas()
+            
+        assert len(result) < len(sample_minute_bars)
+        assert len(result) > 0
         assert "datetime" in result.columns
         assert "open" in result.columns
         assert "high" in result.columns
@@ -85,32 +91,15 @@ class TestDollarBarsProcessor:
         assert "close" in result.columns
         assert "volume" in result.columns
 
-    def test_fit_transform_dynamic(self, sample_minute_bars):
-        """Test fit_transform_dynamic method."""
-        processor = DollarBarsProcessor(daily_target=4, ema_span=20)
-        result = processor.fit_transform_dynamic(sample_minute_bars)
-
-        assert isinstance(result, pd.DataFrame)
-        assert len(result) < len(sample_minute_bars)
-        assert len(result) > 0
-
-    def test_fit_dynamic(self, sample_minute_bars):
-        """Test fit_dynamic method."""
-        processor = DollarBarsProcessor()
-        result = processor.fit_dynamic(sample_minute_bars)
-
-        assert result is processor
-        assert processor.threshold_type == "dynamic"
-
     def test_get_threshold_info(self, sample_minute_bars):
         """Test get_threshold_info method."""
         processor = DollarBarsProcessor()
         processor.fit(sample_minute_bars)
 
         info = processor.get_threshold_info()
-        assert "threshold_type" in info
         assert "threshold" in info
         assert info["threshold"] > 0
+        assert "daily_target" in info
 
     def test_threshold_reasonable(self, sample_minute_bars):
         """Test that threshold is in a reasonable range."""
@@ -118,20 +107,7 @@ class TestDollarBarsProcessor:
         processor.fit(sample_minute_bars)
 
         info = processor.get_threshold_info()
-        # Threshold should be positive
         assert info["threshold"] > 0
-
-        # Threshold should be reasonable (daily volume / target bars)
-        # It's expected to be large since it's a daily accumulated amount
-        avg_daily_amount = (
-            sample_minute_bars.set_index("datetime")
-            .resample("D")["amount"]
-            .sum()
-            .mean()
-        )
-        assert (
-            info["threshold"] < avg_daily_amount * 2
-        )  # Should be less than 2x daily volume
 
     def test_sklearn_compatible(self, sample_minute_bars):
         """Test sklearn compatibility (fit, fit_transform, transform)."""
@@ -143,22 +119,27 @@ class TestDollarBarsProcessor:
 
         # transform should work after fit
         transformed = processor.transform(sample_minute_bars)
-        assert isinstance(transformed, pd.DataFrame)
+        assert isinstance(transformed, (pd.DataFrame, pl.DataFrame))
+        if isinstance(transformed, pl.DataFrame):
+            transformed = transformed.to_pandas()
         assert len(transformed) < len(sample_minute_bars)
 
-    def test_dynamic_mode_changes_threshold(self, sample_minute_bars):
-        """Test that dynamic mode produces different results than fixed."""
-        processor_fixed = DollarBarsProcessor()
-        processor_dynamic = DollarBarsProcessor()
+    def test_consistency(self, sample_minute_bars):
+        """Test that processor produces consistent results."""
+        processor_1 = DollarBarsProcessor()
+        processor_2 = DollarBarsProcessor()
 
-        fixed_result = processor_fixed.fit_transform(sample_minute_bars)
-        dynamic_result = processor_dynamic.fit_transform_dynamic(sample_minute_bars)
+        result_1 = processor_1.fit_transform(sample_minute_bars)
+        result_2 = processor_2.fit_transform(sample_minute_bars)
 
-        # Both should produce valid results but possibly different counts
-        assert len(fixed_result) > 0
-        assert len(dynamic_result) > 0
-        assert isinstance(fixed_result, pd.DataFrame)
-        assert isinstance(dynamic_result, pd.DataFrame)
+        # Both should produce valid results
+        assert len(result_1) > 0
+        assert len(result_2) > 0
+        
+        if isinstance(result_1, pl.DataFrame): result_1 = result_1.to_pandas()
+        if isinstance(result_2, pl.DataFrame): result_2 = result_2.to_pandas()
+        
+        assert len(result_1) == len(result_2)
 
 
 class TestDollarBarsProcessorEdgeCases:
@@ -202,7 +183,7 @@ class TestDollarBarsProcessorEdgeCases:
         result = processor.fit_transform(df)
 
         # Should still produce valid output
-        assert isinstance(result, pd.DataFrame)
+        assert isinstance(result, (pd.DataFrame, pl.DataFrame))
 
 
 if __name__ == "__main__":

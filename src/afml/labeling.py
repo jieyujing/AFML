@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
+import polars as pl
 from polars import DataFrame, Series
 
 from .base import ProcessorMixin
@@ -81,12 +82,23 @@ class TripleBarrierLabeler(ProcessorMixin):
         Calculate volatility for barrier sizing.
 
         Args:
-            close: Series or DataFrame with close prices
+            close: Series or DataFrame with close prices (accepts pandas or Polars)
             y: Ignored
 
         Returns:
             self
         """
+        # Convert pandas to Polars if needed
+        try:
+            import pandas as pd
+
+            if isinstance(close, pd.Series):
+                close = pl.Series(close.name, close.values)
+            elif isinstance(close, pd.DataFrame):
+                close = pl.from_pandas(close)
+        except ImportError:
+            pass
+
         if isinstance(close, DataFrame):
             if "close" not in close.columns:
                 raise ValueError("DataFrame must have 'close' column")
@@ -156,7 +168,7 @@ class TripleBarrierLabeler(ProcessorMixin):
 
         for i in range(1, n):
             p = pos[i - 1] + returns[i]
-            g = neg[i - 1] - returns[i]
+            g = neg[i - 1] + returns[i]
 
             if p > threshold_val:
                 event_indices.append(i)
@@ -173,10 +185,12 @@ class TripleBarrierLabeler(ProcessorMixin):
                 neg[i] = min(0.0, g)
 
         if event_indices:
-            return DataFrame({
-                "datetime": event_indices,
-                "type": event_types,
-            })
+            return DataFrame(
+                {
+                    "datetime": event_indices,
+                    "type": event_types,
+                }
+            )
         return DataFrame({"datetime": [], "type": []})
 
     def label(
@@ -222,7 +236,11 @@ class TripleBarrierLabeler(ProcessorMixin):
         n = len(close_np)
 
         event_datetimes = events["datetime"].to_numpy().astype(np.int64)
-        t1_vals = t1["t1"].to_numpy().astype(np.int64) if "t1" in t1.columns else t1.to_numpy().flatten().astype(np.int64)
+        t1_vals = (
+            t1["t1"].to_numpy().astype(np.int64)
+            if "t1" in t1.columns
+            else t1.to_numpy().flatten().astype(np.int64)
+        )
 
         vol_np = self.volatility_.to_numpy() if self.volatility_ is not None else None
         default_vol = 0.02
@@ -242,7 +260,11 @@ class TripleBarrierLabeler(ProcessorMixin):
                 valid_mask[idx] = False
                 continue
 
-            t1_val = int(t1_vals[idx]) if idx < len(t1_vals) else t0 + self.vertical_barrier_bars
+            t1_val = (
+                int(t1_vals[idx])
+                if idx < len(t1_vals)
+                else t0 + self.vertical_barrier_bars
+            )
             t1_val = min(t1_val, n - 1)
 
             if t0 >= t1_val:
@@ -259,7 +281,7 @@ class TripleBarrierLabeler(ProcessorMixin):
             sl = pt_sl[1] * vol
 
             # Returns relative to entry price
-            price_slice = close_np[t0: t1_val + 1]
+            price_slice = close_np[t0 : t1_val + 1]
             rets = price_slice / close_np[t0] - 1
 
             # Find first barrier touch using argmax on boolean arrays (fast)
@@ -290,16 +312,20 @@ class TripleBarrierLabeler(ProcessorMixin):
                 out_t0[idx] = t0
                 out_t1[idx] = t1_val
                 out_tr[idx] = final_ret
-                out_label[idx] = 0 if abs(final_ret) < min_ret else (1 if final_ret > 0 else -1)
+                out_label[idx] = (
+                    0 if abs(final_ret) < min_ret else (1 if final_ret > 0 else -1)
+                )
 
         # Filter valid events and build DataFrame from arrays (no per-row dict)
         if valid_mask.any():
-            return DataFrame({
-                "t0": out_t0[valid_mask],
-                "t1": out_t1[valid_mask],
-                "tr": out_tr[valid_mask],
-                "label": out_label[valid_mask],
-            })
+            return DataFrame(
+                {
+                    "t0": out_t0[valid_mask],
+                    "t1": out_t1[valid_mask],
+                    "tr": out_tr[valid_mask],
+                    "label": out_label[valid_mask],
+                }
+            )
         return DataFrame({"t0": [], "t1": [], "tr": [], "label": []})
 
     def _get_vertical_barrier(

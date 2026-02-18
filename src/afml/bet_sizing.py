@@ -28,6 +28,7 @@ class BetSizer:
         threshold: Probability threshold for bet sizing
         quantity: Maximum position quantity
         num_classes: Number of probability classes for discretization
+        step_size: Step size for discretization
 
     Example:
         >>> sizer = BetSizer(threshold=0.5)
@@ -39,6 +40,7 @@ class BetSizer:
         threshold: float = 0.5,
         quantity: int = 100,
         num_classes: int = 10,
+        step_size: float = 0.0,
         *,
         lazy: bool = False,
     ):
@@ -49,11 +51,14 @@ class BetSizer:
             threshold: Probability threshold for bet sizing
             quantity: Maximum position quantity
             num_classes: Number of probability classes for discretization
+            step_size: Step size for discretization
             lazy: Whether to use lazy evaluation
         """
         self.threshold = threshold
         self.quantity = quantity
         self.num_classes = num_classes
+        self.step_size = step_size
+        self.concurrency_ = None
         self.lazy = lazy
         self._is_fitted = False
         self._fitEDF = None
@@ -128,14 +133,7 @@ class BetSizer:
             raw_sizes = raw_sizes / prices
             raw_sizes = raw_sizes * prices[0] if len(prices) > 0 else raw_sizes
 
-        size_ranks = np.argsort(raw_sizes)
-        size_quantized = np.linspace(0, self.quantity, self.num_classes)
-
-        quantized_sizes = np.zeros(len(raw_sizes))
-        # This part of logic in the original seemed a bit complex for a simple discretization
-        # Let's use a simpler bucketizing approach
-        
-        return Series(values=raw_sizes) # Default to raw for now as placeholder
+        return Series(values=raw_sizes)
 
     def discretize(
         self,
@@ -275,7 +273,7 @@ class EmpiricalDistributionFunction:
 
     def get_cdf_vectorized(self, x_array: np.ndarray) -> np.ndarray:
         """Get CDF values for an array of x."""
-        indices = np.searchsorted(self.sorted_probs, x_array, side='right') - 1
+        indices = np.searchsorted(self.sorted_probs, x_array, side="right") - 1
         counts = np.zeros(len(x_array))
         mask = indices >= 0
         counts[mask] = self.cum_weighted_returns[indices[mask]]

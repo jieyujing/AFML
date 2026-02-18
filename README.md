@@ -54,10 +54,57 @@ uv sync
 
 ### 2. 运行端到端 Pipeline
 
-运行内置的高性能 Pipeline，体验从数据加载、平稳性处理到 DSR 策略验收的全流程：
+运行内置的高性能 Pipeline，体验从数据加载、平稳性处理到 DSR 策略验收的全流程。该脚本支持自动处理大规模 Parquet 数据集，并生成全流程可视化报告。
 
+#### A. 标准完整运行 (End-to-End)
+自动执行从数据标准化到 DSR 收益验收的 10 个步骤：
 ```bash
-uv run python examples/afml_polars_pipeline.py [你的 tick 数据路径].csv --visualize
+uv run python afml_polars_pipeline.py data/BTCUSDT/parquet_db
+```
+
+#### B. 参数寻优 (Dollar Bar 采样优化)
+根据 Jarque-Bera 正态性测试搜寻最佳的 `daily_target` 采样频率：
+```bash
+uv run python afml_polars_pipeline.py --jb-sweep --jb-targets 4 6 8 10 20 50 100 --jb-data-dir data/raw_data_polars.parquet
+```
+
+#### C. 分步执行 (Step-by-Step AFML Workflow)
+严格按照《Advances in Financial Machine Learning》的标准流程执行：
+
+1. **美元条柱生成 (Sampling)**
+   将时间序列转换为信息驱动的 Dollar Bars，恢复正态性：
+   ```bash
+   uv run python afml_polars_pipeline.py --step bars --daily-target 50
+   ```
+
+2. **三重障碍标注 (Labeling)**
+   应用 Triple-Barrier Method，定义“盈亏”事件：
+   ```bash
+   uv run python afml_polars_pipeline.py --step labels --pt-sl 1.0 1.0 --vertical-barrier 10
+   ```
+
+3. **特征工程 (Feature Engineering)**
+   **[关键步骤]** 生成 Alpha 因子（Alpha158）并进行分式微分 (Fractional Differentiation) 以确保平稳性：
+   ```bash
+   uv run python afml_polars_pipeline.py --step features --ffd-d 0.5
+   ```
+
+4. **样本权重计算 (Sample Weights)**
+   **[关键步骤]** 计算标签的平均唯一性 (Average Uniqueness)，解决金融数据样本重叠导致的过拟合问题：
+   ```bash
+   uv run python afml_polars_pipeline.py --step weights
+   ```
+
+5. **建模与交叉验证 (Modeling)**
+   使用 Purged K-Fold CV 进行训练，并应用 Embargo 防止数据泄漏：
+   ```bash
+   uv run python afml_polars_pipeline.py --step model --embargo 0.01
+   ```
+
+#### E. 查看完整参数说明
+该 Pipeline 包含数十项微调参数（如 CUSUM 阈值、DSR 验收标准等），可以通过以下命令查看完整说明：
+```bash
+uv run python afml_polars_pipeline.py --help
 ```
 
 ### 3. 使用 OO 接口示例

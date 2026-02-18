@@ -1,0 +1,701 @@
+{
+  "nodes": [
+    {
+      "file": "__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "backtest_statistics/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "backtest_statistics/backtests.py",
+      "language": "Python"
+    },
+    {
+      "file": "backtest_statistics/statistics.py",
+      "language": "Python"
+    },
+    {
+      "file": "bet_sizing/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "bet_sizing/bet_sizing.py",
+      "language": "Python"
+    },
+    {
+      "file": "bet_sizing/ch10_snippets.py",
+      "language": "Python"
+    },
+    {
+      "file": "bet_sizing/ef3m.py",
+      "language": "Python"
+    },
+    {
+      "file": "clustering/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "clustering/feature_clusters.py",
+      "language": "Python"
+    },
+    {
+      "file": "clustering/onc.py",
+      "language": "Python"
+    },
+    {
+      "file": "codependence/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "codependence/codependence_matrix.py",
+      "language": "Python"
+    },
+    {
+      "file": "codependence/correlation.py",
+      "language": "Python"
+    },
+    {
+      "file": "codependence/gnpr_distance.py",
+      "language": "Python"
+    },
+    {
+      "file": "codependence/information.py",
+      "language": "Python"
+    },
+    {
+      "file": "cross_validation/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "cross_validation/combinatorial.py",
+      "language": "Python"
+    },
+    {
+      "file": "cross_validation/cross_validation.py",
+      "language": "Python"
+    },
+    {
+      "file": "data_structures/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "data_structures/base_bars.py",
+      "language": "Python"
+    },
+    {
+      "file": "data_structures/imbalance_data_structures.py",
+      "language": "Python"
+    },
+    {
+      "file": "data_structures/run_data_structures.py",
+      "language": "Python"
+    },
+    {
+      "file": "data_structures/standard_data_structures.py",
+      "language": "Python"
+    },
+    {
+      "file": "data_structures/time_data_structures.py",
+      "language": "Python"
+    },
+    {
+      "file": "datasets/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "datasets/load_datasets.py",
+      "language": "Python"
+    },
+    {
+      "file": "ensemble/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "ensemble/sb_bagging.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature_importance/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature_importance/fingerpint.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature_importance/importance.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature_importance/orthogonal.py",
+      "language": "Python"
+    },
+    {
+      "file": "features/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "features/fracdiff.py",
+      "language": "Python"
+    },
+    {
+      "file": "filters/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "filters/filters.py",
+      "language": "Python"
+    },
+    {
+      "file": "labeling/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "labeling/excess_over_mean.py",
+      "language": "Python"
+    },
+    {
+      "file": "labeling/excess_over_median.py",
+      "language": "Python"
+    },
+    {
+      "file": "labeling/fixed_time_horizon.py",
+      "language": "Python"
+    },
+    {
+      "file": "labeling/labeling.py",
+      "language": "Python"
+    },
+    {
+      "file": "labeling/matrix_flags.py",
+      "language": "Python"
+    },
+    {
+      "file": "labeling/raw_return.py",
+      "language": "Python"
+    },
+    {
+      "file": "labeling/return_vs_benchmark.py",
+      "language": "Python"
+    },
+    {
+      "file": "labeling/tail_sets.py",
+      "language": "Python"
+    },
+    {
+      "file": "labeling/trend_scanning.py",
+      "language": "Python"
+    },
+    {
+      "file": "microstructural_features/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "microstructural_features/encoding.py",
+      "language": "Python"
+    },
+    {
+      "file": "microstructural_features/entropy.py",
+      "language": "Python"
+    },
+    {
+      "file": "microstructural_features/feature_generator.py",
+      "language": "Python"
+    },
+    {
+      "file": "microstructural_features/first_generation.py",
+      "language": "Python"
+    },
+    {
+      "file": "microstructural_features/misc.py",
+      "language": "Python"
+    },
+    {
+      "file": "microstructural_features/second_generation.py",
+      "language": "Python"
+    },
+    {
+      "file": "microstructural_features/third_generation.py",
+      "language": "Python"
+    },
+    {
+      "file": "multi_product/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "multi_product/etf_trick.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/bah.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/base.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/bcrp.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/benchmarks/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/best_stock.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/corn.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/cornk.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/cornu.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/crp.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/cwmr.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/eg.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/fcorn.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/fcornk.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/ftl.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/ftrl.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/mean_reversion/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/momentum/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/olmar.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/pamr.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/pattern_matching/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/rmr.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/scorn.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/scornk.py",
+      "language": "Python"
+    },
+    {
+      "file": "online_portfolio_selection/up.py",
+      "language": "Python"
+    },
+    {
+      "file": "portfolio_optimization/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "portfolio_optimization/cla.py",
+      "language": "Python"
+    },
+    {
+      "file": "portfolio_optimization/herc.py",
+      "language": "Python"
+    },
+    {
+      "file": "portfolio_optimization/hrp.py",
+      "language": "Python"
+    },
+    {
+      "file": "portfolio_optimization/mean_variance.py",
+      "language": "Python"
+    },
+    {
+      "file": "portfolio_optimization/nco.py",
+      "language": "Python"
+    },
+    {
+      "file": "portfolio_optimization/returns_estimators.py",
+      "language": "Python"
+    },
+    {
+      "file": "portfolio_optimization/risk_estimators.py",
+      "language": "Python"
+    },
+    {
+      "file": "portfolio_optimization/risk_metrics.py",
+      "language": "Python"
+    },
+    {
+      "file": "portfolio_optimization/tic.py",
+      "language": "Python"
+    },
+    {
+      "file": "sample_weights/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "sample_weights/attribution.py",
+      "language": "Python"
+    },
+    {
+      "file": "sampling/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "sampling/bootstrapping.py",
+      "language": "Python"
+    },
+    {
+      "file": "sampling/concurrent.py",
+      "language": "Python"
+    },
+    {
+      "file": "structural_breaks/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "structural_breaks/chow.py",
+      "language": "Python"
+    },
+    {
+      "file": "structural_breaks/cusum.py",
+      "language": "Python"
+    },
+    {
+      "file": "structural_breaks/sadf.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_backtest_statistics.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_backtests.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_best_constant_rebalanced_portfolio.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_best_stock.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_bet_sizing.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_buy_and_hold.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_ch10_snippets.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_cla.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_codependence.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_combinatorial_cross_validation.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_confidence_weighted_mean_reversion.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_constant_rebalanced_portfolio.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_correlation_driven_nonparametric_learning.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_correlation_driven_nonparametric_learning_k.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_correlation_driven_nonparametric_learning_uniform.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_cross_validation.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_datasets.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_ef3m.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_etf_trick.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_exponential_gradient.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_fast_ewma.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_feature_clusters.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_feature_importance.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_filters.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_fingerpint.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_follow_the_leader.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_follow_the_regularized_leader.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_fracdiff.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_functional_correlation_driven_nonparametric_learning.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_functional_correlation_driven_nonparametric_learning_k.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_futures_roll.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_herc.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_hrp.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_imbalance_data_structures.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_labeling_fixed_time_horizon.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_labeling_matrix_flags.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_labeling_over_mean.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_labeling_over_median.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_labeling_raw_return.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_labeling_tail_sets.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_labeling_vs_benchmark.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_labels.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_mean_variance.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_microstructural_features.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_nco.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_onc.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_online_moving_average_reversion.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_online_portfolio_selection.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_passive_aggressive_mean_reversion.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_risk_estimators.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_risk_metrics.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_robust_median_reversion.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_run_data_structures.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_sample_weights.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_sampling.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_sb_bagging.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_standard_data_structures.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_structural_breaks.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_symmetric_correlation_driven_nonparametric_learning.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_symmetric_correlation_driven_nonparametric_learning_k.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_tic.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_time_data_structures.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_trend_scanning_labels.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_universal_portfolio.py",
+      "language": "Python"
+    },
+    {
+      "file": "tests/test_volatility_features.py",
+      "language": "Python"
+    },
+    {
+      "file": "util/__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "util/fast_ewma.py",
+      "language": "Python"
+    },
+    {
+      "file": "util/generate_dataset.py",
+      "language": "Python"
+    },
+    {
+      "file": "util/misc.py",
+      "language": "Python"
+    },
+    {
+      "file": "util/multiprocess.py",
+      "language": "Python"
+    },
+    {
+      "file": "util/volatility.py",
+      "language": "Python"
+    },
+    {
+      "file": "util/volume_classifier.py",
+      "language": "Python"
+    }
+  ],
+  "edges": []
+}

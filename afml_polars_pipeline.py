@@ -4,8 +4,17 @@ Polars Pipeline - Complete ML Pipeline using Polars and AFML Methodology.
 This script implements a complete financial ML pipeline using Polars-based
 processors, enforcing strict AFML standards including stationarity and DSR.
 
-Usage:
-    uv run python src/afml_polars_pipeline.py [input_file] [options]
+Usage Examples:
+
+    1. Standard Run (End-to-End):
+       uv run python src/afml_polars_pipeline.py data/BTCUSDT/parquet_db
+
+    2. Parameter Sweep (Dollar Bar Optimization):
+       uv run python src/afml_polars_pipeline.py --jb-sweep --jb-targets 4 10 20 60
+
+    3. Step-by-Step Execution:
+       uv run python src/afml_polars_pipeline.py --step bars
+       uv run python src/afml_polars_pipeline.py --step labels --pt-sl 2.0 1.0
 
 Pipeline Steps:
     1. Load Data
@@ -21,7 +30,7 @@ Pipeline Steps:
 
 Output:
     - Data Artifacts in data/
-    - Comprehensive Report
+    - Comprehensive Report in visual_analysis/
 """
 
 from pathlib import Path
@@ -199,7 +208,7 @@ def generate_dollar_bars(
 
     # This will return a LazyFrame if input is LazyFrame because we set lazy=True
     # and we modified Processor to respect laziness
-    dollar_bars_lazy = processor.fit_transform_dynamic(df)
+    dollar_bars_lazy = processor.fit_transform(df)
 
     # NOW we collect. The input was huge (7GB), output bars allow much smaller size.
     dollar_bars = dollar_bars_lazy.collect()
@@ -1068,11 +1077,11 @@ def run_jb_parameter_sweep(
                 fit_df = fit_df.with_columns(backfill)
 
             print(f"    Fitting threshold (streaming, dynamic)...")
-            processor.fit_dynamic(fit_df)
+            processor.fit(fit_df)
             print(f"    Threshold (initial): {processor.threshold_:,.0f}")
 
             print(f"    Generating dollar bars (chunked)...")
-            dollar_bars = processor.transform_chunked(data_source, chunk_size=chunk_size)
+            dollar_bars = processor.transform_chunked(fit_df, chunk_size=chunk_size)
         else:
             # In-memory processing (small datasets)
             if Path(data_source).is_dir():
@@ -1145,8 +1154,10 @@ def run_jb_parameter_sweep(
         )
 
     best = max(results, key=lambda x: x["p_value"])
-    print(f"\n✓ Best parameter: daily_target={best['daily_target']} "
-          f"(p-value={best['p_value']:.4f}, {best['bars_count']:,} bars)")
+    print(
+        f"\n✓ Best parameter: daily_target={best['daily_target']} "
+        f"(p-value={best['p_value']:.4f}, {best['bars_count']:,} bars)"
+    )
 
     # --- Step 4: Rich Visualization ---
     Path(output_dir).mkdir(exist_ok=True)
@@ -1169,14 +1180,33 @@ def run_jb_parameter_sweep(
         dt_vals = [r["daily_target"] for r in results]
         p_vals = [r["p_value"] for r in results]
 
-        ax1.plot(dt_vals, p_vals, "o-", linewidth=2.5, markersize=10,
-                 color="#2196F3", markerfacecolor="white", markeredgewidth=2)
-        ax1.axhline(y=0.05, color="#E91E63", linestyle="--", linewidth=1.5,
-                    label="p=0.05 (normality threshold)")
+        ax1.plot(
+            dt_vals,
+            p_vals,
+            "o-",
+            linewidth=2.5,
+            markersize=10,
+            color="#2196F3",
+            markerfacecolor="white",
+            markeredgewidth=2,
+        )
+        ax1.axhline(
+            y=0.05,
+            color="#E91E63",
+            linestyle="--",
+            linewidth=1.5,
+            label="p=0.05 (normality threshold)",
+        )
         # Highlight best
-        ax1.scatter([best["daily_target"]], [best["p_value"]],
-                    s=200, color="#4CAF50", zorder=5, marker="*",
-                    label=f"Best: dt={best['daily_target']}")
+        ax1.scatter(
+            [best["daily_target"]],
+            [best["p_value"]],
+            s=200,
+            color="#4CAF50",
+            zorder=5,
+            marker="*",
+            label=f"Best: dt={best['daily_target']}",
+        )
         ax1.set_xlabel("daily_target (bars/day)", fontsize=12)
         ax1.set_ylabel("JB p-value", fontsize=12)
         ax1.set_title("Jarque-Bera Normality Test", fontsize=14, fontweight="bold")
@@ -1191,13 +1221,32 @@ def run_jb_parameter_sweep(
         skews = [r["skewness"] for r in results]
         kurts = [r["kurtosis"] for r in results]
 
-        bars1 = ax2.bar(x - width / 2, skews, width, label="Skewness",
-                        color="#FF9800", alpha=0.85, edgecolor="white")
-        bars2 = ax2.bar(x + width / 2, kurts, width, label="Kurtosis",
-                        color="#9C27B0", alpha=0.85, edgecolor="white")
+        bars1 = ax2.bar(
+            x - width / 2,
+            skews,
+            width,
+            label="Skewness",
+            color="#FF9800",
+            alpha=0.85,
+            edgecolor="white",
+        )
+        bars2 = ax2.bar(
+            x + width / 2,
+            kurts,
+            width,
+            label="Kurtosis",
+            color="#9C27B0",
+            alpha=0.85,
+            edgecolor="white",
+        )
         ax2.axhline(y=0, color="gray", linestyle="-", alpha=0.5)
-        ax2.axhline(y=3.0, color="#E91E63", linestyle="--", linewidth=1.5,
-                    label="Normal kurtosis = 3")
+        ax2.axhline(
+            y=3.0,
+            color="#E91E63",
+            linestyle="--",
+            linewidth=1.5,
+            label="Normal kurtosis = 3",
+        )
         ax2.set_xticks(x)
         ax2.set_xticklabels(dt_vals)
         ax2.set_xlabel("daily_target", fontsize=12)
@@ -1211,8 +1260,14 @@ def run_jb_parameter_sweep(
         for i, dt in enumerate(daily_targets):
             ret = all_returns[dt]
             # Normalize for comparison
-            ax3.hist(ret, bins=80, alpha=0.4, color=colors[i], density=True,
-                     label=f"dt={dt} (n={len(ret):,})")
+            ax3.hist(
+                ret,
+                bins=80,
+                alpha=0.4,
+                color=colors[i],
+                density=True,
+                label=f"dt={dt} (n={len(ret):,})",
+            )
             # KDE
             try:
                 kde_x = np.linspace(ret.min(), ret.max(), 300)
@@ -1224,8 +1279,14 @@ def run_jb_parameter_sweep(
         # Normal reference
         combined = np.concatenate(list(all_returns.values()))
         x_norm = np.linspace(combined.min(), combined.max(), 300)
-        ax3.plot(x_norm, sp_stats.norm.pdf(x_norm, 0, np.std(combined)),
-                 "k--", linewidth=2, alpha=0.5, label="Normal (ref)")
+        ax3.plot(
+            x_norm,
+            sp_stats.norm.pdf(x_norm, 0, np.std(combined)),
+            "k--",
+            linewidth=2,
+            alpha=0.5,
+            label="Normal (ref)",
+        )
         ax3.set_xlabel("Log Return", fontsize=12)
         ax3.set_ylabel("Density", fontsize=12)
         ax3.set_title("Return Distributions Overlay", fontsize=14, fontweight="bold")
@@ -1237,8 +1298,9 @@ def run_jb_parameter_sweep(
         # Create sub-grid for QQ plots
         n_qq = min(n_params, 6)
         qq_rows = (n_qq + 2) // 3
-        qq_gs = gridspec.GridSpecFromSubplotSpec(qq_rows, 3, subplot_spec=gs[1, 1],
-                                                  hspace=0.4, wspace=0.3)
+        qq_gs = gridspec.GridSpecFromSubplotSpec(
+            qq_rows, 3, subplot_spec=gs[1, 1], hspace=0.4, wspace=0.3
+        )
         ax4.set_visible(False)  # Hide parent axes
         for i in range(n_qq):
             ax_qq = fig.add_subplot(qq_gs[i // 3, i % 3])
@@ -1259,18 +1321,27 @@ def run_jb_parameter_sweep(
             daily_labels.append(f"dt={r['daily_target']}")
             daily_data.append(r["daily_bars_mean"])
 
-        bar_colors = ["#4CAF50" if r["daily_target"] == best["daily_target"]
-                      else "#2196F3" for r in results]
-        bars_plot = ax5.bar(range(n_params), daily_data, color=bar_colors,
-                           alpha=0.85, edgecolor="white")
+        bar_colors = [
+            "#4CAF50" if r["daily_target"] == best["daily_target"] else "#2196F3"
+            for r in results
+        ]
+        bars_plot = ax5.bar(
+            range(n_params), daily_data, color=bar_colors, alpha=0.85, edgecolor="white"
+        )
         # Add error bars for std
         stds = [r["daily_bars_std"] for r in results]
-        ax5.errorbar(range(n_params), daily_data, yerr=stds,
-                     fmt="none", ecolor="gray", capsize=5)
+        ax5.errorbar(
+            range(n_params), daily_data, yerr=stds, fmt="none", ecolor="gray", capsize=5
+        )
         # Add target reference lines
         for i, r in enumerate(results):
-            ax5.axhline(y=r["daily_target"], color=colors[i], linestyle=":",
-                        alpha=0.3, linewidth=1)
+            ax5.axhline(
+                y=r["daily_target"],
+                color=colors[i],
+                linestyle=":",
+                alpha=0.3,
+                linewidth=1,
+            )
         ax5.set_xticks(range(n_params))
         ax5.set_xticklabels(daily_labels, fontsize=10)
         ax5.set_xlabel("Configuration", fontsize=12)
@@ -1284,19 +1355,29 @@ def run_jb_parameter_sweep(
 
         table_data = []
         for r in results:
-            table_data.append([
-                str(r["daily_target"]),
-                f"{r['bars_count']:,}",
-                f"{r['jb_stat']:.1f}",
-                f"{r['p_value']:.4f}",
-                f"{r['skewness']:.3f}",
-                f"{r['kurtosis']:.3f}",
-                f"{r['daily_bars_mean']:.1f}",
-                "YES" if r["is_normal"] else "NO",
-            ])
+            table_data.append(
+                [
+                    str(r["daily_target"]),
+                    f"{r['bars_count']:,}",
+                    f"{r['jb_stat']:.1f}",
+                    f"{r['p_value']:.4f}",
+                    f"{r['skewness']:.3f}",
+                    f"{r['kurtosis']:.3f}",
+                    f"{r['daily_bars_mean']:.1f}",
+                    "YES" if r["is_normal"] else "NO",
+                ]
+            )
 
-        col_labels = ["Target", "Bars", "JB", "p-val", "Skew", "Kurt",
-                       "Bars/Day", "Normal"]
+        col_labels = [
+            "Target",
+            "Bars",
+            "JB",
+            "p-val",
+            "Skew",
+            "Kurt",
+            "Bars/Day",
+            "Normal",
+        ]
         table = ax6.table(
             cellText=table_data,
             colLabels=col_labels,
@@ -1315,57 +1396,88 @@ def run_jb_parameter_sweep(
             cell.set_text_props(color="white", fontweight="bold")
 
         # Highlight best row
-        best_idx = next(i for i, r in enumerate(results)
-                        if r["daily_target"] == best["daily_target"])
+        best_idx = next(
+            i
+            for i, r in enumerate(results)
+            if r["daily_target"] == best["daily_target"]
+        )
         for j in range(len(col_labels)):
             cell = table[best_idx + 1, j]
             cell.set_facecolor("#E8F5E9")
             cell.set_edgecolor("#4CAF50")
             cell.set_linewidth(2)
 
-        ax6.set_title("Parameter Comparison Summary", fontsize=14,
-                      fontweight="bold", pad=20)
+        ax6.set_title(
+            "Parameter Comparison Summary", fontsize=14, fontweight="bold", pad=20
+        )
 
         # ── Overall title ──
         fig.suptitle(
             f"Dollar Bars Parameter Sweep — {total_rows:,} ticks\n"
             f"Best: daily_target={best['daily_target']} "
             f"(p={best['p_value']:.4f}, {best['bars_count']:,} bars)",
-            fontsize=16, fontweight="bold", y=0.98
+            fontsize=16,
+            fontweight="bold",
+            y=0.98,
         )
 
         output_path = f"{output_dir}/dollar_bars_parameter_sweep.png"
-        plt.savefig(output_path, dpi=150, bbox_inches="tight",
-                    facecolor="white", edgecolor="none")
+        plt.savefig(
+            output_path,
+            dpi=150,
+            bbox_inches="tight",
+            facecolor="white",
+            edgecolor="none",
+        )
         print(f"\n✓ Visualization saved to {output_path}")
         plt.close()
 
         # Also save individual return distributions for detail
-        fig2, axes2 = plt.subplots(1, n_params, figsize=(5 * n_params, 4),
-                                    sharey=True, squeeze=False)
+        fig2, axes2 = plt.subplots(
+            1, n_params, figsize=(5 * n_params, 4), sharey=True, squeeze=False
+        )
         for i, dt in enumerate(daily_targets):
             ax = axes2[0, i]
             ret = all_returns[dt]
-            ax.hist(ret, bins=60, color=colors[i], alpha=0.7, density=True,
-                    edgecolor="white")
+            ax.hist(
+                ret,
+                bins=60,
+                color=colors[i],
+                alpha=0.7,
+                density=True,
+                edgecolor="white",
+            )
             # Overlay normal
             mu, sigma = np.mean(ret), np.std(ret)
             x_norm = np.linspace(mu - 4 * sigma, mu + 4 * sigma, 200)
-            ax.plot(x_norm, sp_stats.norm.pdf(x_norm, mu, sigma),
-                    "r--", linewidth=2, alpha=0.7)
+            ax.plot(
+                x_norm,
+                sp_stats.norm.pdf(x_norm, mu, sigma),
+                "r--",
+                linewidth=2,
+                alpha=0.7,
+            )
             r_info = results[i]
-            ax.set_title(f"dt={dt}\nJB={r_info['jb_stat']:.1f} "
-                        f"p={r_info['p_value']:.4f}", fontsize=11)
+            ax.set_title(
+                f"dt={dt}\nJB={r_info['jb_stat']:.1f} p={r_info['p_value']:.4f}",
+                fontsize=11,
+            )
             ax.set_xlabel("Log Return")
             if i == 0:
                 ax.set_ylabel("Density")
 
-        fig2.suptitle("Return Distributions with Normal Fit", fontsize=14,
-                      fontweight="bold")
+        fig2.suptitle(
+            "Return Distributions with Normal Fit", fontsize=14, fontweight="bold"
+        )
         plt.tight_layout()
         detail_path = f"{output_dir}/dollar_bars_sweep_distributions.png"
-        plt.savefig(detail_path, dpi=150, bbox_inches="tight",
-                    facecolor="white", edgecolor="none")
+        plt.savefig(
+            detail_path,
+            dpi=150,
+            bbox_inches="tight",
+            facecolor="white",
+            edgecolor="none",
+        )
         print(f"✓ Detail distributions saved to {detail_path}")
         plt.close()
 
@@ -1449,7 +1561,8 @@ def run_step_bars(
     daily_target: int = 4,
     visualize: bool = True,
     visual_analysis_dir: str = "visual_analysis",
-    streaming: bool = False,
+    streaming: bool = True,
+    output_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Execute step: generate dollar bars.
 
@@ -1487,7 +1600,9 @@ def run_step_bars(
         "quantity": "volume",
         "amount": "volume",
     }
-    current_cols = df.collect_schema().names() if hasattr(df, 'collect_schema') else df.columns
+    current_cols = (
+        df.collect_schema().names() if hasattr(df, "collect_schema") else df.columns
+    )
     rename_cols = {
         k: v
         for k, v in rename_map.items()
@@ -1495,7 +1610,9 @@ def run_step_bars(
     }
     if rename_cols:
         df = df.rename(rename_cols)
-        current_cols = df.collect_schema().names() if hasattr(df, 'collect_schema') else df.columns
+        current_cols = (
+            df.collect_schema().names() if hasattr(df, "collect_schema") else df.columns
+        )
 
     # Backfill OHLC from close if missing
     if "close" in current_cols:
@@ -1538,7 +1655,7 @@ def run_step_bars(
         # For massive datasets: use chunked processing to avoid OOM
         # cum_sum() over 1.5B rows is not streamable — must process in chunks
         print("  Using chunked transform (memory-safe for large datasets)...")
-        dollar_bars = processor.transform_chunked(input_path, chunk_size=50_000_000)
+        dollar_bars = processor.transform_chunked(df, chunk_size=50_000_000)
     else:
         # For small datasets (CSV): standard lazy transform
         print("  Transforming to dollar bars...")
@@ -1551,7 +1668,8 @@ def run_step_bars(
     print(f"  Generated: {len(dollar_bars):,} bars")
 
     # Save
-    output_path = str(DATA_DIR / "dollar_bars_polars.parquet")
+    # Save
+    output_path = output_path or str(DATA_DIR / "dollar_bars_polars.parquet")
     dollar_bars.write_parquet(output_path)
     print(f"  Saved to: {output_path}")
 
@@ -1871,7 +1989,8 @@ def run_step_dispatcher(
             daily_target=args.daily_target,
             visualize=viz,
             visual_analysis_dir=viz_dir,
-            streaming=args.streaming,
+            streaming=not args.no_streaming,
+            output_path=args.output,
         )
 
     elif step == PipelineStep.LABELS or step_name == "labels":
@@ -1963,7 +2082,22 @@ def main():
 
     parser = argparse.ArgumentParser(
         description="AFML Quant Factory: High-performance Polars ML Pipeline",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # 1. Standard Run (End-to-End Pipeline)
+  uv run python src/afml_polars_pipeline.py data/BTCUSDT/parquet_db
+
+  # 2. Parameter Sweep (Optimize Dollar Bars for Normality)
+  uv run python src/afml_polars_pipeline.py --jb-sweep --jb-targets 4 10 20 50 --jb-data-dir data/BTCUSDT/parquet_db
+
+  # 3. Step-by-Step Execution (Modular)
+  uv run python src/afml_polars_pipeline.py --step bars --daily-target 10
+  uv run python src/afml_polars_pipeline.py --step labels --pt-sl 2.0 1.0 --vertical-barrier 20
+
+  # 4. Custom Parameters
+  uv run python src/afml_polars_pipeline.py data/BTCUSDT/parquet_db --daily-target 50 --veritcal-barrier 10 --no-visualize
+""",
     )
 
     # --- Data & Execution Groups ---
@@ -1972,7 +2106,7 @@ def main():
         "input",
         nargs="?",
         default="data/BTCUSDT/parquet_db",
-        help="Path to input (Parquet directory or file). Must contain Ticks or OHLCV."
+        help="Path to input (Parquet directory or file). Must contain Ticks or OHLCV.",
     )
     data_group.add_argument(
         "--step",
@@ -1990,18 +2124,24 @@ def main():
             "meta (Model Training/Pred), "
             "bet (Sizing), "
             "verify (DSR/Backtest)."
-        )
+        ),
     )
     data_group.add_argument(
         "--streaming",
         action="store_true",
-        help="Use streaming mode for huge datasets (reduces memory usage)."
+        default=True,
+        help="Use streaming mode for huge datasets (reduces memory usage). Default: enabled.",
+    )
+    data_group.add_argument(
+        "--no-streaming",
+        action="store_true",
+        help="Disable streaming mode (force batch processing for small datasets).",
     )
     data_group.add_argument(
         "--output",
         type=str,
         default=None,
-        help="Override default output path for the current step."
+        help="Override default output path for the current step.",
     )
 
     # --- Sampling (AFML Chapter 2) ---
@@ -2010,7 +2150,7 @@ def main():
         "--daily-target",
         type=int,
         default=4,
-        help="Target number of Dollar Bars per day. Adjust for sampling frequency."
+        help="Target number of Dollar Bars per day. Adjust for sampling frequency.",
     )
 
     # --- Labeling (AFML Chapter 3) ---
@@ -2020,13 +2160,13 @@ def main():
         nargs=2,
         type=float,
         default=[1.0, 1.0],
-        help="Profit Taking (PT) and Stop Loss (SL) multipliers. Multiplied by volatility."
+        help="Profit Taking (PT) and Stop Loss (SL) multipliers. Multiplied by volatility.",
     )
     label_group.add_argument(
         "--vertical-barrier",
         type=int,
         default=12,
-        help="Maximum holding period in number of bars (Vertical Barrier)."
+        help="Maximum holding period in number of bars (Vertical Barrier).",
     )
 
     # --- Features & Stationarity (AFML Chapter 5) ---
@@ -2036,18 +2176,18 @@ def main():
         nargs="+",
         type=int,
         default=[5, 10, 20, 30, 50],
-        help="Window sizes for technical indicators and rolling stats."
+        help="Window sizes for technical indicators and rolling stats.",
     )
     feat_group.add_argument(
         "--ffd-d",
         type=float,
         default=0.5,
-        help="Fractional Differentiation (FFD) coefficient (initial guess)."
+        help="Fractional Differentiation (FFD) coefficient (initial guess).",
     )
     feat_group.add_argument(
         "--no-auto-stationarity",
         action="store_true",
-        help="Use fixed --ffd-d; do not search for minimum d to achieve stationarity."
+        help="Use fixed --ffd-d; do not search for minimum d to achieve stationarity.",
     )
 
     # --- Weights & Cross-Validation (AFML Chapter 4 & 7) ---
@@ -2056,25 +2196,25 @@ def main():
         "--decay",
         type=float,
         default=0.9,
-        help="Time decay factor for sample weights. 1.0 = no decay."
+        help="Time decay factor for sample weights. 1.0 = no decay.",
     )
     cv_group.add_argument(
         "--n-splits",
         type=int,
         default=5,
-        help="Number of folds in Purged K-Fold Cross-Validation."
+        help="Number of folds in Purged K-Fold Cross-Validation.",
     )
     cv_group.add_argument(
         "--embargo",
         type=float,
         default=0.1,
-        help="Embargo period as a fraction of the dataset (prevents leakage)."
+        help="Embargo period as a fraction of the dataset (prevents leakage).",
     )
     cv_group.add_argument(
         "--dsr-threshold",
         type=float,
         default=0.95,
-        help="Threshold for Deflated Sharpe Ratio (DSR) to accept strategy."
+        help="Threshold for Deflated Sharpe Ratio (DSR) to accept strategy.",
     )
 
     # --- Visualization ---
@@ -2083,14 +2223,14 @@ def main():
         "--no-visualize",
         action="store_false",
         dest="visualize",
-        help="Disable automatic plot generation for all pipeline steps."
+        help="Disable automatic plot generation for all pipeline steps.",
     )
     parser.set_defaults(visualize=True)
     viz_group.add_argument(
         "--visual-analysis-dir",
         type=str,
         default="visual_analysis",
-        help="Directory to save PNG plots and analysis artifacts."
+        help="Directory to save PNG plots and analysis artifacts.",
     )
 
     # --- Optimization / Sweeps ---
@@ -2098,20 +2238,20 @@ def main():
     sweep_group.add_argument(
         "--jb-sweep",
         action="store_true",
-        help="Run Jarque-Bera normality sweep for --daily-target instead of pipeline."
+        help="Run Jarque-Bera normality sweep for --daily-target instead of pipeline.",
     )
     sweep_group.add_argument(
         "--jb-targets",
         nargs="+",
         type=int,
         default=[4, 20, 50, 60, 80, 100],
-        help="List of daily_target values to test during JB sweep."
+        help="List of daily_target values to test during JB sweep.",
     )
     sweep_group.add_argument(
         "--jb-data-dir",
         type=str,
         default="data/BTCUSDT/parquet_db",
-        help="Data source for the JB parameter sweep."
+        help="Data source for the JB parameter sweep.",
     )
 
     args = parser.parse_args()

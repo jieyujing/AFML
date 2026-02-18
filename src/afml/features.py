@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Union
 
 import polars as pl
-from polars import DataFrame, LazyFrame, Series
+from polars import DataFrame, LazyFrame
 
 from .base import ProcessorMixin
 
@@ -31,7 +31,10 @@ class FeatureEngineer(ProcessorMixin):
     Attributes:
         windows: Rolling window sizes for feature calculation
         ffd_d: Fractional differentiation parameter (default 0.5)
+        ffd_check_stationarity: Whether to check stationarity (default True)
         volatility_span: Span for volatility calculation
+        selected_features_: List of selected feature names after fitting
+        d_values_: Dictionary of d values for each feature
 
     Example:
         >>> engineer = FeatureEngineer(windows=[5, 10, 20, 30, 50])
@@ -41,7 +44,8 @@ class FeatureEngineer(ProcessorMixin):
     def __init__(
         self,
         windows: List[int] = None,
-        ffd_d: float = 0.5,
+        ffd_d: float = 0.4,
+        ffd_check_stationarity: bool = True,
         volatility_span: int = 100,
         *,
         lazy: bool = False,
@@ -52,15 +56,19 @@ class FeatureEngineer(ProcessorMixin):
         Args:
             windows: Rolling window sizes for feature calculation
             ffd_d: Fractional differentiation parameter (0 < d < 1)
+            ffd_check_stationarity: Whether to check stationarity
             volatility_span: Span for volatility calculation
             lazy: Whether to use lazy evaluation
         """
         super().__init__()
         self.windows = windows if windows is not None else [5, 10, 20, 30, 50]
         self.ffd_d = ffd_d
+        self.ffd_check_stationarity = ffd_check_stationarity
         self.volatility_span = volatility_span
         self.lazy = lazy
         self._metadata: Dict[str, Any] = {}
+        self.selected_features_: Optional[List[str]] = None
+        self.d_values_: Optional[Dict[str, float]] = None
 
     def fit(
         self,
@@ -127,6 +135,12 @@ class FeatureEngineer(ProcessorMixin):
         # FFD features
         result = self._add_ffd_features(result)
 
+        # Log-price FFD features
+        result = self._add_log_price_ffd_features(result)
+
+        # Cumulative volume FFD features
+        result = self._add_cum_volume_ffd_features(result)
+
         return result
 
     def _add_roc_features(
@@ -154,12 +168,14 @@ class FeatureEngineer(ProcessorMixin):
         # Batch all rolling expressions into a single with_columns call
         exprs = []
         for w in self.windows:
-            exprs.extend([
-                close.rolling_mean(window_size=w).alias(f"close_ma_{w}"),
-                close.rolling_std(window_size=w).alias(f"close_std_{w}"),
-                high.rolling_max(window_size=w).alias(f"high_max_{w}"),
-                low.rolling_min(window_size=w).alias(f"low_min_{w}"),
-            ])
+            exprs.extend(
+                [
+                    close.rolling_mean(window_size=w).alias(f"close_ma_{w}"),
+                    close.rolling_std(window_size=w).alias(f"close_std_{w}"),
+                    high.rolling_max(window_size=w).alias(f"high_max_{w}"),
+                    low.rolling_min(window_size=w).alias(f"low_min_{w}"),
+                ]
+            )
 
         if exprs:
             df = df.with_columns(exprs)
@@ -243,13 +259,50 @@ class FeatureEngineer(ProcessorMixin):
         df = df.with_columns(ffd_vol.alias("ffd_volatility"))
 
         # FFD slope - using simple diff as proxy for now
+        df = df.with_columns((ffd_close - ffd_close.shift(20)).alias("ffd_slope"))
+
+        return df
+
+    def _add_log_price_ffd_features(
+        self,
+        df: Union[DataFrame, LazyFrame],
+    ) -> Union[DataFrame, LazyFrame]:
+        if self.ffd_d <= 0 or self.ffd_d >= 1:
+            return df
+
+        close = pl.col("close")
+        open_col = pl.col("open")
+        high = pl.col("high")
+        low = pl.col("low")
+
         df = df.with_columns(
-            (ffd_close - ffd_close.shift(20)).alias("ffd_slope")
+            self._frac_diff(close.log(), self.ffd_d).alias("log_close_ffd"),
+            self._frac_diff(open_col.log(), self.ffd_d).alias("log_open_ffd"),
+            self._frac_diff(high.log(), self.ffd_d).alias("log_high_ffd"),
+            self._frac_diff(low.log(), self.ffd_d).alias("log_low_ffd"),
         )
 
         return df
 
-    def _get_ffd_weights(self, d: float, threshold: float = 1e-4, size: int = 1000) -> List[float]:
+    def _add_cum_volume_ffd_features(
+        self,
+        df: Union[DataFrame, LazyFrame],
+    ) -> Union[DataFrame, LazyFrame]:
+        if self.ffd_d <= 0 or self.ffd_d >= 1:
+            return df
+
+        volume = pl.col("volume")
+        cum_volume = volume.cum_sum()
+
+        df = df.with_columns(
+            self._frac_diff(cum_volume, self.ffd_d).alias("cum_volume_ffd"),
+        )
+
+        return df
+
+    def _get_ffd_weights(
+        self, d: float, threshold: float = 1e-4, size: int = 1000
+    ) -> List[float]:
         """Generate weights for fractional differentiation."""
         w = [1.0]
         k = 1
@@ -271,12 +324,12 @@ class FeatureEngineer(ProcessorMixin):
         Compute fractional differentiation (FFD) using fixed window.
         """
         weights = self._get_ffd_weights(d, threshold)
-        
+
         # Apply weights using fold
         res = series * weights[0]
         for k, w in enumerate(weights[1:], 1):
             res = res + series.shift(k) * w
-            
+
         return res
 
     def fit_transform(
@@ -311,3 +364,14 @@ class FeatureEngineer(ProcessorMixin):
             "lazy": self.lazy,
             "metadata": self._metadata,
         }
+
+    def get_feature_names(self) -> List[str]:
+        """
+        Get list of feature names.
+
+        Returns:
+            List of feature column names
+        """
+        if self.selected_features_ is not None:
+            return self.selected_features_
+        return list(self._metadata.get("columns", []))

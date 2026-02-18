@@ -32,6 +32,7 @@ class MetaLabelingPipeline:
         meta_model: sklearn-compatible model for meta-labeling
         primary_params: Parameters for primary model
         meta_params: Parameters for meta model
+        n_splits: Number of cross-validation splits (default 5)
 
     Example:
         >>> pipeline = MetaLabelingPipeline()
@@ -45,6 +46,8 @@ class MetaLabelingPipeline:
         meta_model: str = "logistic",
         primary_params: Optional[Dict] = None,
         meta_params: Optional[Dict] = None,
+        n_splits: int = 5,
+        embargo: float = 0.01,
         *,
         random_state: int = 42,
     ):
@@ -56,10 +59,16 @@ class MetaLabelingPipeline:
             meta_model: Type of meta model ('random_forest', 'lr')
             primary_params: Parameters for primary model
             meta_params: Parameters for meta model
+            n_splits: Number of cross-validation splits
+            embargo: Embargo proportion
             random_state: Random seed
         """
         self.primary_model = primary_model
         self.meta_model = meta_model
+        self.n_splits = n_splits
+        self.embargo = embargo
+        self.cv_ = None
+        self.primary_probs_ = None
         self.primary_params = primary_params or {
             "n_estimators": 100,
             "max_depth": 5,
@@ -115,7 +124,7 @@ class MetaLabelingPipeline:
 
         # 1. Fit primary model
         self._primary_clf.fit(X_array, y, sample_weight=sample_weight)
-        
+
         # 2. Get primary predictions and confidence
         primary_pred = self._primary_clf.predict(X_array)
         primary_proba_all = self._primary_clf.predict_proba(X_array)

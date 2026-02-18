@@ -8,23 +8,41 @@ def load_zip_as_df(f_zip: Path) -> pl.DataFrame:
     with zipfile.ZipFile(f_zip, "r") as z:
         with z.open(z.namelist()[0]) as f:
             df = pl.read_csv(f.read())
-            
+
             # Select requests fields with correct types
-            df = df.select([
-                pl.col("agg_trade_id").cast(pl.Int64),
-                pl.col("price").cast(pl.Float64),
-                pl.col("quantity").cast(pl.Float64),
-                pl.col("first_trade_id").cast(pl.Int64),
-                pl.col("last_trade_id").cast(pl.Int64),
-                pl.col("transact_time").cast(pl.Int64),
-                pl.col("is_buyer_maker").cast(pl.Boolean),
-            ])
+            df = df.select(
+                [
+                    pl.col("agg_trade_id").cast(pl.Int64),
+                    pl.col("price").cast(pl.Float64),
+                    pl.col("quantity").cast(pl.Float64),
+                    pl.col("first_trade_id").cast(pl.Int64),
+                    pl.col("last_trade_id").cast(pl.Int64),
+                    pl.col("transact_time").cast(pl.Int64),
+                    pl.col("is_buyer_maker").cast(pl.Boolean),
+                ]
+            )
 
             # Add timestamp and amount columns
-            df = df.with_columns([
-                pl.col("transact_time").cast(pl.Datetime("ms")).alias("timestamp"),
-                (pl.col("price") * pl.col("quantity")).alias("amount")
-            ])
+            df = df.with_columns(
+                [
+                    pl.col("transact_time").cast(pl.Datetime("ms")).alias("timestamp"),
+                    (pl.col("price") * pl.col("quantity")).alias("amount"),
+                ]
+            )
+
+            # Sort by timestamp for cumulative calculation
+            df = df.sort("timestamp")
+
+            # Compute cumulative money flow
+            # is_buyer_maker=False -> buyer initiated -> +amount (inflow)
+            # is_buyer_maker=True -> seller initiated -> -amount (outflow)
+            signed_amount = (
+                pl.when(pl.col("is_buyer_maker") == False)
+                .then(pl.col("amount"))
+                .otherwise(-pl.col("amount"))
+            )
+
+            df = df.with_columns([signed_amount.cum_sum().alias("cum_money_flow")])
 
     return df
 
@@ -92,7 +110,8 @@ if __name__ == "__main__":
         )
     else:
         merge_to_monthly_parquet("data/BTCUSDT/aggTrades", "data/BTCUSDT/parquet_db")
-    
+
     print("\nRunning data continuity check...")
     from check_data_continuity import visualize_continuity
+
     visualize_continuity("data/BTCUSDT/parquet_db")
