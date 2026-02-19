@@ -1,6 +1,6 @@
 # AGENTS Instructions
 
-This document provides essential guidance for AI coding agents working in the FinMLKit repository.
+This document provides essential guidance for AI coding agents working in the AFMLKit repository.
 
 ---
 
@@ -20,7 +20,7 @@ pip install -e .[dev]
 NUMBA_DISABLE_JIT=1 pytest -q
 
 # Run full test suite with coverage
-NUMBA_DISABLE_JIT=1 pytest tests/ --cov=finmlkit --cov-report=xml --cov-report=term -v
+NUMBA_DISABLE_JIT=1 pytest tests/ --cov=afmlkit --cov-report=xml --cov-report=term -v
 
 # Run a SINGLE test file
 pytest tests/bars/test_comp_ohlcv.py -v
@@ -40,13 +40,13 @@ pytest tests/features/ -v
 
 ```bash
 # Flake8 linting
-flake8 finmlkit/
+flake8 afmlkit/
 
 # Black formatting (check)
-black --check finmlkit/
+black --check afmlkit/
 
 # Black formatting (apply)
-black finmlkit/
+black afmlkit/
 ```
 
 ---
@@ -72,7 +72,7 @@ black finmlkit/
 ```python
 import os
 os.environ['NUMBA_DISABLE_JIT'] = "1"  # Must be before any numba imports
-from finmlkit.bar.base import comp_bar_ohlcv
+from afmlkit.bar.base import comp_bar_ohlcv
 ```
 
 **IMPORTANT**: Remove/comment out JIT-disabling code before committing.
@@ -109,7 +109,7 @@ from numpy.typing import NDArray
 
 # Local imports
 from .data_model import TradesData
-from finmlkit.utils.log import get_logger
+from afmlkit.utils.log import get_logger
 ```
 
 ### Type Hints
@@ -213,7 +213,7 @@ class BarBuilderBase(ABC):
         ValueError: If required columns are missing from trades data.
 
     See Also:
-        :class:`finmlkit.bar.kit.TimeBarKit`: Concrete subclass for time bars.
+        :class:`afmlkit.bar.kit.TimeBarKit`: Concrete subclass for time bars.
     """
 ```
 
@@ -256,7 +256,7 @@ def _numba_implementation(prices, volumes):
 ## Project Structure
 
 ```
-finmlkit/
+afmlkit/
 ├── bar/           # Bar construction (time, tick, volume, dollar bars)
 │   ├── base.py    # Core bar building functions and BarBuilderBase
 │   ├── logic.py   # Bar indexer functions (Numba-accelerated)
@@ -300,7 +300,7 @@ tests/
 ### Logger Usage
 
 ```python
-from finmlkit.utils.log import get_logger
+from afmlkit.utils.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -333,6 +333,6 @@ Or fallback to: `git ls-files | xargs grep -n`
 ## References
 
 - Primary methodology source: **Advances in Financial Machine Learning** by Marcos López de Prado
-- Documentation: [finmlkit.readthedocs.io](https://finmlkit.readthedocs.io)
+- Documentation: [afmlkit.readthedocs.io](https://afmlkit.readthedocs.io)
 - Detailed testing guide: [tests/README.md](tests/README.md)
 - Contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)

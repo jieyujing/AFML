@@ -1,8 +1,8 @@
 import pytest
 import pandas as pd
 import numpy as np
-from finmlkit.feature.kit import Feature
-from finmlkit.feature.transforms import Identity
+from afmlkit.feature.kit import Feature
+from afmlkit.feature.transforms import Identity
 
 
 def generate_test_df():

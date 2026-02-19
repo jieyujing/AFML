@@ -6,8 +6,8 @@ import pandas as pd
 import pytest
 from datetime import datetime, timedelta
 
-from finmlkit.feature.core.volume import vpin
-from finmlkit.feature.transforms import VPIN
+from afmlkit.feature.core.volume import vpin
+from afmlkit.feature.transforms import VPIN
 
 
 def test_vpin_basic():

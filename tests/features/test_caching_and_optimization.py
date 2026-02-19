@@ -2,9 +2,9 @@ import pandas as pd
 import numpy as np
 import pytest
 
-from finmlkit.feature.base import BinaryOpTransform
-from finmlkit.feature.kit import Compose
-from finmlkit.feature.transforms import SMA, EWMA
+from afmlkit.feature.base import BinaryOpTransform
+from afmlkit.feature.kit import Compose
+from afmlkit.feature.transforms import SMA, EWMA
 
 
 def make_df(n=64):

@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from finmlkit.bar.data_model import TradesData
-from finmlkit.bar.io import H5Inspector, TimeBarReader
+from afmlkit.bar.data_model import TradesData
+from afmlkit.bar.io import H5Inspector, TimeBarReader
 
 
 def _build_trades_h5(path: str) -> str:

@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from finmlkit.bar.data_model import TradesData
-from finmlkit.label.kit import TBMLabel, SampleWeights
+from afmlkit.bar.data_model import TradesData
+from afmlkit.label.kit import TBMLabel, SampleWeights
 
 
 def sample_trades():

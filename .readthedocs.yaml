@@ -7,8 +7,8 @@ build:
   jobs:
     pre_build:
       # Fail fast on syntax errors, then generate API stubs and show what's created
-      - python -m compileall finmlkit
-      - sphinx-apidoc -o docs/source/api finmlkit -f -e --module-first
+      - python -m compileall afmlkit
+      - sphinx-apidoc -o docs/source/api afmlkit -f -e --module-first
       - ls -la docs/source/api
 
 sphinx:

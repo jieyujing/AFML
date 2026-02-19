@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from finmlkit.feature.base import SISOTransform
-from finmlkit.feature.kit import Feature, Compose, FeatureKit
+from afmlkit.feature.base import SISOTransform
+from afmlkit.feature.kit import Feature, Compose, FeatureKit
 
 
 class AddOneTransform(SISOTransform):

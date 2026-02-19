@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import pytest
 
-from finmlkit.bar.data_model import TradesData
+from afmlkit.bar.data_model import TradesData
 
 
 def _make_sample_trades(n=10, start_ts="2021-01-01 00:00:00", freq="h"):

@@ -7,10 +7,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-# Add parent directory to path to import finmlkit modules
+# Add parent directory to path to import afmlkit modules
 #sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from finmlkit.feature.core.trend import adx_core
+from afmlkit.feature.core.trend import adx_core
 
 def test_adx_basic():
     """Basic test to verify ADX calculation gives expected results."""

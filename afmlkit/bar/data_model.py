@@ -9,8 +9,8 @@ import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import sys
 
-from finmlkit.bar.utils import footprint_to_dataframe
-from finmlkit.utils.log import get_logger
+from afmlkit.bar.utils import footprint_to_dataframe
+from afmlkit.utils.log import get_logger
 from .utils import comp_trade_side_vector, merge_split_trades
 import os
 
@@ -84,7 +84,7 @@ class TradesData:
 
         >>> import numpy as np
         >>> import pandas as pd
-        >>> from finmlkit.bar.data_model import TradesData
+        >>> from afmlkit.bar.data_model import TradesData
         >>> # Raw trades data
         >>> timestamps = np.array([1609459200000, 1609459201000, 1609459202000])  # ms
         >>> prices = np.array([100.0, 100.5, 99.8])
@@ -109,23 +109,30 @@ class TradesData:
         >>> subset = trades.data  # Only data in view range
 
     See Also:
-        :class:`finmlkit.bar.base.BarBuilderBase`: Uses TradesData for constructing various bar types.
-        :func:`finmlkit.bar.utils.merge_split_trades`: Core function for trade aggregation.
-        :func:`finmlkit.bar.utils.comp_trade_side_vector`: Trade side inference algorithm.
+        :class:`afmlkit.bar.base.BarBuilderBase`: Uses TradesData for constructing various bar types.
+        :func:`afmlkit.bar.utils.merge_split_trades`: Core function for trade aggregation.
+        :func:`afmlkit.bar.utils.comp_trade_side_vector`: Trade side inference algorithm.
 
     References:
         .. _`HDF5 for High-Frequency Trading`: https://www.hdfgroup.org/
         .. _`Market Microstructure in Practice`: https://www.cambridge.org/core/books/market-microstructure-in-practice/
     """
 
-    def __init__(self,
-                 ts: NDArray, px: NDArray, qty: NDArray, id: NDArray = None, *,
-                 is_buyer_maker: NDArray = None,
-                 side = None,
-                 dt_index: Optional[pd.DatetimeIndex] = None,
-                 timestamp_unit: Optional[str] = None,
-                 preprocess: bool = False,
-                 proc_res: Optional[str] = None, name= None):
+    def __init__(
+        self,
+        ts: NDArray,
+        px: NDArray,
+        qty: NDArray,
+        id: NDArray = None,
+        *,
+        is_buyer_maker: NDArray = None,
+        side=None,
+        dt_index: Optional[pd.DatetimeIndex] = None,
+        timestamp_unit: Optional[str] = None,
+        preprocess: bool = False,
+        proc_res: Optional[str] = None,
+        name=None,
+    ):
         """
         Initialize the TradesData with raw trades data.
 
@@ -158,13 +165,18 @@ class TradesData:
 
         self._start_date = self._end_date = None
 
-
-        self._data = pd.DataFrame({'timestamp': ts, 'price': px, 'amount': qty, 'id': id})
+        self._data = pd.DataFrame(
+            {"timestamp": ts, "price": px, "amount": qty, "id": id}
+        )
 
         self.is_buyer_maker = is_buyer_maker
+        if is_buyer_maker is not None:
+            self._data["is_buyer_maker"] = is_buyer_maker
         if side is not None:
-            self._data['side'] = side
-        self._orig_timestamp_unit = timestamp_unit if timestamp_unit else self._infer_timestamp_unit()
+            self._data["side"] = side
+        self._orig_timestamp_unit = (
+            timestamp_unit if timestamp_unit else self._infer_timestamp_unit()
+        )
         self.name = name
 
         # Process the trades data
@@ -186,10 +198,11 @@ class TradesData:
         if dt_index is not None:
             self._data.set_index(dt_index, inplace=True)
         else:
-            self._data.set_index(pd.to_datetime(self._data['timestamp'], unit='ns'), inplace=True)
+            self._data.set_index(
+                pd.to_datetime(self._data["timestamp"], unit="ns"), inplace=True
+            )
             self._data.index.name = "datetime"
             logger.info("TradesData prepared successfully.")
-
 
     @property
     def start_date(self):
@@ -209,7 +222,7 @@ class TradesData:
         """
         return self._end_date
 
-    def set_view_range(self, start: pd.Timestamp|str, end: pd.Timestamp|str):
+    def set_view_range(self, start: pd.Timestamp | str, end: pd.Timestamp | str):
         r"""Set the active view range for data access, enabling efficient time-slice analysis.
 
         :param start: Start timestamp for the view range. Accepts string or pd.Timestamp.
@@ -240,7 +253,7 @@ class TradesData:
         if self._start_date is None and self._end_date is None:
             return self._data
 
-        return self._data.loc[self._start_date: self._end_date]
+        return self._data.loc[self._start_date : self._end_date]
 
     @property
     def orig_timestamp_unit(self) -> str:
@@ -256,39 +269,49 @@ class TradesData:
         Check for gaps in trade IDs
         """
         # First convert to numeric to handle potential string IDs
-        id_diffs = np.diff(self.data['id'].values)
+        id_diffs = np.diff(self.data["id"].values)
         gap_indices = np.where(id_diffs > 1)[0]
         cum_gap_size = 0
         if len(gap_indices) > 0:
-            logger.warning(f"{self.name} | Found {len(gap_indices):,} discontinuities in trade IDs. "
-                           f"This indicates missing trades.")
+            logger.warning(
+                f"{self.name} | Found {len(gap_indices):,} discontinuities in trade IDs. "
+                f"This indicates missing trades."
+            )
             # Record detailed information about each discontinuity
             n_large_gaps = 0
             for idx in gap_indices:
-                gap_start_id = int(self.data['id'].iloc[idx])
-                gap_end_id = int(self.data['id'].iloc[idx + 1])
+                gap_start_id = int(self.data["id"].iloc[idx])
+                gap_end_id = int(self.data["id"].iloc[idx + 1])
                 gap_size = gap_end_id - gap_start_id - 1
                 cum_gap_size += gap_size
 
                 # Get timestamps for the trades before and after the gap
-                pre_gap_time = pd.to_datetime(self.data['timestamp'].iloc[idx], unit='ns')
-                post_gap_time = pd.to_datetime(self.data['timestamp'].iloc[idx + 1], unit='ns')
+                pre_gap_time = pd.to_datetime(
+                    self.data["timestamp"].iloc[idx], unit="ns"
+                )
+                post_gap_time = pd.to_datetime(
+                    self.data["timestamp"].iloc[idx + 1], unit="ns"
+                )
                 time_diff = post_gap_time - pre_gap_time
 
                 # Record the discontinuity if gap is greater than 1 min
                 if time_diff > pd.Timedelta(minutes=1):
                     self.data_ok = False
                     n_large_gaps += 1
-                    self.discontinuities.append({
-                        'start_id': gap_start_id,
-                        'end_id': gap_end_id,
-                        'missing_ids': gap_size,
-                        'pre_gap_time': pre_gap_time,
-                        'post_gap_time': post_gap_time,
-                        'time_interval': time_diff
-                    })
+                    self.discontinuities.append(
+                        {
+                            "start_id": gap_start_id,
+                            "end_id": gap_end_id,
+                            "missing_ids": gap_size,
+                            "pre_gap_time": pre_gap_time,
+                            "post_gap_time": post_gap_time,
+                            "time_interval": time_diff,
+                        }
+                    )
             if n_large_gaps > 0:
-                logger.warning(f"{self.name} | Found {n_large_gaps} large gaps greater than 1 minute.")
+                logger.warning(
+                    f"{self.name} | Found {n_large_gaps} large gaps greater than 1 minute."
+                )
             self.missing_pct = cum_gap_size / len(self.data) * 100
 
     def _sort_trades(self) -> None:
@@ -300,15 +323,17 @@ class TradesData:
         self.discontinuities = []  # Reset discontinuities list
 
         # Sort by ID to inspect data integrity
-        self.data.sort_values(by=['id'], inplace=True)
+        self.data.sort_values(by=["id"], inplace=True)
         # Reset index
         self.data.reset_index(drop=True, inplace=True)
 
         # Check duplicates in trade IDs
-        if self.data['id'].duplicated().any():
-            logger.warning(f"{self.name} | Trade IDs contain duplicates. This may indicate data corruption.")
+        if self.data["id"].duplicated().any():
+            logger.warning(
+                f"{self.name} | Trade IDs contain duplicates. This may indicate data corruption."
+            )
             # Drop duplicates while keeping the first occurrence
-            self.data.drop_duplicates(subset='id', keep='first', inplace=True)
+            self.data.drop_duplicates(subset="id", keep="first", inplace=True)
             logger.info("Duplicates in trade IDs have been removed.")
             self.data_ok = False
 
@@ -316,9 +341,11 @@ class TradesData:
 
         # Now sort by timestamp for chronological order if needed
         if not self.data.timestamp.is_monotonic_increasing:
-            logger.warning(f"{self.name} | Trades timestamps are not monotonic increasing after sorting by trade IDs. "
-                         f"Sorting by timestamp for chronological order...")
-            self.data.sort_values(by=['timestamp', 'id'], inplace=True)
+            logger.warning(
+                f"{self.name} | Trades timestamps are not monotonic increasing after sorting by trade IDs. "
+                f"Sorting by timestamp for chronological order..."
+            )
+            self.data.sort_values(by=["timestamp", "id"], inplace=True)
 
         # Reset index
         self.data.reset_index(drop=True, inplace=True)
@@ -327,21 +354,17 @@ class TradesData:
         """
         Merge trades that occur at the same timestamp and price level.
         """
-        logger.info('Merging split trades (same timestamps) on same price level...')
+        logger.info("Merging split trades (same timestamps) on same price level...")
 
         ts, px, am, side = merge_split_trades(
-            self.data['timestamp'].values.astype(np.int64),
-            self.data['price'].values.astype(np.float64),
-            self.data['amount'].values.astype(np.float32),
+            self.data["timestamp"].values.astype(np.int64),
+            self.data["price"].values.astype(np.float64),
+            self.data["amount"].values.astype(np.float32),
             self.is_buyer_maker,
         )
-        self._data = pd.DataFrame({
-            'timestamp': ts,
-            'price': px,
-            'amount': am
-        })
+        self._data = pd.DataFrame({"timestamp": ts, "price": px, "amount": am})
         if self.is_buyer_maker is not None:
-            self._data['side'] = side
+            self._data["side"] = side
 
     def _convert_timestamps_to_ns(self):
         """
@@ -349,23 +372,22 @@ class TradesData:
         :raises ValueError: If timestamp format is invalid.
         """
         # Infer or validate timestamp unit
-        valid_units = ['s', 'ms', 'us', 'ns']
+        valid_units = ["s", "ms", "us", "ns"]
         if self.orig_timestamp_unit not in valid_units:
-            raise ValueError(f"Invalid timestamp format! Must be one of: {', '.join(valid_units)}")
+            raise ValueError(
+                f"Invalid timestamp format! Must be one of: {', '.join(valid_units)}"
+            )
 
-        unit_scale_factor = {
-            's': 1_000_000_000,
-            'ms': 1_000_000,
-            'us': 1_000,
-            'ns': 1
-        }
+        unit_scale_factor = {"s": 1_000_000_000, "ms": 1_000_000, "us": 1_000, "ns": 1}
 
         # Convert timestamp to nanoseconds
-        logger.info('Converting timestamp to nanoseconds units for processing...')
+        logger.info("Converting timestamp to nanoseconds units for processing...")
         # trades.timestamp = pd.to_datetime(trades.timestamp, unit=timestamp_unit).astype(np.int64).values
         # Work directly on the underlying NumPy array for better performance
         factor = unit_scale_factor[self.orig_timestamp_unit]
-        self._data['timestamp'].values[:] = np.multiply(self.data['timestamp'].values, factor, dtype=np.int64)
+        self._data["timestamp"].values[:] = np.multiply(
+            self.data["timestamp"].values, factor, dtype=np.int64
+        )
 
     def _apply_timestamp_resolution(self, proc_res: Optional[str]) -> None:
         """
@@ -375,13 +397,16 @@ class TradesData:
         :raises ValueError: If processing resolution is invalid.
         """
         if proc_res and proc_res != self.orig_timestamp_unit:
-            logger.info(f"Processing resolution: {proc_res} -> converting timestamps...")
+            logger.info(
+                f"Processing resolution: {proc_res} -> converting timestamps..."
+            )
 
             # Convert proc_res to nanoseconds scale factor
-            scale_factors = {'s': 1_000_000_000, 'ms': 1_000_000, 'us': 1_000, 'ns': 1}
+            scale_factors = {"s": 1_000_000_000, "ms": 1_000_000, "us": 1_000, "ns": 1}
             if proc_res not in scale_factors:
                 raise ValueError(
-                    f"Invalid processing resolution: {proc_res}. Must be one of: {', '.join(scale_factors.keys())}")
+                    f"Invalid processing resolution: {proc_res}. Must be one of: {', '.join(scale_factors.keys())}"
+                )
 
             # Round timestamps to the specified resolution
             resolution_ns = scale_factors[proc_res]
@@ -393,24 +418,26 @@ class TradesData:
 
         :returns: None - modifies the trades DataFrame in place to include a 'side' column.
         """
-        logger.info("No trade side information found. Inferring trade side from price movements.")
-        self._data['side'] = comp_trade_side_vector(self.data['price'].values)
+        logger.info(
+            "No trade side information found. Inferring trade side from price movements."
+        )
+        self._data["side"] = comp_trade_side_vector(self.data["price"].values)
 
     def _infer_timestamp_unit(self) -> str:
         """
         Infer the unit of timestamps in the trades data if not explicitly provided.
         :return: Inferred or provided timestamp unit.
         """
-        max_ts = self.data['timestamp'].max()
+        max_ts = self.data["timestamp"].max()
 
         if max_ts > 1e18:  # Likely in nanoseconds
-            timestamp_unit = 'ns'
+            timestamp_unit = "ns"
         elif max_ts > 1e15:  # Likely in microseconds
-            timestamp_unit = 'us'
+            timestamp_unit = "us"
         elif max_ts > 1e12:  # Likely in milliseconds
-            timestamp_unit = 'ms'
+            timestamp_unit = "ms"
         else:  # Likely in seconds
-            timestamp_unit = 's'
+            timestamp_unit = "s"
             logger.warning("Timestamp unit is set to seconds. Please verify the data.")
 
         logger.info(f"Inferred timestamp format: {timestamp_unit}")
@@ -418,15 +445,15 @@ class TradesData:
         return timestamp_unit
 
     def save_h5(
-            self,
-            filepath: str,
-            *,
-            month_key: Optional[str] = None,
-            complib: str = "blosc:lz4",
-            complevel: int = 1,
-            mode: str = "a",
-            chunksize: int = 1_000_000,
-            overwrite_month: bool = True,
+        self,
+        filepath: str,
+        *,
+        month_key: Optional[str] = None,
+        complib: str = "blosc:lz4",
+        complevel: int = 1,
+        mode: str = "a",
+        chunksize: int = 1_000_000,
+        overwrite_month: bool = True,
     ) -> str:
         r"""Persist trades data to HDF5 format with monthly partitioning and compression.
 
@@ -469,10 +496,10 @@ class TradesData:
         #  Write / append to the store
         # ------------------------------------------------------------------
         with pd.HDFStore(
-                filepath,
-                mode=mode,
-                complib=complib,
-                complevel=complevel,
+            filepath,
+            mode=mode,
+            complib=complib,
+            complevel=complevel,
         ) as store:
             # Check if month data already exists
             month_exists = h5_key in store
@@ -480,18 +507,22 @@ class TradesData:
 
             if month_exists and overwrite_month:
                 # Prompt user for confirmation
-                #record_count = store.get_storer(h5_key).nrows
-                #user_input = input(
+                # record_count = store.get_storer(h5_key).nrows
+                # user_input = input(
                 #    f"WARNING: Data for {month_key} already exists with {record_count:,} records.\n"
                 #    f"Do you want to overwrite it? [y/N]: "
-                #).lower()
-                #should_overwrite = user_input in ('y', 'yes')
+                # ).lower()
+                # should_overwrite = user_input in ('y', 'yes')
 
                 should_overwrite = True
                 if not should_overwrite:
-                    user_input = input("Do you want to append to existing data instead? [Y/n]: ").lower()
-                    if user_input in ('n', 'no'):
-                        logger.info(f"Operation cancelled by user. No changes made to {month_key} data.")
+                    user_input = input(
+                        "Do you want to append to existing data instead? [Y/n]: "
+                    ).lower()
+                    if user_input in ("n", "no"):
+                        logger.info(
+                            f"Operation cancelled by user. No changes made to {month_key} data."
+                        )
                         return h5_key
 
             # Handle data writing
@@ -535,12 +566,15 @@ class TradesData:
             # ------------------------------------------------------------------
             meta = pd.Series(
                 {
-                    "record_count": len(frame) if should_overwrite else (
-                        store.get_storer(h5_key).nrows if month_exists else len(frame)),
+                    "record_count": len(frame)
+                    if should_overwrite
+                    else (
+                        store.get_storer(h5_key).nrows if month_exists else len(frame)
+                    ),
                     "first_timestamp": int(frame["timestamp"].iloc[0]),
                     "last_timestamp": int(frame["timestamp"].iloc[-1]),
                     "data_integrity_ok": self.data_ok,  # Add integrity flag to main metadata
-                    "missing_pct": self.missing_pct     # Add count of discontinuities
+                    "missing_pct": self.missing_pct,  # Add count of discontinuities
                 }
             )
             store.put(meta_key, meta, format="fixed")
@@ -554,12 +588,12 @@ class TradesData:
                 for disc in self.discontinuities:
                     # Convert pandas Timestamp and Timedelta objects to strings to ensure serialization works
                     disc_dict = {
-                        'start_id': disc['start_id'],
-                        'end_id': disc['end_id'],
-                        'missing_ids': disc['missing_ids'],
-                        'pre_gap_time_str': str(disc['pre_gap_time']),
-                        'post_gap_time_str': str(disc['post_gap_time']),
-                        'time_interval_str': str(disc['time_interval'])
+                        "start_id": disc["start_id"],
+                        "end_id": disc["end_id"],
+                        "missing_ids": disc["missing_ids"],
+                        "pre_gap_time_str": str(disc["pre_gap_time"]),
+                        "post_gap_time_str": str(disc["post_gap_time"]),
+                        "time_interval_str": str(disc["time_interval"]),
                     }
                     discontinuity_data.append(disc_dict)
 
@@ -567,7 +601,9 @@ class TradesData:
                 if discontinuity_data:
                     disc_df = pd.DataFrame(discontinuity_data)
                     store.put(integrity_key, disc_df, format="table")
-                    logger.info(f"Saved {len(disc_df)} trade ID discontinuities to metadata.")
+                    logger.info(
+                        f"Saved {len(disc_df)} trade ID discontinuities to metadata."
+                    )
 
             logger.info(f"Successfully saved {len(frame):,} records for {month_key}")
 
@@ -578,7 +614,10 @@ class TradesData:
     # ------------------------------------------------------------------
     @classmethod
     def _keys_for_timerange(
-        cls, store: pd.HDFStore, start: Optional[pd.Timestamp], end: Optional[pd.Timestamp]
+        cls,
+        store: pd.HDFStore,
+        start: Optional[pd.Timestamp],
+        end: Optional[pd.Timestamp],
     ) -> list[str]:
         """Internal helper – determine which monthly groups intersect the
         *[start, end]* interval by consulting the per‑group metadata.
@@ -653,7 +692,7 @@ class TradesData:
 
         # First, determine which keys we need to load
         with pd.HDFStore(filepath, mode="r") as store:
-            available_keys = [k for k in store.keys() if k.startswith('/trades/')]
+            available_keys = [k for k in store.keys() if k.startswith("/trades/")]
 
             # Determine which groups to read -----------------------------------------------------
             if key is not None:
@@ -672,8 +711,7 @@ class TradesData:
         #  Decide whether to use multiprocessing
         # ------------------------------------------------------------------
         use_multiprocessing = (
-            enable_multiprocessing and
-            len(h5_keys) >= min_groups_for_mp
+            enable_multiprocessing and len(h5_keys) >= min_groups_for_mp
         )
 
         # Prepare where clause for time filtering
@@ -687,7 +725,9 @@ class TradesData:
         frames: list[pd.DataFrame] = []
 
         if use_multiprocessing:
-            logger.info(f"Loading {len(h5_keys)} groups using multiprocessing with {n_workers or mp.cpu_count() - 1} workers...")
+            logger.info(
+                f"Loading {len(h5_keys)} groups using multiprocessing with {n_workers or mp.cpu_count() - 1} workers..."
+            )
 
             # Prepare arguments for worker processes
             worker_args = [(filepath, h5_key, where) for h5_key in h5_keys]
@@ -724,11 +764,15 @@ class TradesData:
                 # Add results to frames in the same order as h5_keys to maintain chronology
                 for h5_key in h5_keys:
                     if h5_key in results_by_key:
-                        logger.info(f"Appending {h5_key} to the frame list for concatanation.")
+                        logger.info(
+                            f"Appending {h5_key} to the frame list for concatanation."
+                        )
                         frames.append(results_by_key[h5_key])
 
             except Exception as e:
-                logger.warning(f"Multiprocessing failed ({str(e)}), falling back to sequential loading...")
+                logger.warning(
+                    f"Multiprocessing failed ({str(e)}), falling back to sequential loading..."
+                )
                 use_multiprocessing = False
 
         # Sequential loading (fallback or when multiprocessing is disabled)
@@ -763,13 +807,27 @@ class TradesData:
             logger.info("Sorting DataFrame by datetime index after concatenation...")
             df.sort_index(inplace=True)
 
-        logger.info(f"Successfully loaded {len(df):,} trades from {len(frames)} monthly groups.")
+        logger.info(
+            f"Successfully loaded {len(df):,} trades from {len(frames)} monthly groups."
+        )
 
         side = df["side"] if "side" in df.columns else None
         side_values = side.values if side is not None else None
 
-        return cls(df["timestamp"].values, df["price"].values, df["amount"].values,
-                   side=side_values, dt_index=df.index)
+        id_values = df["id"].values if "id" in df.columns else None
+        is_buyer_maker_values = (
+            df["is_buyer_maker"].values if "is_buyer_maker" in df.columns else None
+        )
+
+        return cls(
+            df["timestamp"].values,
+            df["price"].values,
+            df["amount"].values,
+            id=id_values,
+            is_buyer_maker=is_buyer_maker_values,
+            side=side_values,
+            dt_index=df.index,
+        )
 
 
 @dataclass
@@ -793,32 +851,49 @@ class FootprintData:
     :param vp_skew: Optional volume profile skew for each bar (positive = buy pressure above VWAP).
     :param vp_gini: Optional volume profile Gini coefficient for each bar (0 = concentrated, →1 = even).
     """
+
     # Data attributes
     bar_timestamps: NDArray[np.int64]  # 1D int64 array
     price_tick: float  # Price tick size (float)
-    price_levels: Union[NDArray[NDArray[np.int32]], NumbaList[NDArray[np.int32]]]     # Array of 1D int32 arrays (price levels in price tick units)
-    buy_volumes: Union[NDArray[NDArray[np.float32]], NumbaList[NDArray[np.float32]]]  # Array of 1D float32 arrays
-    sell_volumes: Union[NDArray[NDArray[np.float32]], NumbaList[NDArray[np.float32]]] # Array of 1D float32 arrays
-    buy_ticks: Union[NDArray[NDArray[np.int32]], NumbaList[NDArray[np.int32]]]        # Array of 1D int32 arrays
-    sell_ticks: Union[NDArray[NDArray[np.int32]], NumbaList[NDArray[np.int32]]]       # Array of 1D int32 arrays
-    buy_imbalances: Union[NDArray[NDArray[np.bool_]], NumbaList[NDArray[np.bool_]]]   # Array of 1D bool arrays
-    sell_imbalances: Union[NDArray[NDArray[np.bool_]], NumbaList[NDArray[np.bool_]]]  # Array of 1D bool arrays
+    price_levels: Union[
+        NDArray[NDArray[np.int32]], NumbaList[NDArray[np.int32]]
+    ]  # Array of 1D int32 arrays (price levels in price tick units)
+    buy_volumes: Union[
+        NDArray[NDArray[np.float32]], NumbaList[NDArray[np.float32]]
+    ]  # Array of 1D float32 arrays
+    sell_volumes: Union[
+        NDArray[NDArray[np.float32]], NumbaList[NDArray[np.float32]]
+    ]  # Array of 1D float32 arrays
+    buy_ticks: Union[
+        NDArray[NDArray[np.int32]], NumbaList[NDArray[np.int32]]
+    ]  # Array of 1D int32 arrays
+    sell_ticks: Union[
+        NDArray[NDArray[np.int32]], NumbaList[NDArray[np.int32]]
+    ]  # Array of 1D int32 arrays
+    buy_imbalances: Union[
+        NDArray[NDArray[np.bool_]], NumbaList[NDArray[np.bool_]]
+    ]  # Array of 1D bool arrays
+    sell_imbalances: Union[
+        NDArray[NDArray[np.bool_]], NumbaList[NDArray[np.bool_]]
+    ]  # Array of 1D bool arrays
 
     # Additional attributes
-    cot_price_levels: Optional[NDArray[np.int32]] = None      # 1D int32 array
+    cot_price_levels: Optional[NDArray[np.int32]] = None  # 1D int32 array
     sell_imbalances_sum: Optional[NDArray[np.uint16]] = None  # 1D uint16 array
-    buy_imbalances_sum: Optional[NDArray[np.uint16]] = None   # 1D uint16 array
-    imb_max_run_signed: Optional[NDArray[np.int16]] = None    # 1D int16 array
-    vp_skew: Optional[NDArray[np.float64]] = None             # 1D float64 array
-    vp_gini: Optional[NDArray[np.float64]] = None             # 1D float64 array
+    buy_imbalances_sum: Optional[NDArray[np.uint16]] = None  # 1D uint16 array
+    imb_max_run_signed: Optional[NDArray[np.int16]] = None  # 1D int16 array
+    vp_skew: Optional[NDArray[np.float64]] = None  # 1D float64 array
+    vp_gini: Optional[NDArray[np.float64]] = None  # 1D float64 array
 
     # Private attributes
-    _datetime_index: pd.Series = None  # DatetimeIndex for date time slicing (will be set in __post_init__)
+    _datetime_index: pd.Series = (
+        None  # DatetimeIndex for date time slicing (will be set in __post_init__)
+    )
 
     def __post_init__(self):
         # Convert bar_timestamps to pandas DatetimeIndex for easier slicing
         # This method is automatically called after the object is initialized.
-        self._datetime_index = pd.to_datetime(self.bar_timestamps, unit='ns')
+        self._datetime_index = pd.to_datetime(self.bar_timestamps, unit="ns")
 
     def __len__(self) -> int:
         """
@@ -833,16 +908,30 @@ class FootprintData:
         :returns: Formatted string summary.
         """
         additional_info = {
-            'cot_price_levels': 'present' if self.cot_price_levels is not None else 'missing',
-            'sell_imbalances_sum': 'present' if self.sell_imbalances_sum is not None else 'missing',
-            'buy_imbalances_sum': 'present' if self.buy_imbalances_sum is not None else 'missing'
+            "cot_price_levels": "present"
+            if self.cot_price_levels is not None
+            else "missing",
+            "sell_imbalances_sum": "present"
+            if self.sell_imbalances_sum is not None
+            else "missing",
+            "buy_imbalances_sum": "present"
+            if self.buy_imbalances_sum is not None
+            else "missing",
         }
 
         # Check if all arrays are of the same type
-        array_types = {type(getattr(self, attr)).__name__ for attr in [
-            'price_levels', 'buy_volumes', 'sell_volumes',
-            'buy_ticks', 'sell_ticks', 'buy_imbalances', 'sell_imbalances'
-        ]}
+        array_types = {
+            type(getattr(self, attr)).__name__
+            for attr in [
+                "price_levels",
+                "buy_volumes",
+                "sell_volumes",
+                "buy_ticks",
+                "sell_ticks",
+                "buy_imbalances",
+                "sell_imbalances",
+            ]
+        }
 
         if len(array_types) == 1:
             array_type = array_types.pop()
@@ -869,7 +958,7 @@ class FootprintData:
             f"  Total Memory Usage: {total_memory_usage:.3f} MB\n"
         )
 
-    def __getitem__(self, key) -> 'FootprintData':
+    def __getitem__(self, key) -> "FootprintData":
         """
         Support slicing or indexing of the footprint data.
         :param key: Slice, integer index, or datetime range.
@@ -877,9 +966,15 @@ class FootprintData:
         :raises TypeError: If key is not a supported type.
         """
         if isinstance(key, (slice, int)):
-            if isinstance(key, slice) and isinstance(key.start, (str, dt.datetime)) and isinstance(key.stop, (str, dt.datetime)):
+            if (
+                isinstance(key, slice)
+                and isinstance(key.start, (str, dt.datetime))
+                and isinstance(key.stop, (str, dt.datetime))
+            ):
                 # Use pandas indexing with datetime slice
-                start_idx, end_idx = self._datetime_index.slice_locs(start=key.start, end=key.stop)
+                start_idx, end_idx = self._datetime_index.slice_locs(
+                    start=key.start, end=key.stop
+                )
                 return self[start_idx:end_idx]
 
             # Handle integer index or regular slicing
@@ -893,18 +988,26 @@ class FootprintData:
                 sell_ticks=self.sell_ticks[key],
                 buy_imbalances=self.buy_imbalances[key],
                 sell_imbalances=self.sell_imbalances[key],
-                cot_price_levels=self.cot_price_levels[key] if self.cot_price_levels is not None else None,
-                sell_imbalances_sum=self.sell_imbalances_sum[key] if self.sell_imbalances_sum is not None else None,
-                buy_imbalances_sum=self.buy_imbalances_sum[key] if self.buy_imbalances_sum is not None else None,
-                imb_max_run_signed=self.imb_max_run_signed[key] if self.imb_max_run_signed is not None else None,
+                cot_price_levels=self.cot_price_levels[key]
+                if self.cot_price_levels is not None
+                else None,
+                sell_imbalances_sum=self.sell_imbalances_sum[key]
+                if self.sell_imbalances_sum is not None
+                else None,
+                buy_imbalances_sum=self.buy_imbalances_sum[key]
+                if self.buy_imbalances_sum is not None
+                else None,
+                imb_max_run_signed=self.imb_max_run_signed[key]
+                if self.imb_max_run_signed is not None
+                else None,
                 vp_skew=self.vp_skew[key] if self.vp_skew is not None else None,
-                vp_gini=self.vp_gini[key] if self.vp_gini is not None else None
+                vp_gini=self.vp_gini[key] if self.vp_gini is not None else None,
             )
         else:
             raise TypeError("Invalid argument type. Expected a slice or integer index.")
 
     @classmethod
-    def from_numba(cls, data: Tuple, price_tick: float) -> 'FootprintData':
+    def from_numba(cls, data: Tuple, price_tick: float) -> "FootprintData":
         """
         Create a FootprintData object from Numba-based output.
         :param data: Output tuple from comp_bar_footprint.
@@ -927,7 +1030,7 @@ class FootprintData:
             cot_price_levels=np.array(data[10], dtype=np.int32),
             imb_max_run_signed=np.array(data[11], dtype=np.int16),
             vp_skew=np.array(data[12], dtype=np.float64),
-            vp_gini=np.array(data[13], dtype=np.float64)
+            vp_gini=np.array(data[13], dtype=np.float64),
         )
         # Validate the data
         if not instance.is_valid():
@@ -987,7 +1090,7 @@ class FootprintData:
             self.sell_ticks,
             self.buy_imbalances,
             self.sell_imbalances,
-            self.price_tick
+            self.price_tick,
         )
         return df
 
@@ -1019,6 +1122,7 @@ class FootprintData:
         """Calculate the approximate memory usage of this object in MB."""
         from pympler import asizeof
         import dataclasses
+
         total_memory = 0
 
         # Get field names from dataclass fields
@@ -1028,10 +1132,16 @@ class FootprintData:
         for attr in fields:
             if hasattr(self, attr):
                 array = getattr(self, attr)
-                if isinstance(array, np.ndarray) or isinstance(array, list) or isinstance(array, NumbaList):
+                if (
+                    isinstance(array, np.ndarray)
+                    or isinstance(array, list)
+                    or isinstance(array, NumbaList)
+                ):
                     try:
                         # Try using pympler
-                        total_memory += sum(asizeof.asizeof(item) for item in array if item is not None)
+                        total_memory += sum(
+                            asizeof.asizeof(item) for item in array if item is not None
+                        )
                     except ValueError:
                         # Fallback for NumPy arrays with problematic memory layouts
                         if isinstance(array, np.ndarray):
@@ -1040,7 +1150,7 @@ class FootprintData:
                             # Rough estimate for other types
                             total_memory += len(array) * 8  # Assume 8 bytes per object
 
-        return total_memory / (1024 ** 2)
+        return total_memory / (1024**2)
 
     def is_valid(self) -> bool:
         """
@@ -1049,8 +1159,13 @@ class FootprintData:
         """
         expected_length = len(self.bar_timestamps)
         attributes = [
-            self.price_levels, self.buy_volumes, self.sell_volumes,
-            self.buy_ticks, self.sell_ticks, self.buy_imbalances, self.sell_imbalances
+            self.price_levels,
+            self.buy_volumes,
+            self.sell_volumes,
+            self.buy_ticks,
+            self.sell_ticks,
+            self.buy_imbalances,
+            self.sell_imbalances,
         ]
         for attr in attributes:
             if len(attr) != expected_length:
@@ -1092,10 +1207,11 @@ def _is_notebook_environment() -> bool:
     try:
         # Check for IPython
         from IPython import get_ipython
+
         if get_ipython() is not None:
             return True
     except ImportError:
         pass
 
     # Check for other notebook indicators
-    return any('jupyter' in arg.lower() or 'ipython' in arg.lower() for arg in sys.argv)
+    return any("jupyter" in arg.lower() or "ipython" in arg.lower() for arg in sys.argv)

@@ -25,7 +25,7 @@ jobs:
 
       - name: Generate API docs (optional)
         working-directory: docs
-        run: sphinx-apidoc -o source/api ../finmlkit
+        run: sphinx-apidoc -o source/api ../afmlkit
 
       - name: Build HTML docs
         working-directory: docs

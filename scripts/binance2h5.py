@@ -22,7 +22,7 @@ where market_path is one of: spot, um, cm.
 Notes:
 - If an existing H5 for the same symbol+market matches the same start but an earlier end, it will be
   renamed to the new full-range name before appending new months (extension).
-- Requires pandas, requests, tqdm, and finmlkit installed in the environment.
+- Requires pandas, requests, tqdm, and afmlkit installed in the environment.
 """
 from __future__ import annotations
 
@@ -43,8 +43,8 @@ import pandas as pd
 import requests
 from tqdm import tqdm
 
-from finmlkit.bar.data_model import TradesData
-from finmlkit.bar.io import AddTimeBarH5
+from afmlkit.bar.data_model import TradesData
+from afmlkit.bar.io import AddTimeBarH5
 
 BINANCE_BASE = "https://data.binance.vision"
 

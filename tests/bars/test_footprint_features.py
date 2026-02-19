@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 import os
 #os.environ['NUMBA_DISABLE_JIT'] = '1'  # Disable JIT for testing (we can debug numba functions this way)
-from finmlkit.bar.base import comp_footprint_features
+from afmlkit.bar.base import comp_footprint_features
 
 
 # ---------- helpers ----------

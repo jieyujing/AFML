@@ -13,7 +13,7 @@ from .core.trend import adx_core
 from .core.structural_break.cusum import cusum_test_rolling
 from .core.correlation import rolling_price_volume_correlation
 from typing import Union, Sequence, Callable, Any, Optional
-from finmlkit.utils.log import get_logger
+from afmlkit.utils.log import get_logger
 from numba import njit
 import pandas as pd
 import numpy as np

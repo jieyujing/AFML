@@ -17,7 +17,7 @@ import os
 os.environ['NUMBA_DISABLE_JIT'] = "1"  # disable jit
 
 # important to do this before importing numba functions
-from finmlkit.utils import my_numba_fn
+from afmlkit.utils import my_numba_fn
 ...
 ```
 After you are done, it is important to **re-enable jit** by removing or commenting out the above code (otherwise it can broke the full test pipeline if numba disabling stays there) 

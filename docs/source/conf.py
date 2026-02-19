@@ -7,13 +7,13 @@ sys.path.insert(0, PROJECT_ROOT.as_posix())      # must happen first
 # ---------------------------------------------------------------
 
 # now it is safe to import your project or read files inside it
-from finmlkit._version import __version__        # no try/except needed
+from afmlkit._version import __version__        # no try/except needed
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'FinMLKit'
-copyright = '2025, FinMLKit'
+project = 'AFMLKit'
+copyright = '2025, AFMLKit'
 author = 'Dániel Terbe'
 release = __version__
 

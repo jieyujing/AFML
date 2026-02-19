@@ -5,7 +5,7 @@ from numpy.testing import assert_array_almost_equal, assert_array_equal
 # disable jit
 #os.environ['NUMBA_DISABLE_JIT'] = "1"
 
-from finmlkit.label.weights import return_attribution
+from afmlkit.label.weights import return_attribution
 
 
 # ---------- Input Validation Tests ----------

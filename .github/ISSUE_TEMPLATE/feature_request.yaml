@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest a new idea for FinMLKit
+description: Suggest a new idea for AFMLKit
 labels: [enhancement]
 body:
   - type: markdown

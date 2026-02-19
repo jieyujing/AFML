@@ -1,8 +1,8 @@
 import pandas as pd
 import numpy as np
 
-from finmlkit.feature.kit import Feature, FeatureKit
-from finmlkit.feature.transforms import SMA, EWMA, RSIWilder
+from afmlkit.feature.kit import Feature, FeatureKit
+from afmlkit.feature.transforms import SMA, EWMA, RSIWilder
 
 
 def make_sample_df(n=50):

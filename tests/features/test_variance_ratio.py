@@ -4,8 +4,8 @@ Tests for Variance Ratio feature transforms.
 import numpy as np
 import pandas as pd
 import pytest
-from finmlkit.feature.core.volatility import rolling_variance_nb, variance_ratio_1_4_core
-from finmlkit.feature.transforms import VarianceRatio14
+from afmlkit.feature.core.volatility import rolling_variance_nb, variance_ratio_1_4_core
+from afmlkit.feature.transforms import VarianceRatio14
 
 
 def test_rolling_variance_nb():

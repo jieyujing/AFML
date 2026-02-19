@@ -5,7 +5,7 @@ import time
 
 from .base import BaseTransform, MinMaxOpTransform, BinaryOpTransform, ConstantOpTransform, UnaryOpTransform, SISOTransform, MISOTransform
 from .utils import transform_to_config, transform_from_config, ComputationGraph, build_feature_graph
-from finmlkit.utils.log import get_logger
+from afmlkit.utils.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -857,8 +857,8 @@ class FeatureKit:
 
            # Large-scale feature construction
            import pandas as pd
-           from finmlkit.features import Feature, FeatureKit
-           from finmlkit.transforms import *
+           from afmlkit.features import Feature, FeatureKit
+           from afmlkit.transforms import *
 
            # Load large dataset
            large_data = pd.read_csv('large_financial_dataset.csv', index_col='timestamp', parse_dates=True)
@@ -928,7 +928,7 @@ class FeatureKit:
 
         .. code-block:: python
 
-           from finmlkit.feature.transforms import ExternalFunction
+           from afmlkit.feature.transforms import ExternalFunction
 
            # Single-output example using NumPy (passes numpy arrays to function)
            log_close = Feature(ExternalFunction('numpy.log', input_cols='close', output_cols='log_close', pass_numpy=True))

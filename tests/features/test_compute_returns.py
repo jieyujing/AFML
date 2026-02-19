@@ -4,7 +4,7 @@ import pytest
 import os
 #os.environ['NUMBA_DISABLE_JIT'] = '1'  # Disable JIT for testing (we can debug numba functions this way)
 
-from finmlkit.feature.core.utils import comp_lagged_returns
+from afmlkit.feature.core.utils import comp_lagged_returns
 from numpy.testing import assert_allclose
 
 

@@ -3,7 +3,7 @@ import os
 import pytest
 os.environ['NUMBA_DISABLE_JIT'] = '1'  # Disable JIT for testing (we can debug numba functions this way)
 
-from finmlkit.bar.logic import _time_bar_indexer
+from afmlkit.bar.logic import _time_bar_indexer
 
 
 def test_time_bar_indexer_basic():

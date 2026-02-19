@@ -1,5 +1,5 @@
 """
-Tests for time-based features in the finmlkit.feature.core.time module
+Tests for time-based features in the afmlkit.feature.core.time module
 """
 import numpy as np
 import pandas as pd
@@ -7,7 +7,7 @@ import pytest
 from datetime import datetime, timezone, timedelta
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
-from finmlkit.feature.core.time import time_cues
+from afmlkit.feature.core.time import time_cues
 
 
 def create_timestamp_array(start_date, periods, freq='D'):

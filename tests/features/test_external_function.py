@@ -1,8 +1,8 @@
 import pandas as pd
 import numpy as np
 
-from finmlkit.feature.kit import Feature, FeatureKit
-from finmlkit.feature.transforms import ExternalFunction
+from afmlkit.feature.kit import Feature, FeatureKit
+from afmlkit.feature.transforms import ExternalFunction
 
 
 def make_df(n=64):

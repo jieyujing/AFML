@@ -2,7 +2,7 @@ import numpy as np
 import os
 import pytest
 from numba.typed import List as NumbaList
-from finmlkit.bar.base import comp_bar_footprints
+from afmlkit.bar.base import comp_bar_footprints
 
 
 def test_comp_bar_footprints_basic():

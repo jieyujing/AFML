@@ -36,7 +36,7 @@ jobs:
       - name: Run tests with coverage (JIT disabled)
         env: { NUMBA_DISABLE_JIT: 1 }
         run: |
-          pytest tests/ --cov=finmlkit --cov-report=xml:coverage.xml -v
+          pytest tests/ --cov=afmlkit --cov-report=xml:coverage.xml -v
 
       - name: Debug SHAs
         run: |

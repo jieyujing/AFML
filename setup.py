@@ -6,28 +6,29 @@ import os
 def get_version():
     """Read version from _version.py without importing."""
     here = os.path.abspath(os.path.dirname(__file__))
-    version_file = os.path.join(here, 'finmlkit', '_version.py')
+    version_file = os.path.join(here, "afmlkit", "_version.py")
 
-    with open(version_file, 'r', encoding='utf-8') as f:
+    with open(version_file, "r", encoding="utf-8") as f:
         content = f.read()
         for line in content.splitlines():
-            if line.startswith('__version__'):
-                return line.split('=')[1].strip().strip('"').strip("'")
+            if line.startswith("__version__"):
+                return line.split("=")[1].strip().strip('"').strip("'")
 
-    raise RuntimeError('Cannot find version string')
+    raise RuntimeError("Cannot find version string")
+
 
 with open("requirements.txt") as f:
     requirements = f.read().splitlines()
 
 setup(
-    name="finmlkit",
+    name="afmlkit",
     version=get_version(),
     description="Financial ML toolkit",
     long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
     author="Dániel Terbe",
     author_email="dainel@terbe.dev",
-    url="https://github.com/quantscious/finmlkit",
+    url="https://github.com/quantscious/afmlkit",
     license="MIT",
     packages=find_packages(exclude=("tests", "docs")),
     python_requires=">=3.10",
@@ -45,5 +46,5 @@ setup(
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
-    ]
+    ],
 )

@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from finmlkit.label.weights import average_uniqueness
+from afmlkit.label.weights import average_uniqueness
 
 
 def test_no_overlap():

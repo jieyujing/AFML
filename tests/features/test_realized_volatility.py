@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 import pandas as pd
-from finmlkit.feature.transforms import RealizedVolatility
+from afmlkit.feature.transforms import RealizedVolatility
 
 
 @pytest.fixture

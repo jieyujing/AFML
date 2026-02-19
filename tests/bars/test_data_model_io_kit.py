@@ -2,9 +2,9 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
-from finmlkit.bar.data_model import TradesData, FootprintData
-from finmlkit.bar.io import H5Inspector
-from finmlkit.bar.kit import TimeBarKit, TickBarKit, VolumeBarKit, DollarBarKit, CUSUMBarKit
+from afmlkit.bar.data_model import TradesData, FootprintData
+from afmlkit.bar.io import H5Inspector
+from afmlkit.bar.kit import TimeBarKit, TickBarKit, VolumeBarKit, DollarBarKit, CUSUMBarKit
 
 
 def _sample_trades():

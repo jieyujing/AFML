@@ -12,3 +12,4 @@ dist/
 *.egg-info/
 .coverage
 coverage.xml
+*.parquet

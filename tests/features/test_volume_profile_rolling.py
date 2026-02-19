@@ -3,8 +3,8 @@ import pandas as pd
 import pytest
 from numba.typed import List as NumbaList
 
-from finmlkit.bar.data_model import FootprintData
-from finmlkit.feature.core.volume import (
+from afmlkit.bar.data_model import FootprintData
+from afmlkit.feature.core.volume import (
     volume_profile_rolling, calc_volume_percentage_above_poc, VolumePro
 )
 

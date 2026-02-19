@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from finmlkit.bar.data_model import TradesData, _load_single_h5_group, _is_notebook_environment
+from afmlkit.bar.data_model import TradesData, _load_single_h5_group, _is_notebook_environment
 
 
 def make_us_timestamps(base='2021-01-01 00:00:00', offsets_us=(0, 0, 120_000_000)):

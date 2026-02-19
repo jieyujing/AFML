@@ -1,7 +1,7 @@
 import pytest
 #os.environ['NUMBA_DISABLE_JIT'] = '1'  # Disable JIT for testing (we can debug numba functions this way)
 
-from finmlkit.feature.core.structural_break.cusum import cusum_test_developing, cusum_test_last, cusum_test_rolling
+from afmlkit.feature.core.structural_break.cusum import cusum_test_developing, cusum_test_last, cusum_test_rolling
 import numpy as np
 
 def test_chu_stinchcombe_white_developing_basic():

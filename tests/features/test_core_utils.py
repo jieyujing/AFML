@@ -1,7 +1,7 @@
 import numpy as np
 from numpy.testing import assert_allclose
 
-from finmlkit.feature.core.utils import (
+from afmlkit.feature.core.utils import (
     comp_lagged_returns,
     comp_zscore,
     comp_burst_ratio,

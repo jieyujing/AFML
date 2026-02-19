@@ -3,8 +3,8 @@ import pandas as pd
 import pytest
 from datetime import datetime, timedelta
 
-from finmlkit.feature.core.volatility import atr, true_range
-from finmlkit.feature.transforms import ATR
+from afmlkit.feature.core.volatility import atr, true_range
+from afmlkit.feature.transforms import ATR
 
 
 def test_true_range_basic():

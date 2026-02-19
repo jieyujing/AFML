@@ -5,7 +5,7 @@ import pytest
 #os.environ['NUMBA_DISABLE_JIT'] = '1'  # Disable JIT for testing (we can debug numba functions this way)
 
 
-from finmlkit.bar.utils import (
+from afmlkit.bar.utils import (
     comp_trade_side_vector,
     comp_price_tick_size,
     comp_price_tick_size_old,

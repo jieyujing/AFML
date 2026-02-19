@@ -6,8 +6,8 @@ import pandas as pd
 import pytest
 from datetime import datetime, timedelta
 
-from finmlkit.feature.core.correlation import rolling_price_volume_correlation
-from finmlkit.feature.transforms import PriceVolumeCorrelation
+from afmlkit.feature.core.correlation import rolling_price_volume_correlation
+from afmlkit.feature.transforms import PriceVolumeCorrelation
 
 
 def test_rolling_price_volume_correlation_basic():

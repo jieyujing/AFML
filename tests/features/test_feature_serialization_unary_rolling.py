@@ -1,8 +1,8 @@
 import pandas as pd
 import numpy as np
 
-from finmlkit.feature.kit import Feature, FeatureKit
-import finmlkit.feature.transforms as tfs
+from afmlkit.feature.kit import Feature, FeatureKit
+import afmlkit.feature.transforms as tfs
 
 
 def make_df(n=96):

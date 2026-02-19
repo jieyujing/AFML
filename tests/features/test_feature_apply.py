@@ -1,9 +1,9 @@
 import pytest
 import pandas as pd
 import numpy as np
-from finmlkit.feature.kit import Feature
-from finmlkit.feature.base import SISOTransform
-from finmlkit.feature.transforms import Identity
+from afmlkit.feature.kit import Feature
+from afmlkit.feature.base import SISOTransform
+from afmlkit.feature.transforms import Identity
 
 class TestFeatureApply:
     """Test the apply method and other new methods added to Feature class."""

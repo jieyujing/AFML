@@ -1,7 +1,7 @@
 """
 tests/test_comp_bar_directional_features.py
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Unit-tests for finmlkit.bar.base.comp_bar_directional_features
+Unit-tests for afmlkit.bar.base.comp_bar_directional_features
 adapted to the current implementation (August 2025).
 
 The last index in *bar_close_indices* must now be the last traded index
@@ -14,7 +14,7 @@ import pytest
 
 # os.environ["NUMBA_DISABLE_JIT"] = "1"          # run the pure-Python path
 
-from finmlkit.bar.base import comp_bar_directional_features
+from afmlkit.bar.base import comp_bar_directional_features
 
 
 # ---------- helper -------------------------------------------------------------------------------

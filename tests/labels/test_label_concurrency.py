@@ -4,7 +4,7 @@ import os
 # disable jit
 # os.environ['NUMBA_DISABLE_JIT'] = "1"
 
-from finmlkit.label.weights import average_uniqueness
+from afmlkit.label.weights import average_uniqueness
 
 
 def test_average_uniqueness_basic():

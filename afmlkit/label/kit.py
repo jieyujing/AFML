@@ -1,8 +1,8 @@
 """ A API wrapper around the core numba function for better usability"""
 from .tbm import triple_barrier
 from .weights import average_uniqueness, return_attribution, time_decay, class_balance_weights
-from finmlkit.utils.log import get_logger
-from finmlkit.bar.data_model import TradesData
+from afmlkit.utils.log import get_logger
+from afmlkit.bar.data_model import TradesData
 import pandas as pd
 import numpy as np
 

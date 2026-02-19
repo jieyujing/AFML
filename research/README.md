@@ -1,7 +1,7 @@
 # Research Space
 This is a research directory separate from the main lib as this is a more experimental and prototype space (but may be similarly valuable).
 
-Here we collect **jupyter notebooks**, higher level research that may not be ready or fit in `finmlkit` where the fundamental algorithms are implemented.
+Here we collect **jupyter notebooks**, higher level research that may not be ready or fit in `afmlkit` where the fundamental algorithms are implemented.
 
 Here we can build and collect useful, self-contained research notebooks that can be used to explore and understand the data, algorithms, and models. 
 

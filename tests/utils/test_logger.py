@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from finmlkit.utils.log import get_logger, setup_logging
+from afmlkit.utils.log import get_logger, setup_logging
 
 
 @pytest.fixture(autouse=True)
@@ -64,7 +64,7 @@ def test_console_only_logger_defaults(monkeypatch, capsys):
     # Also set a known console level
     monkeypatch.setenv("FMK_CONSOLE_LOGGER_LEVEL", "INFO")
 
-    logger = get_logger("finmlkit.test.console")
+    logger = get_logger("afmlkit.test.console")
 
     handlers = get_root_handlers()
     # Assert there is a console StreamHandler to stdout
@@ -98,7 +98,7 @@ def test_file_logging_enabled_creates_file_and_dir(monkeypatch, tmp_path):
     monkeypatch.setenv("FMK_FILE_LOGGER_LEVEL", "DEBUG")
     monkeypatch.setenv("FMK_CONSOLE_LOGGER_LEVEL", "WARNING")
 
-    logger = get_logger("finmlkit.test.file")
+    logger = get_logger("afmlkit.test.file")
 
     handlers = get_root_handlers()
 
@@ -148,14 +148,14 @@ def test_idempotent_setup_no_duplicate_handlers(monkeypatch, tmp_path):
     monkeypatch.setattr(logging.Logger, "hasHandlers", lambda self: False)
 
     # First setup
-    _ = get_logger("finmlkit.test.idempotent")
+    _ = get_logger("afmlkit.test.idempotent")
     handlers_first = list(get_root_handlers())
 
     # Restore original hasHandlers so subsequent call observes handlers and skips adding duplicates
     monkeypatch.setattr(logging.Logger, "hasHandlers", original_has_handlers)
 
     # Second setup (should not add handlers)
-    _ = get_logger("finmlkit.test.idempotent")
+    _ = get_logger("afmlkit.test.idempotent")
     handlers_second = list(get_root_handlers())
 
     assert len(handlers_first) == len(handlers_second)

@@ -4,7 +4,7 @@ General utility functions not exclusively for OHLCV bar data.
 import numpy as np
 from numba import njit, prange
 from numpy.typing import NDArray
-from finmlkit.utils.log import get_logger
+from afmlkit.utils.log import get_logger
 
 logger = get_logger(__name__)
 

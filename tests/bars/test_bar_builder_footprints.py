@@ -1,8 +1,8 @@
 import pytest
 import numpy as np
 import pandas as pd
-from finmlkit.bar.base import BarBuilderBase
-from finmlkit.bar.data_model import TradesData, FootprintData
+from afmlkit.bar.base import BarBuilderBase
+from afmlkit.bar.data_model import TradesData, FootprintData
 
 
 class MockBarBuilder(BarBuilderBase):

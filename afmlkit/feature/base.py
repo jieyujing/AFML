@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Union, Optional, Sequence, Callable
 import pandas as pd
-from finmlkit.utils.log import get_logger
+from afmlkit.utils.log import get_logger
 import numpy as np
 from numpy.typing import NDArray
 

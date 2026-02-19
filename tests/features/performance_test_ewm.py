@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 import time
 
-from finmlkit.feature.core.volatility import ewms
-from finmlkit.feature.core.ma import ewma
+from afmlkit.feature.core.volatility import ewms
+from afmlkit.feature.core.ma import ewma
 
 
 def ewma_perf_test():

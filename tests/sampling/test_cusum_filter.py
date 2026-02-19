@@ -2,7 +2,7 @@ import os
 #os.environ['NUMBA_DISABLE_JIT'] = '1'  # Disable JIT for testing (we can debug numba functions this way)
 import pytest
 import numpy as np
-from finmlkit.sampling.filters import cusum_filter
+from afmlkit.sampling.filters import cusum_filter
 
 def test_cusum_filter_no_events():
     """

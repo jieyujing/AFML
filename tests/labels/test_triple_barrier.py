@@ -4,7 +4,7 @@ import os
 # disable jit
 #os.environ['NUMBA_DISABLE_JIT'] = "1"
 
-from finmlkit.label.tbm import triple_barrier
+from afmlkit.label.tbm import triple_barrier
 
 
 # ---------- Helper Functions ----------

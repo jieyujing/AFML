@@ -1,12 +1,12 @@
 import numpy as np
 import pandas as pd
 from numba import njit, prange
-from finmlkit.bar.data_model import FootprintData
+from afmlkit.bar.data_model import FootprintData
 from typing import Union
 from numpy.typing import NDArray
 from numba.typed import List as NumbaList
 
-from finmlkit.utils.log import get_logger
+from afmlkit.utils.log import get_logger
 logger = get_logger(__name__)
 
 

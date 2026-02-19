@@ -17,7 +17,7 @@ from .data_model import FootprintData
 from .utils import comp_price_tick_size
 from .data_model import TradesData
 
-from finmlkit.utils.log import get_logger
+from afmlkit.utils.log import get_logger
 logger = get_logger(__name__)
 
 
@@ -55,11 +55,11 @@ class BarBuilderBase(ABC):
         ValueError: If required columns are missing from trades data or if data is not properly formatted.
 
     See Also:
-        :class:`finmlkit.bar.kit.TimeBarKit`: A concrete subclass for fixed-time interval bars.
+        :class:`afmlkit.bar.kit.TimeBarKit`: A concrete subclass for fixed-time interval bars.
 
-        :class:`finmlkit.bar.kit.TickBarKit`: For bars based on tick counts.
+        :class:`afmlkit.bar.kit.TickBarKit`: For bars based on tick counts.
 
-        :class:`finmlkit.bar.kit.VolumeBarKit`: For volume-threshold bars.
+        :class:`afmlkit.bar.kit.VolumeBarKit`: For volume-threshold bars.
     """
 
     def __init__(self, trades: TradesData):

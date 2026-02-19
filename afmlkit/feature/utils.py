@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional, Set
 import importlib
 import inspect
 import numpy as np
-from finmlkit.utils.log import get_logger
+from afmlkit.utils.log import get_logger
 
 from .base import (
     BaseTransform,
@@ -262,12 +262,12 @@ def transform_from_config(cfg: Dict[str, Any]) -> BaseTransform:
         return UnaryOpTransform(child, op_name, op)
     if kind == "compose":
         # lazy import to avoid circular dependency at import-time
-        from finmlkit.feature.kit import Compose  # type: ignore
+        from afmlkit.feature.kit import Compose  # type: ignore
         steps = [transform_from_config(s) for s in cfg.get("steps", [])]
         return Compose(*steps)  # type: ignore[arg-type]
     if kind == "external":
         # Lazy import to avoid circulars
-        from finmlkit.feature.transforms import ExternalFunction  # type: ignore
+        from afmlkit.feature.transforms import ExternalFunction  # type: ignore
         func_path = cfg.get("func")
         if not func_path:
             raise ValueError("ExternalFunction config requires 'func' path")

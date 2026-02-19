@@ -1,203 +1,181 @@
+# AFMLKit
 
- ![FinMLKit Header](finmlkit_header.png)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Documentation](https://img.shields.io/badge/docs-readthedocs-green.svg)](https://afmlkit.readthedocs.io)
 
-[![Python Versions](https://img.shields.io/pypi/pyversions/finmlkit.svg)](https://pypi.python.org/pypi/finmlkit)
-[![Platforms](https://img.shields.io/badge/Platforms-linux--64,win--64,osx--64-orange.svg?style=flat-square)](https://pypi.python.org/pypi/finmlkit)
-[![PyPI Version](https://img.shields.io/pypi/v/finmlkit.svg)](https://pypi.python.org/pypi/finmlkit)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/quantscious/finmlkit/deploy.yml)](https://github.com/quantscious/finmlkit)
-[![Documentation Status](https://readthedocs.org/projects/finmlkit/badge/?version=latest)](https://finmlkit.readthedocs.io/en/latest/?version=latest)
-[![codecov](https://codecov.io/gh/quantscious/finmlkit/graph/badge.svg?token=2H6VR817RB)](https://codecov.io/gh/quantscious/finmlkit)
-[![Total Downloads](https://static.pepy.tech/badge/finmlkit)](https://pepy.tech/project/finmlkit)
-[![GitHub Stars](https://img.shields.io/github/stars/quantscious/finmlkit.svg)](https://github.com/quantscious/finmlkit/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/quantscious/finmlkit.svg)](https://github.com/quantscious/finmlkit/network)
-[![GitHub Issues](https://img.shields.io/github/issues/quantscious/finmlkit.svg)](https://github.com/quantscious/finmlkit/issues)
-[![Last Commit](https://img.shields.io/github/last-commit/quantscious/finmlkit.svg)](https://github.com/quantscious/finmlkit/commits/main)
-![Contributions](https://img.shields.io/badge/Contributions-Welcome-ff69b4)
-[![MIT License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](https://pypi.python.org/pypi/finmlkit)
-[![DOI](https://zenodo.org/badge/867537116.svg)](https://doi.org/10.5281/zenodo.16731879)
+**AFMLKit** 是一个基于 *Advances in Financial Machine Learning*（Marcos López de Prado 著）方法论的高性能金融机器学习工具包。使用 Numba 进行 JIT 编译加速，专为处理大规模金融数据而设计。
 
-**FinMLKit** is an open-source, lightweight **financial machine learning library** designed to be simple, blazing fast, and easy to contribute to. Whether you’re a seasoned quant or a beginner in finance and programming, FinMLKit welcomes contributions from everyone.
- 
-The main goal of this library is to provide a solid foundation for financial machine learning, enabling users to process raw trades data, generate different types of bars, intra-bar features (eg. footprints), bar-level features (indicators), and labels for supervised learning.
+## 特性
 
-# ⚒️ Quick Start
-To get started with FinMLKit, you can simply install it via pip:
+- **K线构建** — 支持多种 K 线采样策略：时间、Tick、成交量、金额、CUSUM、不平衡、运行条
+- **特征工程** — 流式接口的特征工程框架，支持数学运算、函数组合和管道构建
+- **标签生成** — 实现三重屏障法（Triple Barrier Method）进行事件标签生成
+- **采样过滤** — CUSUM 过滤器等事件检测方法
+- **高性能** — 基于 Numba JIT 编译，支持并行计算
+- **双后端** — 同时支持 Pandas 和 Numba 计算后端
+
+## 安装
+
 ```bash
-pip install finmlkit
+# 基础安装
+pip install afmlkit
+
+# 开发模式安装（包含测试依赖）
+pip install -e .[dev]
 ```
 
-Or clone the repository and install it locally:
-```bash
-git clone https://github.com/quantscious/finmlkit.git
-cd finmlkit
-pip install .
+## 快速开始
+
+### K线构建
+
+```python
+import pandas as pd
+from afmlkit.bar.kit import TimeBarKit, VolumeBarKit, DollarBarKit
+from afmlkit.bar.data_model import TradesData
+
+# 加载原始交易数据
+trades = TradesData(pd.read_parquet('trades.parquet'))
+
+# 构建 5 分钟 K 线
+time_bars = TimeBarKit(trades, pd.Timedelta('5min'))
+ohlcv_df = time_bars.build_ohlcv()
+
+# 构建成交量 K 线（每 1000 单位成交量）
+volume_bars = VolumeBarKit(trades, volume_ths=1000)
+ohlcv_df = volume_bars.build_ohlcv()
+
+# 构建金额 K 线（每 10000 美元）
+dollar_bars = DollarBarKit(trades, dollar_thrs=10000)
+ohlcv_df = dollar_bars.build_ohlcv()
 ```
 
-See the [examples directory](https://github.com/quantscious/finmlkit/tree/main/examples) to learn about the practical usage of the library: how to process trades data and build bars, features, and labels for machine learning models.
+### 特征工程
 
-Build your **own crypto database** with `binance2h5.py`, ready to be processed by **FinMLKit**. This script downloads raw trades data from Binance in monthly chunks and processes it into HDF5 format compatible with **FinMLKit**.
-You can find this in the `scripts` directory. Example usage:
-```bash
-python scripts/binance2h5.py \
-  --market spot \
-  --tickers BTCUSDT ETHUSDT ADAUSDT ADAUSDC \
-  --start 2021-01 \
-  --end now \
-  --workdir /Users/you/data \
-  --workers 4 \
-  --overwrite-klines 1
+```python
+from afmlkit.feature.kit import Feature, FeatureKit
+from afmlkit.feature.core.ma import SimpleMovingAverageTransform
+from afmlkit.feature.core.volatility import VolatilityTransform
+
+# 创建特征
+price = Feature(SimpleMovingAverageTransform('close', 'sma_20'))
+volatility = Feature(VolatilityTransform('close', 'volatility_20'))
+
+# 数学运算
+price_to_vol_ratio = price / volatility
+normalized = (price - price.rolling_mean(50)) / price.rolling_std(50)
+
+# 构建特征管道
+kit = FeatureKit([
+    price,
+    volatility,
+    price_to_vol_ratio,
+    normalized
+], retain=['close', 'volume'])
+
+# 执行计算
+features_df = kit.build(ohlcv_df, backend='nb', timeit=True)
 ```
 
-## 📖 Documentation
-The documentation is available at [finmlkit.readthedocs.io](https://finmlkit.readthedocs.io/en/latest/).
+### 标签生成（三重屏障法）
 
-## 🪵 Logger Configuration
-By default, logging is directed to the console at `INFO` level, but you can change this and also enable file-based logging by setting the appropriate environment variables.
-- If `FMK_LOG_FILE_PATH` is defined, logs will be written to both the specified file and the console.
-- `FMK_LOG_FILE_PATH` is not set, logging defaults to console-only output.
-To apply these settings, export the environment variables in your terminal before running your application:
-```bash
-export FMK_LOG_FILE_PATH=/path/to/your/logfile.log
-export FMK_FILE_LOGGER_LEVEL=DEBUG
-export FMK_CONSOLE_LOGGER_LEVEL=WARNING
+```python
+from afmlkit.label.kit import TBMLabel, SampleWeights
+
+# 创建标签生成器
+tbm = TBMLabel(
+    features=features_df,
+    target_ret_col='volatility_20',  # 波动率作为目标收益
+    min_ret=0.001,  # 最小收益率阈值
+    horizontal_barriers=(1.0, 1.0),  # 止损/止盈乘数
+    vertical_barrier=pd.Timedelta('1D')  # 时间屏障
+)
+
+# 计算标签
+features, labels = tbm.compute_labels(trades)
+
+# 计算样本权重
+weights = tbm.compute_weights(trades, normalized=True)
+
+# 组合最终权重
+final_weights = SampleWeights.compute_final_weights(
+    avg_uniqueness=weights['avg_uniqueness'],
+    return_attribution=weights['return_attribution'],
+    time_decay_intercept=0.5,
+    labels=labels['labels']
+)
 ```
-If you want to suppress console output, you can set the `FMK_CONSOLE_LOGGER_LEVEL`, for example, to `WARNING`.
 
-# 🧰 Why FinMLKit?
-**FinMLKit** is an **open-source, lightweight** financial data processing library with a focus on preparing data and labels for ML models. It is specialized for High Frequency Trading (HFT) and building on the most granular data level, the price tick data (raw trades data). This enables the building of intra-bar features (e.g., footprints, flow imbalance) that provide additional information to ML models compared to conventional and ubiquitous OHLCV data. Working with large amount of raw data requires a special design approach to ensure speed and efficiency, which is why FinMLKit is built with **Numba** for high-performance computation and parallelization. To illustrate this, if we were to aggregate raw trades data into OHLCV bars using Pandas, it would take around 60x longer than using FinMLKit. A task that would take 1 minute in Pandas would take approx. 1 second with FinMLKit. In the [performance test notebook](https://github.com/quantscious/finmlkit/tree/main/examples) we did a fun comparison between **FinMLKit** and [MLFinPy](https://github.com/baobach/mlfinpy) regarding bar construction speed and demonstrated a **more than 600x** speedup. This highlights the efficiency and power of FinMLKit for processing large amount of raw financial data.
+### 采样过滤
 
-So FinMLKit is built on Python’s Numba for high-performance computation, while using Pandas only as a wrapper for easier handling of data. Numba’s **Just-In-Time (JIT)** compilation allows it to convert Python code into machine code, significantly improving performance, especially in iterative tasks where parallelization can be utilized. In contrast, Pandas, while great for structuring and managing data, is slow and cumbersome for such operations. Therefore, we use Pandas only as a wrapper for handling data, allowing it to shine where it excels, while Numba powers the core algorithmic computations for efficiency and clarity. This way, we can avoid relying on slow and elusive pandas operations and focus on efficient, more explicit codes in the core functions.
+```python
+from afmlkit.sampling.filters import cusum_filter
 
-Key principles are **Simplicity**, **Speed**, and **Accessibility** (SSA):
-- **Simplicity** 🧩 No complex frameworks, no elusive pandas operations, just efficient, explicit, well-documented algorithms.
-- **Speed** ⚡ Core functions built with Numba for high-performance computation and parallelization in mind.
-- **Accessibility** 🌍 The goal is to make it easy for anyone – regardless of their background – to contribute and enhance the library, fostering an open-source collaborative spirit.
+# 使用 CUSUM 过滤器检测事件
+event_indices = cusum_filter(
+    raw_time_series=prices,
+    threshold=volatility  # 可使用波动率作为动态阈值
+)
+```
 
-# 🔥 Motivation & Vision
-**FinMLKit** is an open-source toolkit designed to make advanced, **reproducible financial machine learning** accessible to both researchers and practitioners. 
-Many existing pipelines still rely on outdated conventions like time bars, fixed-window labels, and oversimplified features—not because they are optimal, but because better alternatives are often harder to implement and scale. 
-FinMLKit addresses this gap by providing a research-grade foundation for working directly with raw trade data, including information-driven bar types, path-aware labeling with the Triple Barrier Method, microstructure features like volume profiles and footprints, and sample weighting for overlapping events—all powered by high-performance, Numba-accelerated internals.
+## 项目结构
 
-This project aims not only to offer tools, but to foster collaboration. By open-sourcing the core infrastructure, we invite contributors to improve, extend, and build on a shared foundation—raising the methodological standard across both academia and industry. FinMLKit is structured to support **reproducible research**, with clean APIs, modular design, and **citable releases** (see citation info at the bottom). 
-Our vision is to **democratize access to advanced techniques**, make rigorous pipelines more practical, and accelerate the adoption of robust, transparent practices in financial ML.
+```
+afmlkit/
+├── bar/                    # K 线构建模块
+│   ├── base.py            # 基础类和核心函数
+│   ├── logic.py           # Numba 加速的索引器
+│   ├── data_model.py      # 数据模型
+│   └── kit.py             # 具体 K 线实现
+├── feature/               # 特征工程模块
+│   ├── base.py            # Transform 基类
+│   ├── core/              # 核心特征实现
+│   │   ├── ma.py          # 移动平均
+│   │   ├── volatility.py  # 波动率
+│   │   ├── momentum.py    # 动量
+│   │   ├── trend.py       # 趋势
+│   │   ├── reversion.py   # 均值回归
+│   │   ├── volume.py      # 成交量
+│   │   ├── correlation.py # 相关性
+│   │   └── time.py        # 时间特征
+│   └── kit.py             # Feature 和 FeatureKit
+├── label/                 # 标签生成模块
+│   ├── tbm.py            # 三重屏障法核心实现
+│   ├── weights.py        # 样本权重计算
+│   └── kit.py            # TBMLabel API
+├── sampling/              # 采样模块
+│   └── filters.py        # CUSUM 过滤器
+└── utils/                 # 工具函数
+    └── log.py            # 日志工具
+```
 
-
-# 🧱 Project Structure
-
-## Data Preprocessing & I/O
-The foundation of any financial ML pipeline is robust data handling. FinMLKit provides comprehensive tools for ingesting, preprocessing, validating, and storing high-frequency trading data at scale. **The data preprocessing module transforms raw, inconsistent trade feeds into clean, validated datasets ready for bar construction and analysis**.
-
-**Data Ingestion & Preprocessing:**
-- [x] TradesData - Raw trades preprocessing with timestamp normalization, trade merging, and side inference
-- [x] Data integrity validation with gap detection and discontinuity analysis
-- [x] Multi-format timestamp support (s, ms, μs, ns) with automatic unit inference
-- [x] Trade ID validation and missing data percentage calculation
-- [x] Memory-efficient processing with chunking support for large datasets
-
-**Storage & Retrieval:**
-- [x] HDF5-based storage with monthly partitioning for efficient time-range queries
-- [x] Compressed storage with multiple backends (blosc:lz4, blosc:zstd)
-- [x] Metadata-driven data discovery and range validation
-- [x] Multiprocessing support for large dataset operations
-- [x] H5Inspector - Comprehensive HDF5 file analysis and integrity reporting
-- [x] AddTimeBarH5 - Automated time bar generation and persistence (extending the raw trade data h5 file)
-- [x] TimeBarReader - Efficient time bar loading with flexible resampling capabilities
-
-## Bars
-Bars are the primary data structure in FinMLKit – constructed from preprocessed trades data –, representing the historical price data of an asset. Bars can be in the form of OHLCV (Open, High, Low, Close, Volume) or any other format that includes the necessary information for analysis (e.g. footprint data, directional features). Bars are used as input for indicators, strategies, and other components of the library. In summary, **the bars module is responsible for processing structured trades data into analytical data structures optimized for financial machine learning**.
-
-**Data Structures:**
-- [x] OHLCV bars with VWAP and trade statistics
-- [x] Directional features (e.g. buy/sell tick, volume, dollars, min. cum. volume, max. cum. volume etc.)
-- [x] Trade size features (e.g., are there large trade block prints in the bar?)
-- [x] Bar footprints with order flow imbalance detection
-
-**Bar Types:**
-- [x] Time bars
-- [x] Tick bars
-- [x] Volume bars
-- [x] Dollar bars
-- [x] CUSUM bars
-- [ ] Imbalance bars
-- [ ] Run bars
-
-## Features
-Everything that processes bars data (candlestick/OHLCV, directional features, or footprints) and calculates derived values from it is considered a feature. This includes moving averages, RSI, MACD, etc. Here we are focusing on more unconventional indicators that are not commonly found in other libraries and builds on our advanced data structures like footprints, for example, **volume profile features**. Features are the building blocks of trading strategies and are used to generate signals for buying or selling assets.
-
-**FeatureKit Framework:**
-- [x] Dual-backend architecture (pandas for development/prototyping, Numba for production)
-- [x] SISO, MISO, SIMO, MIMO transform patterns for flexible feature engineering
-- [x] Compose class for sequential transform chaining
-- [x] Mathematical operations and function composition with the Feature wrapper class
-- [x] **Computational graph:** visualize dependencies and compute in topological order
-- [x] **Optimized, caching-aware execution:** reuse precomputed columns across features and pipelines
-- [x] **Reproducibility:** JSON serialization of Features/FeatureKit with full config export/import
-- [x] **Integration with external libraries** (e.g., TA-Lib) via `ExternalFunction` transform wrapper
-- [x] **FeatureKit** for batch feature computation with optional performance profiling
-
-**Implemented Features:**
-- [x] Adjusted Exponential Moving Average
-- [x] Standard Volatility Estimators
-- [x] Volume Profile Indicators: Commitment of Traders (COT), Buy/Sell Imbalance price levels, High Volume Nodes (HVN), Low Volume Nodes (LVN), Point of Control (POC)
-- [x] Cusum Monitoring structural break feature _(Chu-Stinchcombe-White CUSUM Test on Levels based on Homm and Breitung (2011))_
-- [x] And many more... Consult the [documentation](https://finmlkit.readthedocs.io/en/latest/api/finmlkit.feature.transforms.html#module-finmlkit.feature.transforms) for a complete list of implemented transform examples. Feel free to **build your own features** to your specific needs, the **framework design is given**.
-
-## Labels
-Labels are the target values that we want to predict in a supervised learning problem. Currently, Triple Barrier Method is implemented with meta-label support, which is an advanced approach in financial machine learning.
-
-- [x] Triple Barrier Method
-- [x] Meta-Labeling
-- [x] Label Concurrency weights
-- [x] Return Attribution weights
-- [x] Class Imbalance weights
-
-## Sampling
-- [x] CUSUM Filter
-
-
-# 📑 Trusted Methodologies
-FinMLKit implements methods from **trusted sources**, including renowned **academic papers and books**. The primary reference is **Marcos Lopez de Prado**’s Advances in Financial Machine Learning, which lays the foundation for many of the algorithms and methods in this package.
-We prioritize transparency and accuracy in both the implementation and explanation of these methodologies. Each algorithm should be accompanied by **detailed documentation** that:
-- **Cites the original sources** from which the methods were derived (papers, books, and other trusted research).
-- **Describes the algorithms comprehensively**, explaining the theory behind them and how they are applied in practice.
-By ensuring that the algorithms are well-documented, with clear references to their origins, we aim to foster trust and enable users to fully understand the underlying mechanics of the tools they are using. This also makes it easier for contributors to extend the package, knowing exactly how each method works and what references to consult.
-
-
-# 📚 Documentation
-**FinMLKit** is designed to be **well-documented**, with detailed explanations of each algorithm, method, and function. It uses `reStructured` style docstrings to provide clear and concise documentation for each function, class, and module. This makes it easier for users to understand how to use the library and what each function does. It uses `Sphinx` to generate the documentation and automatically deploy it to [finmlkit.readthedocs.io](https://finmlkit.readthedocs.io/en/latest/). This way, users can access the documentation online and easily navigate through the library's features and functionalities. This framework also enables the creation of tutorials or in-depth descriptions of the methods.
-
-# 🤝 Contribution
-We aim to make **FinMLKit** as easy to contribute to as possible. Whether it’s fixing bugs, adding new features,
-or improving documentation, **your contribution matters**. Let’s work together to make the common ground for financial machine learning!
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on bug reports, new features, enhancements, documentation, and testing.
-
-**Star** the repo, **cite** it in your work, file issues, propose features, and share benchmark results. Let’s make **better defaults** the norm.
-
-## 🧪 Testing
-To run the full test suite locally, disable Numba's JIT compiler:
+## 测试
 
 ```bash
+# 运行测试（推荐禁用 JIT）
 NUMBA_DISABLE_JIT=1 pytest -q
+
+# 运行带覆盖率的测试
+NUMBA_DISABLE_JIT=1 pytest tests/ --cov=afmlkit --cov-report=term -v
+
+# 运行单个测试文件
+pytest tests/bars/test_comp_ohlcv.py -v
 ```
 
-Alternatively, use the helper scripts `./local_test.sh` (JIT enabled) or
-`./local_test_nojit.sh` (JIT disabled). See [tests/README.md](tests/README.md)
-for more guidance.
+## 文档
 
-# ⚡ Speed & Performance Tests
-FinMLKit is built with speed in mind. We use Numba for high-performance computation, 
-allowing us to avoid slow and elusive pandas operations and focus on efficient, 
-more explicit codes in the core functions. This way, we can ensure that the library is fast and efficient, even when dealing with large datasets or complex algorithms. 
+完整文档请访问 [afmlkit.readthedocs.io](https://afmlkit.readthedocs.io)
 
-Some results are collected below to demonstrate the effectiveness of the numba framework:
-- Exponentially Weighted Moving Average (EWMA) calculation: __4x speedup__ compared to Pandas function
-- Standard Volatility Estimator: __8.12x speedup__ compared to Pandas implementation
-- CUSUM monitoring for structural breaks: __6.25x speedup__ with parallelization compared to non-parallelized implementation.
-- OHLCV Time Bar generation: **100x speedup** compared to Pandas implementation.
+## 贡献
 
-# 🔬 Citation
+欢迎贡献代码！请参阅 [CONTRIBUTING.md](CONTRIBUTING.md) 了解详情。
 
-If you use FinMLKit in your research or publications, we kindly ask that you cite it. Use the _"Cite this repository"_ option in the GitHub sidebar for ready-to-use citation details in formats like `BibTeX` and `APA`. For persistent DOIs, check the Zenodo archive linked below.
+## 参考文献
 
- [![DOI](https://zenodo.org/badge/867537116.svg)](https://doi.org/10.5281/zenodo.16731879)
+本项目方法论主要基于：
+
+- López de Prado, Marcos. *Advances in Financial Machine Learning*. Wiley, 2018.
+
+## 许可证
+
+MIT License - 详见 [LICENSE](LICENSE) 文件
