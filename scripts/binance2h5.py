@@ -27,10 +27,12 @@ Notes:
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import datetime as dt
 import io
 import multiprocessing
 import os
+import queue
 import re
 import zipfile
 from dataclasses import dataclass
@@ -147,14 +149,18 @@ def load_csv_from_zip(zip_path: str) -> pd.DataFrame:
         if not members:
             raise FileNotFoundError(f"No CSV found in {zip_path}")
         name = members[0]
+        
         with z.open(name) as f:
-            raw = f.read()
-            buf = io.BytesIO(raw)
-            try:
-                df = pd.read_csv(buf, header=None)
-            except Exception:
-                buf.seek(0)
-                df = pd.read_csv(buf)
+            first_line = f.readline().decode('utf-8', errors='ignore').strip().lower()
+
+        has_header = 'price' in first_line or 'time' in first_line or first_line.startswith('id,')
+        
+        with z.open(name) as f:
+            if has_header:
+                df = pd.read_csv(f, engine='c', low_memory=False)
+            else:
+                df = pd.read_csv(f, header=None, engine='c', low_memory=False)
+
     if df.shape[1] >= 6:
         cols = ['id', 'price', 'qty', 'quoteQty', 'time', 'isBuyerMaker', 'isBestMatch'][: df.shape[1]]
         df.columns = cols
@@ -176,16 +182,24 @@ def load_csv_from_zip(zip_path: str) -> pd.DataFrame:
     missing = [c for c in ['time', 'price', 'qty', 'id'] if c not in df.columns]
     if missing:
         raise ValueError(f"Missing required columns in {zip_path}: {missing}")
+        
+    # Drop unused columns immediately to save memory
+    df = df[required].copy()
+    import gc
+    gc.collect()
+
     df['time'] = pd.to_numeric(df['time'], errors='coerce').astype('Int64').astype('int64')
-    df['price'] = pd.to_numeric(df['price'], errors='coerce').astype(float)
-    df['qty'] = pd.to_numeric(df['qty'], errors='coerce').astype(float)
+    df['price'] = pd.to_numeric(df['price'], errors='coerce').astype('float32') # downcast
+    df['qty'] = pd.to_numeric(df['qty'], errors='coerce').astype('float32')     # downcast
     df['id'] = pd.to_numeric(df['id'], errors='coerce').astype('Int64').astype('int64')
+    
     if 'is_buyer_maker' in df.columns:
         if df['is_buyer_maker'].dtype != bool:
             df['is_buyer_maker'] = df['is_buyer_maker'].astype(str).str.lower().isin(['1', 'true', 't', 'yes'])
     else:
         df['is_buyer_maker'] = False
-    df = df[required].sort_values('time')
+        
+    df = df.sort_values('time')
     df.reset_index(drop=True, inplace=True)
     return df
 
@@ -214,57 +228,71 @@ def _process_task(zip_file: str, from_date: Optional[str], dates: Optional[List[
     return trades, date
 
 
-def _writer_thread(queue: multiprocessing.Queue, h5_path: str, counters: dict, lock: Lock):
-    while True:
-        item = queue.get()
-        if item is None:
-            break
-        trades, date = item
-        print(f"Writing {date} trades to {h5_path}...")
-        trades.save_h5(h5_path, mode='a', overwrite_month=True)
-        print(f"Finished writing {date} trades.")
-        with lock:
-            counters['consumed'] += 1
-
-
 def process_all(root_dir: str, h5_path: str, from_date: Optional[str] = None, dates: Optional[List[str]] = None, workers: int = 4):
     zip_files = sorted([os.path.join(root_dir, f) for f in os.listdir(root_dir) if f.endswith('.zip')])
     pbar = tqdm(total=len(zip_files), desc="Processing months")
-    queue: multiprocessing.Queue = multiprocessing.Queue()
-    counters = {'enqueued': 0, 'consumed': 0, 'errors': 0}
-    lock = Lock()
-    writer = Thread(target=_writer_thread, args=(queue, h5_path, counters, lock))
-    writer.start()
-    pool: Pool = Pool(workers)
+    
+    # Bounded queue to provide strict backpressure and avoid IPC pickling overhead.
+    # We use ThreadPoolExecutor instead of multiprocessing.Pool, ensuring memory is strictly bounded.
+    result_queue = queue.Queue(maxsize=1)
+    
+    def _producer():
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = set()
+            task_iter = iter(zip_files)
+            
+            # Seed the pool with exactly 'workers' tasks to limit memory
+            for _ in range(workers):
+                try:
+                    futures.add(pool.submit(_process_task, next(task_iter), from_date, dates))
+                except StopIteration:
+                    break
+                    
+            while futures:
+                done, futures = concurrent.futures.wait(futures, return_when=concurrent.futures.FIRST_COMPLETED)
+                for f in done:
+                    try:
+                        res = f.result()
+                        # Blocks if queue is full (maxsize=1), achieving perfect backpressure
+                        result_queue.put(('ok', res))
+                    except Exception as e:
+                        result_queue.put(('error', e))
+                        
+                for _ in range(len(done)):
+                    try:
+                        futures.add(pool.submit(_process_task, next(task_iter), from_date, dates))
+                    except StopIteration:
+                        break
+        result_queue.put(('done', None))
 
-    def on_done(output):
-        if output:
-            queue.put(output)
-            with lock:
-                counters['enqueued'] += 1
-        pbar.update(1)
-        with lock:
-            backlog = counters['enqueued'] - counters['consumed']
-            err = counters['errors']
-        pbar.set_postfix(queue=backlog, errors=err)
+    producer_thread = Thread(target=_producer)
+    producer_thread.start()
 
-    def on_error(err):
-        print(f"Error processing file: {err}")
-        with lock:
-            counters['errors'] += 1
-            backlog = counters['enqueued'] - counters['consumed']
-            err_count = counters['errors']
-        pbar.update(1)
-        pbar.set_postfix(queue=backlog, errors=err_count)
+    errors = 0
+    while True:
+        status, payload = result_queue.get()
+        if status == 'done':
+            break
+        elif status == 'error':
+            print(f"Error processing file: {payload}")
+            errors += 1
+            pbar.update(1)
+            pbar.set_postfix(queue=result_queue.qsize(), errors=errors)
+        elif status == 'ok':
+            if payload:
+                trades, date = payload
+                print(f"Writing {date} trades to {h5_path}...")
+                try:
+                    trades.save_h5(h5_path, mode='a', overwrite_month=True)
+                    print(f"Finished writing {date} trades.")
+                except Exception as e:
+                    print(f"Error saving {date}: {e}")
+                    errors += 1
+            pbar.update(1)
+            pbar.set_postfix(queue=result_queue.qsize(), errors=errors)
 
-    for zip_file in zip_files:
-        pool.apply_async(_process_task, args=(zip_file, from_date, dates), callback=on_done, error_callback=on_error)
-    pool.close()
-    pool.join()
-
+    producer_thread.join()
     pbar.close()
-    queue.put(None)
-    writer.join()
 
 
 # ------------------------- Network & Orchestration -------------------------
@@ -306,10 +334,11 @@ def build_urls(market: str, symbol: str, month: Month) -> Tuple[str, str]:
     return url, url + ".CHECKSUM"
 
 
-def download_file(url: str, dest_path: str, session: requests.Session, retries: int = 3) -> bool:
+def download_file(url: str, dest_path: str, session: requests.Session, retries: int = 5) -> bool:
+    import time
     for attempt in range(retries):
         try:
-            with session.get(url, stream=True, timeout=60) as r:
+            with session.get(url, stream=True, timeout=(30, 300)) as r:
                 if r.status_code == 404:
                     return False
                 r.raise_for_status()
@@ -323,9 +352,13 @@ def download_file(url: str, dest_path: str, session: requests.Session, retries: 
                             if total > 0:
                                 pbar.update(len(chunk))
             return True
-        except Exception:
+        except Exception as e:
+            print(f"\n[warn] Download failed for {os.path.basename(dest_path)} (attempt {attempt+1}/{retries}): {e}")
             if attempt == retries - 1:
+                if os.path.exists(dest_path):
+                    os.remove(dest_path) # Clean up partial
                 raise
+            time.sleep(5)
     return False
 
 
@@ -438,7 +471,7 @@ def main():
     parser.add_argument('--start', required=True, help='Start date: YYYY or YYYY-MM')
     parser.add_argument('--end', default='now', help="End date: YYYY or YYYY-MM or 'now'")
     parser.add_argument('--workdir', required=True, help='Working directory for data (raw/ and h5/ will be created)')
-    parser.add_argument('--workers', '-c', type=int, default=4, help='Workers for processing stage')
+    parser.add_argument('--workers', '-c', type=int, default=1, help='Workers for processing stage (default=1 to prevent OOM)')
     parser.add_argument('--overwrite-klines', type=int, default=1, help='If 1, overwrite timebar klines during build')
     args = parser.parse_args()
 
