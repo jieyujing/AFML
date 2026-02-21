@@ -1,129 +1,85 @@
 # AGENTS Instructions
 
-This document provides essential guidance for AI coding agents working in the AFMLKit repository.
+AI 编码代理在 AFMLKit 仓库中工作的必备指南。Python 版本：3.10+
 
 ---
 
-## Build / Install / Lint / Test Commands
-
-### Installation
+## 快速参考
 
 ```bash
-# Install in editable mode with dev dependencies (REQUIRED before any work)
+pip install -e .[dev]                                      # 安装
+NUMBA_DISABLE_JIT=1 pytest -q                              # 测试
+pytest tests/bars/test_comp_ohlcv.py::test_comp_ohlcv -v   # 单测试
+flake8 afmlkit/ && black afmlkit/                          # 检查
+```
+
+---
+
+## 构建与测试
+
+```bash
+# 安装（开始工作前必须执行）
 pip install -e .[dev]
-```
 
-### Testing
+# 测试命令
+NUMBA_DISABLE_JIT=1 pytest -q                              # 完整套件
+NUMBA_DISABLE_JIT=1 pytest tests/ --cov=afmlkit -v         # 带覆盖率
+pytest tests/bars/test_comp_ohlcv.py -v                    # 单文件
+pytest tests/bars/test_comp_ohlcv.py::test_comp_ohlcv -v   # 单函数
 
-```bash
-# Run full test suite (JIT disabled - recommended for CI/reliability)
-NUMBA_DISABLE_JIT=1 pytest -q
+# 辅助脚本
+./local_test.sh          # JIT 启用
+./local_test_nojit.sh    # JIT 禁用（CI 风格）
 
-# Run full test suite with coverage
-NUMBA_DISABLE_JIT=1 pytest tests/ --cov=afmlkit --cov-report=xml --cov-report=term -v
-
-# Run a SINGLE test file
-pytest tests/bars/test_comp_ohlcv.py -v
-
-# Run a SINGLE test function
-pytest tests/bars/test_comp_ohlcv.py::test_comp_ohlcv -v
-
-# Run all tests in a directory
-pytest tests/features/ -v
-
-# Helper scripts (create fresh venv and run tests)
-./local_test.sh          # JIT enabled
-./local_test_nojit.sh    # JIT disabled (CI-style)
-```
-
-### Linting / Formatting
-
-```bash
-# Flake8 linting
+# Lint
 flake8 afmlkit/
-
-# Black formatting (check)
-black --check afmlkit/
-
-# Black formatting (apply)
 black afmlkit/
 ```
 
 ---
 
-## Numba JIT Compilation Notes
+## Numba JIT 注意事项
 
-**CRITICAL**: This codebase uses Numba for high-performance computation. Testing Numba functions requires special handling.
+**关键**：此代码库使用 Numba 进行高性能计算，测试需要特殊处理。
 
-### JIT-Disabled Testing (Recommended)
+- **推荐**：设置 `NUMBA_DISABLE_JIT=1` 运行测试
+- **原因**：CI 在 JIT 禁用模式下运行（numba 与大规模测试不兼容）
+- **本地验证**：JIT 禁用测试通过后，启用 JIT 再次验证生产行为
 
-- Set `NUMBA_DISABLE_JIT=1` environment variable before running tests
-- CI runs with JIT disabled (`numba` is not compatible with mass testing)
-- Always test with JIT disabled first for debugging
-
-### JIT-Enabled Testing
-
-- Test with JIT enabled locally to ensure production behavior
-- First run includes compilation overhead; subsequent runs are fast
-- Use `n_runs=11` pattern and exclude first run for benchmarks
-
-### In-File JIT Disabling (Debug Only)
-
+**调试时禁用 JIT（仅用于调试，提交前移除）：**
 ```python
 import os
-os.environ['NUMBA_DISABLE_JIT'] = "1"  # Must be before any numba imports
+os.environ['NUMBA_DISABLE_JIT'] = "1"  # 必须在导入 numba 函数前
 from afmlkit.bar.base import comp_bar_ohlcv
 ```
 
-**IMPORTANT**: Remove/comment out JIT-disabling code before committing.
-
 ---
 
-## Code Style Guidelines
+## 代码风格
 
-### General Principles
+### 导入顺序
 
-- Follow [PEP 8](https://peps.python.org/pep-0008/)
-- Use descriptive variable names; avoid cryptic abbreviations
-- Keep functions focused; prefer small, composable units
-- Leave the working tree clean before creating PRs
-
-### Imports
-
-Order imports in three groups, separated by blank lines:
-
-1. **Standard library** (alphabetical)
-2. **Third-party** (alphabetical: `numpy`, `numba`, `pandas`, etc.)
-3. **Local imports** (relative or absolute)
+三组导入，用空行分隔：标准库 → 第三方 → 本地导入
 
 ```python
-# Standard library
+# 标准库
 from abc import ABC, abstractmethod
-from typing import Tuple, Optional, Sequence
+from typing import Tuple, Optional
 
-# Third-party
+# 第三方
 import numpy as np
 import pandas as pd
 from numba import njit, prange
 from numpy.typing import NDArray
 
-# Local imports
+# 本地导入
 from .data_model import TradesData
 from afmlkit.utils.log import get_logger
 ```
 
-### Type Hints
-
-- Use explicit type hints for function signatures
-- Use `numpy.typing.NDArray` for NumPy arrays with dtype specification
-- Use `Optional[T]` for optional parameters
-- Use `Union[A, B]` for multiple accepted types
+### 类型注解
 
 ```python
-from typing import Tuple, Optional, Union, Sequence
-from numpy.typing import NDArray
-import numpy as np
-
 def process_data(
     prices: NDArray[np.float64],
     volumes: NDArray[np.float64],
@@ -132,44 +88,69 @@ def process_data(
     ...
 ```
 
-### Naming Conventions
+### 命名约定
 
-| Type | Convention | Example |
-|------|------------|---------|
-| Functions | `snake_case` | `comp_bar_ohlcv`, `build_ohlcv` |
-| Classes | `PascalCase` | `BarBuilderBase`, `SISOTransform` |
-| Private functions | `_leading_underscore` | `_time_bar_indexer`, `_validate_input` |
-| Constants | `UPPER_SNAKE_CASE` | `DEFAULT_THRESHOLD` |
-| Instance variables | `snake_case` | `self.trades_df`, `self._close_ts` |
+| 类型 | 约定 | 示例 |
+|------|------|------|
+| 函数 | `snake_case` | `comp_bar_ohlcv` |
+| 类 | `PascalCase` | `BarBuilderBase` |
+| 私有函数 | `_前缀` | `_time_bar_indexer` |
+| 常量 | `UPPER_SNAKE_CASE` | `DEFAULT_THRESHOLD` |
 
-### Numba Function Patterns
+### Numba 函数
 
 ```python
-from numba import njit, prange
-from numba.typed import List as NumbaList
-
-# Standard Numba function
 @njit(nogil=True)
 def _process_array(data: NDArray[np.float64]) -> NDArray[np.float64]:
     ...
 
-# Parallel Numba function (use prange, not range)
 @njit(nogil=True, parallel=True)
 def _process_parallel(data: NDArray[np.float64]) -> NDArray[np.float64]:
-    n = len(data)
-    result = np.zeros(n, dtype=np.float64)
-    for i in prange(n):  # prange enables parallelization
-        result[i] = data[i] * 2.0
-    return result
+    for i in prange(n):  # 使用 prange 而非 range
+        ...
+```
+
+### 错误处理
+
+```python
+def public_api(prices, volumes):
+    # 在调用 Numba 函数前验证
+    if len(prices) != len(volumes):
+        raise ValueError("Array lengths must match.")
+    return _numba_implementation(prices, volumes)
 ```
 
 ---
 
-## Docstring Style
+## 项目结构
 
-Use **reStructuredText** format for Sphinx documentation compatibility.
+```
+afmlkit/
+├── bar/           # K线构建（time, tick, volume, dollar bars）
+├── feature/       # 特征工程框架
+├── label/         # 标签方法（Triple Barrier Method）
+├── sampling/      # 采样过滤器（CUSUM filter）
+└── utils/         # 工具函数
 
-### Function Docstrings
+tests/
+├── bars/          # bar 模块测试
+├── features/      # feature 模块测试
+└── utils.py       # 测试工具
+```
+
+---
+
+## 关键约定
+
+- **DataFrame 索引**：时间序列使用 datetime index，内部存储为纳秒 (`int64`)
+- **数组类型**：`np.float64`（价格/成交量）、`np.int64`（索引/计数）、`np.int8`（分类值）
+- **日志**：`from afmlkit.utils.log import get_logger`
+
+---
+
+## Docstring 风格
+
+使用 **reStructuredText** 格式：
 
 ```python
 def compute_returns(prices: NDArray[np.float64], log: bool = True) -> NDArray[np.float64]:
@@ -177,162 +158,17 @@ def compute_returns(prices: NDArray[np.float64], log: bool = True) -> NDArray[np
     Compute returns from a price series.
 
     :param prices: Array of price values.
-    :param log: If True, compute log returns; otherwise simple returns.
+    :param log: If True, compute log returns.
     :returns: Array of return values.
-    :raises ValueError: If prices array has fewer than 2 elements.
-
-    .. note::
-        The first element of the output will be NaN as there is no prior price.
-
-    Example:
-        >>> prices = np.array([100.0, 101.0, 99.0])
-        >>> compute_returns(prices, log=True)
-        array([nan, 0.0099..., -0.0202...])
+    :raises ValueError: If prices has fewer than 2 elements.
     """
     ...
 ```
 
-### Class Docstrings
-
-```python
-class BarBuilderBase(ABC):
-    r"""Abstract base class for building bars from raw trades data.
-
-    This class serves as a template for subclasses that implement specific
-    bar sampling strategies (time, tick, volume, etc.).
-
-    Key functionalities include:
-
-    - :meth:`build_ohlcv`: Computes OHLCV, VWAP, trade count, and median trade size.
-    - :meth:`build_directional_features`: Calculates buy/sell splits.
-
-    Args:
-        trades (TradesData): Object containing raw trades DataFrame.
-
-    Raises:
-        ValueError: If required columns are missing from trades data.
-
-    See Also:
-        :class:`afmlkit.bar.kit.TimeBarKit`: Concrete subclass for time bars.
-    """
-```
-
 ---
 
-## Error Handling
+## 参考资源
 
-### Input Validation
-
-Validate inputs at function start with descriptive error messages:
-
-```python
-def process_trades(prices: NDArray, volumes: NDArray) -> NDArray:
-    if len(prices) != len(volumes):
-        raise ValueError("Prices and volumes arrays must have the same length.")
-    if len(prices) < 2:
-        raise ValueError("At least 2 prices are required.")
-    ...
-```
-
-### Numba Error Handling
-
-Numba functions have limited exception support. Validate outside when possible:
-
-```python
-def public_api(prices, volumes):
-    # Validate BEFORE calling Numba function
-    if len(prices) != len(volumes):
-        raise ValueError("Array lengths must match.")
-    return _numba_implementation(prices, volumes)
-
-@njit(nogil=True)
-def _numba_implementation(prices, volumes):
-    # Minimal validation inside Numba
-    ...
-```
-
----
-
-## Project Structure
-
-```
-afmlkit/
-├── bar/           # Bar construction (time, tick, volume, dollar bars)
-│   ├── base.py    # Core bar building functions and BarBuilderBase
-│   ├── logic.py   # Bar indexer functions (Numba-accelerated)
-│   ├── data_model.py  # Data structures (TradesData, FootprintData)
-│   └── kit.py     # Concrete implementations (TimeBarKit, etc.)
-├── feature/       # Feature engineering framework
-│   ├── base.py    # Transform base classes (SISO, MISO, SIMO, MIMO)
-│   ├── core/      # Core feature implementations
-│   └── kit.py     # FeatureKit for batch computation
-├── label/         # Labeling methods (Triple Barrier Method, etc.)
-├── sampling/      # Sampling filters (CUSUM filter)
-├── utils/         # Utilities (logging, helpers)
-└── _version.py    # Version string
-
-tests/
-├── bars/          # Tests for bar module
-├── features/      # Tests for feature module
-├── labels/        # Tests for label module
-├── sampling/      # Tests for sampling module
-├── utils.py       # Test utilities
-└── README.md      # Testing guidance
-```
-
----
-
-## Key Conventions
-
-### DataFrame Index
-
-- Time series DataFrames use **datetime index**
-- Timestamps stored as nanoseconds (`int64`) internally
-- Convert with `pd.to_datetime(timestamps, unit='ns')`
-
-### Array Types
-
-- Use `np.float64` for prices, volumes, returns
-- Use `np.int64` for indices, counts
-- Use `np.int8` for categorical/enum values (e.g., trade side: -1, 1)
-- Use `np.float32` for memory-constrained aggregations
-
-### Logger Usage
-
-```python
-from afmlkit.utils.log import get_logger
-
-logger = get_logger(__name__)
-
-logger.info("Processing started...")
-logger.warning("Unusual condition detected")
-logger.error("Failed to process data")
-```
-
----
-
-## Search Tools
-
-Prefer `rg` (ripgrep) for searching. If missing, install via:
-```bash
-sudo apt-get update && sudo apt-get install -y ripgrep
-```
-Or fallback to: `git ls-files | xargs grep -n`
-
----
-
-## Git Workflow
-
-- Keep commits focused and atomic
-- Write descriptive commit messages
-- Ensure working tree is clean before PR creation
-- Run tests locally before pushing: `NUMBA_DISABLE_JIT=1 pytest -q`
-
----
-
-## References
-
-- Primary methodology source: **Advances in Financial Machine Learning** by Marcos López de Prado
-- Documentation: [afmlkit.readthedocs.io](https://afmlkit.readthedocs.io)
-- Detailed testing guide: [tests/README.md](tests/README.md)
-- Contribution guidelines: [CONTRIBUTING.md](CONTRIBUTING.md)
+- 方法论：*Advances in Financial Machine Learning* by Marcos López de Prado
+- 文档：https://afmlkit.readthedocs.io
+- 测试指南：[tests/README.md](tests/README.md)
