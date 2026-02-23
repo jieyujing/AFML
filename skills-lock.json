@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "autogen-development": {
+      "source": "mindrally/skills",
+      "sourceType": "github",
+      "computedHash": "82c305e62fe4a537495888d8a426dd2423d274752d9867b2eda6b30766b5e5d3"
+    }
+  }
+}
