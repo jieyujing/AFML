@@ -25,6 +25,7 @@ dependencies = [
     "pympler~=1.1",
     "tables~=3.10.0",
     "tqdm",
+    "matplotlib>=3.10.8",
 ]
 
 [project.optional-dependencies]

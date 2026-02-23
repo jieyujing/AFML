@@ -150,6 +150,40 @@ def _dollar_bar_indexer(
 
 
 @njit(nogil=True)
+def _dynamic_dollar_bar_indexer(
+        prices: NDArray[np.int64],
+        volumes: NDArray[np.float64],
+        thresholds: NDArray[np.float64]
+) -> NumbaList:
+    """
+    Determine the dollar bar open indices using cumulative dollar value with a dynamic threshold.
+
+    :param prices: Trade prices.
+    :param volumes: Trade volumes.
+    :param thresholds: Array of dollar value thresholds for opening a new bar, aligned with prices.
+    :returns: close_indices: Timestamps at which each dollar bar opens.
+
+    .. note::
+        The first trade is always the start of a bar.
+        A new bar is opened when the cumulative dollar value (price × volume) meets or exceeds the current threshold.
+    """
+    n = len(prices)
+
+    # Initialize a Numba typed list to store indices
+    dollar_bar_indices = NumbaList()
+    dollar_bar_indices.append(0)
+
+    cum_dollar = prices[0] * volumes[0]
+    for i in range(1, n):
+        cum_dollar += prices[i] * volumes[i]
+        if cum_dollar >= thresholds[i]:
+            dollar_bar_indices.append(i)
+            cum_dollar = cum_dollar - thresholds[i]
+
+    return dollar_bar_indices
+
+
+@njit(nogil=True)
 def _cusum_bar_indexer(
         timestamps: NDArray[np.int64],
         prices: NDArray[np.float64],
