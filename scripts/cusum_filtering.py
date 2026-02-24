@@ -34,16 +34,15 @@ def compute_dynamic_cusum_filter(
     print(f"Calculating rolling volatility (span={vol_span})...")
     volatility = ewms(log_ret, span=vol_span)
     
-    # 前几项可能是 NaN，由于 ewms 内部逻辑，如果全是 NaN 会一直 NaN。
-    # 这里我们使用 pandas 的 bfill 或者简单用 nanmean 填充。
+    # 前几项可能是 NaN，严格按 AFML 方法论：不做前向/后向填充，直接丢弃 (dropna) 无效数据！
     valid_mask = ~np.isnan(volatility)
     if not np.any(valid_mask):
         raise ValueError("Calculated volatility is all NaNs.")
         
-    # 将前面的 NaN 填充为第一个有效的方差 (bfill)
-    vol_series = pd.Series(volatility)
-    vol_series = vol_series.bfill().ffill()
-    clean_volatility = vol_series.values.astype(np.float64)
+    # 直接舍弃掉没有足够历史数据来计算波动率的那些观测行
+    df = df.iloc[valid_mask].copy()
+    prices = prices[valid_mask]
+    clean_volatility = volatility[valid_mask]
     
     # 防止波动率为 0 导致后续无事件
     clean_volatility = np.maximum(clean_volatility, 1e-8)
