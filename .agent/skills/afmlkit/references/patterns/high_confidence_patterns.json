@@ -1,0 +1,358 @@
+[
+  {
+    "pattern_type": "Factory",
+    "category": "Creational",
+    "confidence": 0.9,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\base.py",
+    "class_name": "BarBuilderBase",
+    "method_name": null,
+    "line_number": 24,
+    "evidence": [
+      "Factory method: build_ohlcv",
+      "Factory method: build_directional_features",
+      "Parameterized factory method: build_trade_size_features",
+      "Parameterized factory method: build_footprints",
+      "Multiple factory methods: build_ohlcv, build_directional_features, build_trade_size_features",
+      "Inherits from: ABC"
+    ],
+    "related_classes": [
+      "ABC"
+    ],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\base.py"
+  },
+  {
+    "pattern_type": "Factory",
+    "category": "Creational",
+    "confidence": 0.9,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\data_model.py",
+    "class_name": "FootprintData",
+    "method_name": null,
+    "line_number": 834,
+    "evidence": [
+      "Parameterized factory method: __getitem__",
+      "Factory method: get_df",
+      "Multiple factory methods: __getitem__, get_df"
+    ],
+    "related_classes": [],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\data_model.py"
+  },
+  {
+    "pattern_type": "Factory",
+    "category": "Creational",
+    "confidence": 0.9,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\io.py",
+    "class_name": "H5Inspector",
+    "method_name": null,
+    "line_number": 35,
+    "evidence": [
+      "Parameterized factory method: get_metadata",
+      "Parameterized factory method: get_integrity_info",
+      "Parameterized factory method: get_statistics",
+      "Parameterized factory method: get_integrity_summary",
+      "Multiple factory methods: get_metadata, get_integrity_info, get_statistics"
+    ],
+    "related_classes": [],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\io.py"
+  },
+  {
+    "pattern_type": "Strategy",
+    "category": "Behavioral",
+    "confidence": 0.9,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+    "class_name": "BaseTransform",
+    "method_name": null,
+    "line_number": 11,
+    "evidence": [
+      "Part of strategy family with: CoreTransform, SISOTransform, MISOTransform",
+      "Strategy base with implementations: CoreTransform, BinaryOpTransform, ConstantOpTransform"
+    ],
+    "related_classes": [
+      "ABC",
+      "CoreTransform",
+      "BinaryOpTransform",
+      "ConstantOpTransform",
+      "UnaryOpTransform",
+      "MinMaxOpTransform"
+    ],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py"
+  },
+  {
+    "pattern_type": "Strategy",
+    "category": "Behavioral",
+    "confidence": 0.9,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+    "class_name": "CoreTransform",
+    "method_name": null,
+    "line_number": 141,
+    "evidence": [
+      "Part of strategy family with: BinaryOpTransform, ConstantOpTransform, UnaryOpTransform",
+      "Strategy base with implementations: SISOTransform, MISOTransform, SIMOTransform"
+    ],
+    "related_classes": [
+      "BaseTransform",
+      "ABC",
+      "SISOTransform",
+      "MISOTransform",
+      "SIMOTransform",
+      "MIMOTransform"
+    ],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py"
+  },
+  {
+    "pattern_type": "Factory",
+    "category": "Creational",
+    "confidence": 0.9,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\kit.py",
+    "class_name": "FeatureKit",
+    "method_name": null,
+    "line_number": 724,
+    "evidence": [
+      "Factory method: build_graph",
+      "Parameterized factory method: build",
+      "Multiple factory methods: build_graph, build"
+    ],
+    "related_classes": [],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\kit.py"
+  },
+  {
+    "pattern_type": "TemplateMethod",
+    "category": "Behavioral",
+    "confidence": 0.85,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+    "class_name": "CoreTransform",
+    "method_name": null,
+    "line_number": 141,
+    "evidence": [
+      "Base class with 4 implementations",
+      "Has hook methods: _prepare_input_nb, _prepare_output_nb",
+      "Has abstract methods: __init__, __call__"
+    ],
+    "related_classes": [
+      "SISOTransform",
+      "MISOTransform",
+      "SIMOTransform",
+      "MIMOTransform"
+    ],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py"
+  },
+  {
+    "pattern_type": "Strategy",
+    "category": "Behavioral",
+    "confidence": 0.7,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\kit.py",
+    "class_name": "TimeBarKit",
+    "method_name": null,
+    "line_number": 12,
+    "evidence": [
+      "Part of strategy family with: TickBarKit, VolumeBarKit, DollarBarKit",
+      "Strategy interface method: _comp_bar_close"
+    ],
+    "related_classes": [
+      "BarBuilderBase"
+    ],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\kit.py"
+  },
+  {
+    "pattern_type": "Strategy",
+    "category": "Behavioral",
+    "confidence": 0.7,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\kit.py",
+    "class_name": "TickBarKit",
+    "method_name": null,
+    "line_number": 38,
+    "evidence": [
+      "Part of strategy family with: TimeBarKit, VolumeBarKit, DollarBarKit",
+      "Strategy interface method: _comp_bar_close"
+    ],
+    "related_classes": [
+      "BarBuilderBase"
+    ],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\kit.py"
+  },
+  {
+    "pattern_type": "Strategy",
+    "category": "Behavioral",
+    "confidence": 0.7,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\kit.py",
+    "class_name": "VolumeBarKit",
+    "method_name": null,
+    "line_number": 70,
+    "evidence": [
+      "Part of strategy family with: TimeBarKit, TickBarKit, DollarBarKit",
+      "Strategy interface method: _comp_bar_close"
+    ],
+    "related_classes": [
+      "BarBuilderBase"
+    ],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\kit.py"
+  },
+  {
+    "pattern_type": "Strategy",
+    "category": "Behavioral",
+    "confidence": 0.7,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\kit.py",
+    "class_name": "DollarBarKit",
+    "method_name": null,
+    "line_number": 105,
+    "evidence": [
+      "Part of strategy family with: TimeBarKit, TickBarKit, VolumeBarKit",
+      "Strategy interface method: _comp_bar_close"
+    ],
+    "related_classes": [
+      "BarBuilderBase"
+    ],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\kit.py"
+  },
+  {
+    "pattern_type": "Strategy",
+    "category": "Behavioral",
+    "confidence": 0.7,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\kit.py",
+    "class_name": "DynamicDollarBarKit",
+    "method_name": null,
+    "line_number": 140,
+    "evidence": [
+      "Part of strategy family with: TimeBarKit, TickBarKit, VolumeBarKit",
+      "Strategy interface method: _comp_bar_close"
+    ],
+    "related_classes": [
+      "BarBuilderBase"
+    ],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\kit.py"
+  },
+  {
+    "pattern_type": "Command",
+    "category": "Behavioral",
+    "confidence": 0.7,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+    "class_name": "BaseTransform",
+    "method_name": null,
+    "line_number": 11,
+    "evidence": [
+      "Has execute method: __call__()",
+      "Encapsulates receiver/parameters"
+    ],
+    "related_classes": [],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py"
+  },
+  {
+    "pattern_type": "Command",
+    "category": "Behavioral",
+    "confidence": 0.7,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+    "class_name": "CoreTransform",
+    "method_name": null,
+    "line_number": 141,
+    "evidence": [
+      "Has execute method: __call__()",
+      "Encapsulates receiver/parameters"
+    ],
+    "related_classes": [],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py"
+  },
+  {
+    "pattern_type": "Command",
+    "category": "Behavioral",
+    "confidence": 0.7,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+    "class_name": "BinaryOpTransform",
+    "method_name": null,
+    "line_number": 1257,
+    "evidence": [
+      "Has execute method: __call__()",
+      "Encapsulates receiver/parameters"
+    ],
+    "related_classes": [],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py"
+  },
+  {
+    "pattern_type": "Command",
+    "category": "Behavioral",
+    "confidence": 0.7,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+    "class_name": "ConstantOpTransform",
+    "method_name": null,
+    "line_number": 1302,
+    "evidence": [
+      "Has execute method: __call__()",
+      "Encapsulates receiver/parameters"
+    ],
+    "related_classes": [],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py"
+  },
+  {
+    "pattern_type": "Command",
+    "category": "Behavioral",
+    "confidence": 0.7,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+    "class_name": "UnaryOpTransform",
+    "method_name": null,
+    "line_number": 1335,
+    "evidence": [
+      "Has execute method: __call__()",
+      "Encapsulates receiver/parameters"
+    ],
+    "related_classes": [],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py"
+  },
+  {
+    "pattern_type": "Command",
+    "category": "Behavioral",
+    "confidence": 0.7,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+    "class_name": "MinMaxOpTransform",
+    "method_name": null,
+    "line_number": 1367,
+    "evidence": [
+      "Has execute method: __call__()",
+      "Encapsulates receiver/parameters"
+    ],
+    "related_classes": [],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py"
+  },
+  {
+    "pattern_type": "Command",
+    "category": "Behavioral",
+    "confidence": 0.7,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\kit.py",
+    "class_name": "Feature",
+    "method_name": null,
+    "line_number": 13,
+    "evidence": [
+      "Has execute method: __call__()",
+      "Encapsulates receiver/parameters"
+    ],
+    "related_classes": [],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\kit.py"
+  },
+  {
+    "pattern_type": "Command",
+    "category": "Behavioral",
+    "confidence": 0.7,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+    "class_name": "Identity",
+    "method_name": null,
+    "line_number": 25,
+    "evidence": [
+      "Has execute method: __call__()",
+      "Encapsulates receiver/parameters"
+    ],
+    "related_classes": [],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py"
+  },
+  {
+    "pattern_type": "Command",
+    "category": "Behavioral",
+    "confidence": 0.7,
+    "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+    "class_name": "ExternalFunction",
+    "method_name": null,
+    "line_number": 1668,
+    "evidence": [
+      "Has execute method: __call__()",
+      "Encapsulates receiver/parameters"
+    ],
+    "related_classes": [],
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py"
+  }
+]

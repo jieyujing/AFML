@@ -24,6 +24,10 @@ This skill provides a standardized, industrial-grade workflow for quantitative f
     *   **Check**: Are you using Time Bars?
     *   **Action**: If YES -> STOP. Switch to **Dollar Bars** or **Volume Bars** to recover normality and synchronize with information flow.
     *   **Event Trigger**: Apply **CUSUM Filter** (Cumulative Sum) to trigger sampling. Only record data when price deviation hits a threshold to capture "significant events" and reduce noise.
+    *   **Frequency Selection (Best Practice)**: When evaluating Dollar Bars (IID test):
+        *   **Independence First**: Prioritize **Low Autocorrelation** over the Jarque-Bera (JB) absolute value. Independent samples (AC1 ≈ 0) are critical for preventing CV leakage.
+        *   **Sample Size Sensitivity**: JB statistics scale with $N$. A larger $N$ (more bars) naturally leads to higher JB. Don't let high JB scare you away from high-frequency bars if the autocorrelation is near-zero and labels look balanced.
+        *   **Optimal Frequency**: Often around 20-50 bars/day for high-volume assets (e.g., BTCUSDT). Aim for a balance: enough samples for ML training vs. preserving IID properties.
 2.  **Stationarity**:
     *   **Check**: Run Augmented Dickey-Fuller (ADF) test. Is p-value < 0.05?
     *   **Action**: If NO -> Apply **Fractional Differentiation (FracDiff)**. Find minimum `d` such that p < 0.05 while maximizing memory preservation. *Never use integer differencing (d=1).*

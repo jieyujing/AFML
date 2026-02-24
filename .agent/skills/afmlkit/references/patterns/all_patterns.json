@@ -1,0 +1,2456 @@
+[
+  {
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\base.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\base.py",
+        "class_name": "BarBuilderBase",
+        "method_name": null,
+        "line_number": 24,
+        "evidence": [
+          "Factory method: build_ohlcv",
+          "Factory method: build_directional_features",
+          "Parameterized factory method: build_trade_size_features",
+          "Parameterized factory method: build_footprints",
+          "Multiple factory methods: build_ohlcv, build_directional_features, build_trade_size_features",
+          "Inherits from: ABC"
+        ],
+        "related_classes": [
+          "ABC"
+        ]
+      },
+      {
+        "pattern_type": "Builder",
+        "category": "Creational",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\base.py",
+        "class_name": "BarBuilderBase",
+        "method_name": null,
+        "line_number": 24,
+        "evidence": [
+          "Has terminal build/create method"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\base.py",
+        "class_name": "BarBuilderBase",
+        "method_name": "_comp_bar_close",
+        "line_number": 93,
+        "evidence": [
+          "Method uses decorators: ['abstractmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\base.py",
+        "class_name": "BarBuilderBase",
+        "method_name": null,
+        "line_number": 24,
+        "evidence": [
+          "Implements interface: ABC",
+          "Has 10 interface methods"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 5,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 1,
+      "Builder": 1,
+      "Decorator": 1,
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\data_model.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\data_model.py",
+        "class_name": "TradesData",
+        "method_name": "start_date",
+        "line_number": 208,
+        "evidence": [
+          "Method uses decorators: ['property']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\data_model.py",
+        "class_name": "FootprintData",
+        "method_name": null,
+        "line_number": 834,
+        "evidence": [
+          "Parameterized factory method: __getitem__",
+          "Factory method: get_df",
+          "Multiple factory methods: __getitem__, get_df"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\data_model.py",
+        "class_name": "FootprintData",
+        "method_name": "from_numba",
+        "line_number": 1010,
+        "evidence": [
+          "Method uses decorators: ['classmethod']"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 2,
+    "total_functions": 2,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 2,
+      "Factory": 1
+    }
+  },
+  {
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\io.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\io.py",
+        "class_name": "H5Inspector",
+        "method_name": null,
+        "line_number": 35,
+        "evidence": [
+          "Parameterized factory method: get_metadata",
+          "Parameterized factory method: get_integrity_info",
+          "Parameterized factory method: get_statistics",
+          "Parameterized factory method: get_integrity_summary",
+          "Multiple factory methods: get_metadata, get_integrity_info, get_statistics"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "TemplateMethod",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\io.py",
+        "class_name": "AddTimeBarH5",
+        "method_name": null,
+        "line_number": 311,
+        "evidence": [
+          "Has hook methods: process_key, process_all",
+          "Has abstract methods: __init__, _list_keys"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 3,
+    "total_functions": 2,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 1,
+      "TemplateMethod": 1
+    }
+  },
+  {
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\kit.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\kit.py",
+        "class_name": "TimeBarKit",
+        "method_name": null,
+        "line_number": 12,
+        "evidence": [
+          "Part of strategy family with: TickBarKit, VolumeBarKit, DollarBarKit",
+          "Strategy interface method: _comp_bar_close"
+        ],
+        "related_classes": [
+          "BarBuilderBase"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\kit.py",
+        "class_name": "TickBarKit",
+        "method_name": null,
+        "line_number": 38,
+        "evidence": [
+          "Part of strategy family with: TimeBarKit, VolumeBarKit, DollarBarKit",
+          "Strategy interface method: _comp_bar_close"
+        ],
+        "related_classes": [
+          "BarBuilderBase"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\kit.py",
+        "class_name": "VolumeBarKit",
+        "method_name": null,
+        "line_number": 70,
+        "evidence": [
+          "Part of strategy family with: TimeBarKit, TickBarKit, DollarBarKit",
+          "Strategy interface method: _comp_bar_close"
+        ],
+        "related_classes": [
+          "BarBuilderBase"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\kit.py",
+        "class_name": "DollarBarKit",
+        "method_name": null,
+        "line_number": 105,
+        "evidence": [
+          "Part of strategy family with: TimeBarKit, TickBarKit, VolumeBarKit",
+          "Strategy interface method: _comp_bar_close"
+        ],
+        "related_classes": [
+          "BarBuilderBase"
+        ]
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\kit.py",
+        "class_name": "DynamicDollarBarKit",
+        "method_name": null,
+        "line_number": 140,
+        "evidence": [
+          "Part of strategy family with: TimeBarKit, TickBarKit, VolumeBarKit",
+          "Strategy interface method: _comp_bar_close"
+        ],
+        "related_classes": [
+          "BarBuilderBase"
+        ]
+      },
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.6,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\kit.py",
+        "class_name": "CUSUMBarKit",
+        "method_name": "get_sigma",
+        "line_number": 252,
+        "evidence": [
+          "Factory method detected: get_sigma"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\kit.py",
+        "class_name": "CUSUMBarKit",
+        "method_name": null,
+        "line_number": 216,
+        "evidence": [
+          "Implements interface: BarBuilderBase",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\bar\\kit.py",
+        "class_name": "CUSUMBarKit",
+        "method_name": null,
+        "line_number": 216,
+        "evidence": [
+          "Part of strategy family with: TimeBarKit, TickBarKit, VolumeBarKit"
+        ],
+        "related_classes": [
+          "BarBuilderBase"
+        ]
+      }
+    ],
+    "total_classes": 6,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Strategy": 6,
+      "Factory": 1,
+      "Adapter": 1
+    }
+  },
+  {
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "BaseTransform",
+        "method_name": "__call__",
+        "line_number": 97,
+        "evidence": [
+          "Method uses decorators: ['abstractmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "BaseTransform",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Implements interface: ABC",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.9,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "BaseTransform",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Part of strategy family with: CoreTransform, SISOTransform, MISOTransform",
+          "Strategy base with implementations: CoreTransform, BinaryOpTransform, ConstantOpTransform"
+        ],
+        "related_classes": [
+          "ABC",
+          "CoreTransform",
+          "BinaryOpTransform",
+          "ConstantOpTransform",
+          "UnaryOpTransform",
+          "MinMaxOpTransform"
+        ]
+      },
+      {
+        "pattern_type": "Command",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "BaseTransform",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Has execute method: __call__()",
+          "Encapsulates receiver/parameters"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "TemplateMethod",
+        "category": "Behavioral",
+        "confidence": 0.6000000000000001,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "BaseTransform",
+        "method_name": null,
+        "line_number": 11,
+        "evidence": [
+          "Base class with 5 implementations",
+          "Has abstract methods: __init__, __call__"
+        ],
+        "related_classes": [
+          "CoreTransform",
+          "BinaryOpTransform",
+          "ConstantOpTransform",
+          "UnaryOpTransform",
+          "MinMaxOpTransform"
+        ]
+      },
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.6,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "CoreTransform",
+        "method_name": null,
+        "line_number": 141,
+        "evidence": [
+          "Parameterized factory method: _get_timestamps",
+          "Inherits from: BaseTransform, ABC"
+        ],
+        "related_classes": [
+          "BaseTransform",
+          "ABC"
+        ]
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "CoreTransform",
+        "method_name": "_check_datetime_index",
+        "line_number": 256,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "CoreTransform",
+        "method_name": null,
+        "line_number": 141,
+        "evidence": [
+          "Implements interface: BaseTransform",
+          "Has 8 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.9,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "CoreTransform",
+        "method_name": null,
+        "line_number": 141,
+        "evidence": [
+          "Part of strategy family with: BinaryOpTransform, ConstantOpTransform, UnaryOpTransform",
+          "Strategy base with implementations: SISOTransform, MISOTransform, SIMOTransform"
+        ],
+        "related_classes": [
+          "BaseTransform",
+          "ABC",
+          "SISOTransform",
+          "MISOTransform",
+          "SIMOTransform",
+          "MIMOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Command",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "CoreTransform",
+        "method_name": null,
+        "line_number": 141,
+        "evidence": [
+          "Has execute method: __call__()",
+          "Encapsulates receiver/parameters"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "TemplateMethod",
+        "category": "Behavioral",
+        "confidence": 0.85,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "CoreTransform",
+        "method_name": null,
+        "line_number": 141,
+        "evidence": [
+          "Base class with 4 implementations",
+          "Has hook methods: _prepare_input_nb, _prepare_output_nb",
+          "Has abstract methods: __init__, __call__"
+        ],
+        "related_classes": [
+          "SISOTransform",
+          "MISOTransform",
+          "SIMOTransform",
+          "MIMOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "SISOTransform",
+        "method_name": "output_name",
+        "line_number": 486,
+        "evidence": [
+          "Method uses decorators: ['property']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "SISOTransform",
+        "method_name": null,
+        "line_number": 335,
+        "evidence": [
+          "Implements interface: CoreTransform",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "SISOTransform",
+        "method_name": null,
+        "line_number": 335,
+        "evidence": [
+          "Part of strategy family with: MISOTransform, SIMOTransform, MIMOTransform"
+        ],
+        "related_classes": [
+          "CoreTransform",
+          "ABC"
+        ]
+      },
+      {
+        "pattern_type": "TemplateMethod",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "SISOTransform",
+        "method_name": null,
+        "line_number": 335,
+        "evidence": [
+          "Has hook methods: _validate_input, _prepare_input_nb, _prepare_output_nb",
+          "Has abstract methods: __init__, _validate_input"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "MISOTransform",
+        "method_name": "output_name",
+        "line_number": 700,
+        "evidence": [
+          "Method uses decorators: ['property']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "MISOTransform",
+        "method_name": null,
+        "line_number": 504,
+        "evidence": [
+          "Implements interface: CoreTransform",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "MISOTransform",
+        "method_name": null,
+        "line_number": 504,
+        "evidence": [
+          "Part of strategy family with: SISOTransform, SIMOTransform, MIMOTransform"
+        ],
+        "related_classes": [
+          "CoreTransform",
+          "ABC"
+        ]
+      },
+      {
+        "pattern_type": "TemplateMethod",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "MISOTransform",
+        "method_name": null,
+        "line_number": 504,
+        "evidence": [
+          "Has hook methods: _validate_input, _prepare_input_nb, _prepare_output_nb",
+          "Has abstract methods: __init__, _validate_input"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "SIMOTransform",
+        "method_name": "output_name",
+        "line_number": 969,
+        "evidence": [
+          "Method uses decorators: ['property']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "SIMOTransform",
+        "method_name": null,
+        "line_number": 718,
+        "evidence": [
+          "Implements interface: CoreTransform",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "SIMOTransform",
+        "method_name": null,
+        "line_number": 718,
+        "evidence": [
+          "Part of strategy family with: SISOTransform, MISOTransform, MIMOTransform"
+        ],
+        "related_classes": [
+          "CoreTransform",
+          "ABC"
+        ]
+      },
+      {
+        "pattern_type": "TemplateMethod",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "SIMOTransform",
+        "method_name": null,
+        "line_number": 718,
+        "evidence": [
+          "Has hook methods: _validate_input, _prepare_input_nb, _prepare_output_nb",
+          "Has abstract methods: __init__, _validate_input"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "MIMOTransform",
+        "method_name": "output_name",
+        "line_number": 1238,
+        "evidence": [
+          "Method uses decorators: ['property']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "MIMOTransform",
+        "method_name": null,
+        "line_number": 989,
+        "evidence": [
+          "Implements interface: CoreTransform",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "MIMOTransform",
+        "method_name": null,
+        "line_number": 989,
+        "evidence": [
+          "Part of strategy family with: SISOTransform, MISOTransform, SIMOTransform"
+        ],
+        "related_classes": [
+          "CoreTransform",
+          "ABC"
+        ]
+      },
+      {
+        "pattern_type": "TemplateMethod",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "MIMOTransform",
+        "method_name": null,
+        "line_number": 989,
+        "evidence": [
+          "Has hook methods: _validate_input, _prepare_input_nb, _prepare_output_nb",
+          "Has abstract methods: __init__, _validate_input"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "BinaryOpTransform",
+        "method_name": "output_name",
+        "line_number": 1278,
+        "evidence": [
+          "Method uses decorators: ['property']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "BinaryOpTransform",
+        "method_name": null,
+        "line_number": 1257,
+        "evidence": [
+          "Implements interface: BaseTransform",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "BinaryOpTransform",
+        "method_name": null,
+        "line_number": 1257,
+        "evidence": [
+          "Part of strategy family with: CoreTransform, ConstantOpTransform, UnaryOpTransform"
+        ],
+        "related_classes": [
+          "BaseTransform"
+        ]
+      },
+      {
+        "pattern_type": "Command",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "BinaryOpTransform",
+        "method_name": null,
+        "line_number": 1257,
+        "evidence": [
+          "Has execute method: __call__()",
+          "Encapsulates receiver/parameters"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "ConstantOpTransform",
+        "method_name": "output_name",
+        "line_number": 1315,
+        "evidence": [
+          "Method uses decorators: ['property']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "ConstantOpTransform",
+        "method_name": null,
+        "line_number": 1302,
+        "evidence": [
+          "Implements interface: BaseTransform",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "ConstantOpTransform",
+        "method_name": null,
+        "line_number": 1302,
+        "evidence": [
+          "Part of strategy family with: CoreTransform, BinaryOpTransform, UnaryOpTransform"
+        ],
+        "related_classes": [
+          "BaseTransform"
+        ]
+      },
+      {
+        "pattern_type": "Command",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "ConstantOpTransform",
+        "method_name": null,
+        "line_number": 1302,
+        "evidence": [
+          "Has execute method: __call__()",
+          "Encapsulates receiver/parameters"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "UnaryOpTransform",
+        "method_name": "output_name",
+        "line_number": 1347,
+        "evidence": [
+          "Method uses decorators: ['property']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "UnaryOpTransform",
+        "method_name": null,
+        "line_number": 1335,
+        "evidence": [
+          "Implements interface: BaseTransform",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "UnaryOpTransform",
+        "method_name": null,
+        "line_number": 1335,
+        "evidence": [
+          "Part of strategy family with: CoreTransform, BinaryOpTransform, ConstantOpTransform"
+        ],
+        "related_classes": [
+          "BaseTransform"
+        ]
+      },
+      {
+        "pattern_type": "Command",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "UnaryOpTransform",
+        "method_name": null,
+        "line_number": 1335,
+        "evidence": [
+          "Has execute method: __call__()",
+          "Encapsulates receiver/parameters"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "MinMaxOpTransform",
+        "method_name": "output_name",
+        "line_number": 1388,
+        "evidence": [
+          "Method uses decorators: ['property']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "MinMaxOpTransform",
+        "method_name": null,
+        "line_number": 1367,
+        "evidence": [
+          "Implements interface: BaseTransform",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "MinMaxOpTransform",
+        "method_name": null,
+        "line_number": 1367,
+        "evidence": [
+          "Part of strategy family with: CoreTransform, BinaryOpTransform, ConstantOpTransform"
+        ],
+        "related_classes": [
+          "BaseTransform"
+        ]
+      },
+      {
+        "pattern_type": "Command",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\base.py",
+        "class_name": "MinMaxOpTransform",
+        "method_name": null,
+        "line_number": 1367,
+        "evidence": [
+          "Has execute method: __call__()",
+          "Encapsulates receiver/parameters"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 10,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 10,
+      "Adapter": 10,
+      "Strategy": 10,
+      "Command": 6,
+      "TemplateMethod": 6,
+      "Factory": 1
+    }
+  },
+  {
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\kit.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\kit.py",
+        "class_name": "Feature",
+        "method_name": "name",
+        "line_number": 207,
+        "evidence": [
+          "Method uses decorators: ['property']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Observer",
+        "category": "Behavioral",
+        "confidence": 0.6,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\kit.py",
+        "class_name": "Feature",
+        "method_name": null,
+        "line_number": 13,
+        "evidence": [
+          "Attach method: __add__",
+          "Attach method: __radd__"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Command",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\kit.py",
+        "class_name": "Feature",
+        "method_name": null,
+        "line_number": 13,
+        "evidence": [
+          "Has execute method: __call__()",
+          "Encapsulates receiver/parameters"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\kit.py",
+        "class_name": "Compose",
+        "method_name": "output_name",
+        "line_number": 657,
+        "evidence": [
+          "Method uses decorators: ['property']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\kit.py",
+        "class_name": "Compose",
+        "method_name": null,
+        "line_number": 464,
+        "evidence": [
+          "Implements interface: BaseTransform",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Command",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\kit.py",
+        "class_name": "Compose",
+        "method_name": null,
+        "line_number": 464,
+        "evidence": [
+          "Has execute method: __call__()"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.9,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\kit.py",
+        "class_name": "FeatureKit",
+        "method_name": null,
+        "line_number": 724,
+        "evidence": [
+          "Factory method: build_graph",
+          "Parameterized factory method: build",
+          "Multiple factory methods: build_graph, build"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Builder",
+        "category": "Creational",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\kit.py",
+        "class_name": "FeatureKit",
+        "method_name": null,
+        "line_number": 724,
+        "evidence": [
+          "Has terminal build/create method"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\kit.py",
+        "class_name": "FeatureKit",
+        "method_name": "from_dict",
+        "line_number": 970,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 3,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 3,
+      "Observer": 1,
+      "Command": 2,
+      "Adapter": 1,
+      "Factory": 1,
+      "Builder": 1
+    }
+  },
+  {
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "Identity",
+        "method_name": "output_name",
+        "line_number": 56,
+        "evidence": [
+          "Method uses decorators: ['property']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "Identity",
+        "method_name": null,
+        "line_number": 25,
+        "evidence": [
+          "Implements interface: BaseTransform",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "Identity",
+        "method_name": null,
+        "line_number": 25,
+        "evidence": [
+          "Part of strategy family with: ExternalFunction"
+        ],
+        "related_classes": [
+          "BaseTransform"
+        ]
+      },
+      {
+        "pattern_type": "Command",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "Identity",
+        "method_name": null,
+        "line_number": 25,
+        "evidence": [
+          "Has execute method: __call__()",
+          "Encapsulates receiver/parameters"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "Lag",
+        "method_name": null,
+        "line_number": 63,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "Lag",
+        "method_name": null,
+        "line_number": 63,
+        "evidence": [
+          "Part of strategy family with: ReturnT, Return, ROC"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ReturnT",
+        "method_name": null,
+        "line_number": 89,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ReturnT",
+        "method_name": null,
+        "line_number": 89,
+        "evidence": [
+          "Part of strategy family with: Lag, Return, ROC"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "Return",
+        "method_name": null,
+        "line_number": 120,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "Return",
+        "method_name": null,
+        "line_number": 120,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, ROC"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ROC",
+        "method_name": null,
+        "line_number": 155,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ROC",
+        "method_name": null,
+        "line_number": 155,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "PctChange",
+        "method_name": null,
+        "line_number": 180,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "PctChange",
+        "method_name": null,
+        "line_number": 180,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "RSIWilder",
+        "method_name": null,
+        "line_number": 206,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "RSIWilder",
+        "method_name": null,
+        "line_number": 206,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "StochK",
+        "method_name": null,
+        "line_number": 276,
+        "evidence": [
+          "Implements interface: MISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "StochK",
+        "method_name": null,
+        "line_number": 276,
+        "evidence": [
+          "Part of strategy family with: VWAPDistance, ParkinsonRange, ATR"
+        ],
+        "related_classes": [
+          "MISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "EWMST",
+        "method_name": null,
+        "line_number": 308,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "EWMST",
+        "method_name": null,
+        "line_number": 308,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ZScore",
+        "method_name": null,
+        "line_number": 335,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ZScore",
+        "method_name": null,
+        "line_number": 335,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "BurstRatio",
+        "method_name": null,
+        "line_number": 362,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "BurstRatio",
+        "method_name": null,
+        "line_number": 362,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "VWAPDistance",
+        "method_name": null,
+        "line_number": 388,
+        "evidence": [
+          "Implements interface: MISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "VWAPDistance",
+        "method_name": null,
+        "line_number": 388,
+        "evidence": [
+          "Part of strategy family with: StochK, ParkinsonRange, ATR"
+        ],
+        "related_classes": [
+          "MISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "TimeCues",
+        "method_name": "output_name",
+        "line_number": 445,
+        "evidence": [
+          "Method uses decorators: ['property']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "TimeCues",
+        "method_name": null,
+        "line_number": 421,
+        "evidence": [
+          "Implements interface: SIMOTransform",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "TimeCues",
+        "method_name": null,
+        "line_number": 421,
+        "evidence": [
+          "Part of strategy family with: CUSUMTest"
+        ],
+        "related_classes": [
+          "SIMOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "RealizedVolatility",
+        "method_name": null,
+        "line_number": 450,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "RealizedVolatility",
+        "method_name": null,
+        "line_number": 450,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "BollingerPercentB",
+        "method_name": null,
+        "line_number": 494,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "BollingerPercentB",
+        "method_name": null,
+        "line_number": 494,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ParkinsonRange",
+        "method_name": null,
+        "line_number": 521,
+        "evidence": [
+          "Implements interface: MISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ParkinsonRange",
+        "method_name": null,
+        "line_number": 521,
+        "evidence": [
+          "Part of strategy family with: StochK, VWAPDistance, ATR"
+        ],
+        "related_classes": [
+          "MISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "SMA",
+        "method_name": null,
+        "line_number": 549,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "SMA",
+        "method_name": null,
+        "line_number": 549,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "EWMA",
+        "method_name": null,
+        "line_number": 577,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "EWMA",
+        "method_name": null,
+        "line_number": 577,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "FlowAcceleration",
+        "method_name": null,
+        "line_number": 605,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "FlowAcceleration",
+        "method_name": null,
+        "line_number": 605,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "CUSUMTest",
+        "method_name": "output_name",
+        "line_number": 707,
+        "evidence": [
+          "Method uses decorators: ['property']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "CUSUMTest",
+        "method_name": null,
+        "line_number": 631,
+        "evidence": [
+          "Implements interface: SIMOTransform",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "CUSUMTest",
+        "method_name": null,
+        "line_number": 631,
+        "evidence": [
+          "Part of strategy family with: TimeCues"
+        ],
+        "related_classes": [
+          "SIMOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ATR",
+        "method_name": null,
+        "line_number": 711,
+        "evidence": [
+          "Implements interface: MISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ATR",
+        "method_name": null,
+        "line_number": 711,
+        "evidence": [
+          "Part of strategy family with: StochK, VWAPDistance, ParkinsonRange"
+        ],
+        "related_classes": [
+          "MISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "PriceVolumeCorrelation",
+        "method_name": null,
+        "line_number": 754,
+        "evidence": [
+          "Implements interface: MISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "PriceVolumeCorrelation",
+        "method_name": null,
+        "line_number": 754,
+        "evidence": [
+          "Part of strategy family with: StochK, VWAPDistance, ParkinsonRange"
+        ],
+        "related_classes": [
+          "MISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "VPIN",
+        "method_name": null,
+        "line_number": 816,
+        "evidence": [
+          "Implements interface: MISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "VPIN",
+        "method_name": null,
+        "line_number": 816,
+        "evidence": [
+          "Part of strategy family with: StochK, VWAPDistance, ParkinsonRange"
+        ],
+        "related_classes": [
+          "MISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "VarianceRatio14",
+        "method_name": null,
+        "line_number": 867,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "VarianceRatio14",
+        "method_name": null,
+        "line_number": 867,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "KurtosisTransform",
+        "method_name": null,
+        "line_number": 900,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "KurtosisTransform",
+        "method_name": null,
+        "line_number": 900,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "TrendSlope",
+        "method_name": null,
+        "line_number": 936,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "TrendSlope",
+        "method_name": null,
+        "line_number": 936,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ADX",
+        "method_name": null,
+        "line_number": 991,
+        "evidence": [
+          "Implements interface: MISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ADX",
+        "method_name": null,
+        "line_number": 991,
+        "evidence": [
+          "Part of strategy family with: StochK, VWAPDistance, ParkinsonRange"
+        ],
+        "related_classes": [
+          "MISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "MeanReversionZScore",
+        "method_name": null,
+        "line_number": 1033,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "MeanReversionZScore",
+        "method_name": null,
+        "line_number": 1033,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "DailyGap",
+        "method_name": null,
+        "line_number": 1065,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "DailyGap",
+        "method_name": null,
+        "line_number": 1065,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ORBBreak",
+        "method_name": "output_name",
+        "line_number": 1206,
+        "evidence": [
+          "Method uses decorators: ['property']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ORBBreak",
+        "method_name": null,
+        "line_number": 1122,
+        "evidence": [
+          "Implements interface: MIMOTransform",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ORBBreak",
+        "method_name": null,
+        "line_number": 1122,
+        "evidence": [
+          "Part of strategy family with: CandleShape"
+        ],
+        "related_classes": [
+          "MIMOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "BarRate",
+        "method_name": null,
+        "line_number": 1210,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "BarRate",
+        "method_name": null,
+        "line_number": 1210,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "CandleShape",
+        "method_name": "output_name",
+        "line_number": 1337,
+        "evidence": [
+          "Method uses decorators: ['property']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "CandleShape",
+        "method_name": null,
+        "line_number": 1273,
+        "evidence": [
+          "Implements interface: MIMOTransform",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "CandleShape",
+        "method_name": null,
+        "line_number": 1273,
+        "evidence": [
+          "Part of strategy family with: ORBBreak"
+        ],
+        "related_classes": [
+          "MIMOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "HurstExponent",
+        "method_name": "_hurst_aggregated_variance",
+        "line_number": 1378,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "HurstExponent",
+        "method_name": null,
+        "line_number": 1341,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "HurstExponent",
+        "method_name": null,
+        "line_number": 1341,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ApproximateEntropy",
+        "method_name": null,
+        "line_number": 1400,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ApproximateEntropy",
+        "method_name": null,
+        "line_number": 1400,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "BarDurationEWMA",
+        "method_name": null,
+        "line_number": 1460,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "BarDurationEWMA",
+        "method_name": null,
+        "line_number": 1460,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "BarDuration",
+        "method_name": null,
+        "line_number": 1511,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "BarDuration",
+        "method_name": null,
+        "line_number": 1511,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "BiPowerVariation",
+        "method_name": null,
+        "line_number": 1551,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 3 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "BiPowerVariation",
+        "method_name": null,
+        "line_number": 1551,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "DirRunLen",
+        "method_name": "numba_core",
+        "line_number": 1638,
+        "evidence": [
+          "Method uses decorators: ['staticmethod', 'njit(nogil=True)']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "DirRunLen",
+        "method_name": null,
+        "line_number": 1605,
+        "evidence": [
+          "Implements interface: SISOTransform",
+          "Has 4 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "DirRunLen",
+        "method_name": null,
+        "line_number": 1605,
+        "evidence": [
+          "Part of strategy family with: Lag, ReturnT, Return"
+        ],
+        "related_classes": [
+          "SISOTransform"
+        ]
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ExternalFunction",
+        "method_name": "output_name",
+        "line_number": 1736,
+        "evidence": [
+          "Method uses decorators: ['property']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Adapter",
+        "category": "Structural",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ExternalFunction",
+        "method_name": null,
+        "line_number": 1668,
+        "evidence": [
+          "Implements interface: BaseTransform",
+          "Has 5 interface methods"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Strategy",
+        "category": "Behavioral",
+        "confidence": 0.5,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ExternalFunction",
+        "method_name": null,
+        "line_number": 1668,
+        "evidence": [
+          "Part of strategy family with: Identity"
+        ],
+        "related_classes": [
+          "BaseTransform"
+        ]
+      },
+      {
+        "pattern_type": "Command",
+        "category": "Behavioral",
+        "confidence": 0.7,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\transforms.py",
+        "class_name": "ExternalFunction",
+        "method_name": null,
+        "line_number": 1668,
+        "evidence": [
+          "Has execute method: __call__()",
+          "Encapsulates receiver/parameters"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 39,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Decorator": 8,
+      "Adapter": 39,
+      "Strategy": 39,
+      "Command": 2
+    }
+  },
+  {
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\utils.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Observer",
+        "category": "Behavioral",
+        "confidence": 0.6,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\feature\\utils.py",
+        "class_name": "ComputationGraph",
+        "method_name": null,
+        "line_number": 308,
+        "evidence": [
+          "Attach method: add_edge",
+          "Attach method: add_node"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 1,
+    "total_functions": 10,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Observer": 1
+    }
+  },
+  {
+    "file_path": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\label\\kit.py",
+    "language": "Python",
+    "patterns": [
+      {
+        "pattern_type": "Factory",
+        "category": "Creational",
+        "confidence": 0.6,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\label\\kit.py",
+        "class_name": "TBMLabel",
+        "method_name": "target_returns",
+        "line_number": 223,
+        "evidence": [
+          "Factory method detected: target_returns"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\label\\kit.py",
+        "class_name": "TBMLabel",
+        "method_name": "_preprocess_features",
+        "line_number": 155,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      },
+      {
+        "pattern_type": "Decorator",
+        "category": "Structural",
+        "confidence": 0.3,
+        "location": "D:\\PycharmProjects\\AFMLKIT\\afmlkit\\label\\kit.py",
+        "class_name": "SampleWeights",
+        "method_name": "compute_info_weights",
+        "line_number": 332,
+        "evidence": [
+          "Method uses decorators: ['staticmethod']"
+        ],
+        "related_classes": []
+      }
+    ],
+    "total_classes": 2,
+    "total_functions": 0,
+    "analysis_depth": "deep",
+    "pattern_summary": {
+      "Factory": 1,
+      "Decorator": 2
+    }
+  }
+]

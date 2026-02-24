@@ -1,0 +1,149 @@
+{
+  "nodes": [
+    {
+      "file": "__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "_version.py",
+      "language": "Python"
+    },
+    {
+      "file": "bar\\__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "bar\\base.py",
+      "language": "Python"
+    },
+    {
+      "file": "bar\\data_model.py",
+      "language": "Python"
+    },
+    {
+      "file": "bar\\io.py",
+      "language": "Python"
+    },
+    {
+      "file": "bar\\kit.py",
+      "language": "Python"
+    },
+    {
+      "file": "bar\\logic.py",
+      "language": "Python"
+    },
+    {
+      "file": "bar\\utils.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature\\__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature\\base.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature\\core\\__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature\\core\\correlation.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature\\core\\ma.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature\\core\\momentum.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature\\core\\reversion.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature\\core\\structural_break\\__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature\\core\\structural_break\\cusum.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature\\core\\time.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature\\core\\trend.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature\\core\\utils.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature\\core\\volatility.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature\\core\\volume.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature\\kit.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature\\transforms.py",
+      "language": "Python"
+    },
+    {
+      "file": "feature\\utils.py",
+      "language": "Python"
+    },
+    {
+      "file": "label\\__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "label\\kit.py",
+      "language": "Python"
+    },
+    {
+      "file": "label\\tbm.py",
+      "language": "Python"
+    },
+    {
+      "file": "label\\trend_scanning.py",
+      "language": "Python"
+    },
+    {
+      "file": "label\\utils.py",
+      "language": "Python"
+    },
+    {
+      "file": "label\\weights.py",
+      "language": "Python"
+    },
+    {
+      "file": "sampling\\__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "sampling\\filters.py",
+      "language": "Python"
+    },
+    {
+      "file": "utils\\__init__.py",
+      "language": "Python"
+    },
+    {
+      "file": "utils\\log.py",
+      "language": "Python"
+    }
+  ],
+  "edges": []
+}
