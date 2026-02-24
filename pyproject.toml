@@ -26,8 +26,6 @@ dependencies = [
     "tables~=3.10.0",
     "tqdm",
     "matplotlib>=3.10.8",
-    "autogen-agentchat>=0.7.5",
-    "autogen-ext[openai]>=0.7.5",
 ]
 
 [project.optional-dependencies]
