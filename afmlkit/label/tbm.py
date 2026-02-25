@@ -3,12 +3,12 @@ Implements the Triple Barrier Method (TBM) for labeling financial data based on
 Advances in Financial Machine Learning, Chapter 3.
 """
 import numpy as np
-from numba import njit, prange
+from numba import njit
 from numpy.typing import NDArray
 from typing import Tuple, Optional
 
 
-@njit(nogil=True, parallel=True)
+@njit(nogil=True)
 def triple_barrier(
         timestamps: NDArray[np.int64],
         close: NDArray[np.float64],
@@ -63,6 +63,10 @@ def triple_barrier(
 
     n_events = len(event_idxs)  # Number of events (subset of samples)
     bottom_mult, top_mult = horizontal_barriers
+    if bottom_mult == 0.0 or np.isnan(bottom_mult):
+        bottom_mult = np.inf
+    if top_mult == 0.0 or np.isnan(top_mult):
+        top_mult = np.inf
     vertical_barrier_ns = vertical_barrier * 1e9  # Convert to nanoseconds
     min_close_time_ns = min_close_time_sec * 1e9    # Convert to nanoseconds
 
@@ -74,7 +78,7 @@ def triple_barrier(
     max_rb_ratios = np.full(n_events, np.nan, dtype=np.float64)    # Maximum return/target ratio during the search
 
     # Loop over the events parallelized
-    for i_event in prange(n_events):
+    for i_event in range(n_events):
         t0_idx = event_idxs[i_event]
         tgt = targets[i_event]
 
@@ -142,8 +146,13 @@ def triple_barrier(
             sign = np.sign(ret)
             labels[i_event] = sign if sign != 0 else 1
 
+        is_array_end = (touch_idx == len(timestamps) - 1) and (timestamps[touch_idx] < t1)
+        if touch_idx == t1_idx and is_array_end:
+            touch_idx = -1  # Explicitly mark as NaN/invalid
 
-        if touch_idx == t1_idx:
+
+
+        if touch_idx == t1_idx or touch_idx == -1:
             # Calculate the maximum return-barrier ratio based sample weight
             if ret > 0.:
                 max_rbr = max_urbr / (1 + max_lrbr)

@@ -385,7 +385,7 @@ class TradesData:
         # trades.timestamp = pd.to_datetime(trades.timestamp, unit=timestamp_unit).astype(np.int64).values
         # Work directly on the underlying NumPy array for better performance
         factor = unit_scale_factor[self.orig_timestamp_unit]
-        self._data["timestamp"].values[:] = np.multiply(
+        self._data["timestamp"] = np.multiply(
             self.data["timestamp"].values, factor, dtype=np.int64
         )
 

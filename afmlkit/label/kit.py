@@ -237,7 +237,7 @@ class TBMLabel:
         """
         if self._out is None:
             raise ValueError("Labels have not been computed yet. Call `compute_labels()` first.")
-        return self._out['labels']
+        return self._out['bin']
 
     @property
     def event_returns(self) -> pd.Series:
@@ -245,9 +245,9 @@ class TBMLabel:
         Get the log returns associated with each event.
         :return: A pandas Series containing the log returns.
         """
-        if self._out is None or 'returns' not in self._out.columns:
+        if self._out is None or 'ret' not in self._out.columns:
             raise ValueError("Log returns have not been computed yet. Call `compute_labels()` first.")
-        return self._out['returns']
+        return self._out['ret']
 
     @property
     def full_output(self) -> pd.DataFrame:
@@ -300,13 +300,20 @@ class TBMLabel:
             min_ret=self.min_ret
         )
 
+        touch_times = np.empty(len(touch_idx), dtype='datetime64[ns]')
+        for i, idx in enumerate(touch_idx):
+            if idx == -1:
+                touch_times[i] = np.datetime64('NaT')
+            else:
+                touch_times[i] = trades.data.timestamp.values[idx]
+
         # Construct the output DataFrame
         self._out = pd.DataFrame({
-            'touch_time': pd.to_datetime(trades.data.timestamp.values[touch_idx]),
+            't1': touch_times,
             'event_idx': event_idx,
             'touch_idx': touch_idx,
-            'labels': labels,
-            'returns': rets,
+            'bin': labels,
+            'ret': rets,
             'vertical_touch_weights': max_rb_ratios
         }, index=self.features.index)
 

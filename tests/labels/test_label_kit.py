@@ -31,6 +31,6 @@ def test_tbm_label_and_weights():
 
     final = SampleWeights.compute_final_weights(weights["avg_uniqueness"],
                                                 return_attribution=weights["return_attribution"],
-                                                labels=out["labels"])
+                                                labels=out["bin"])
     assert "weights" in final.columns
     assert len(final) == len(out)
