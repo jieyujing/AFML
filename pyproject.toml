@@ -27,6 +27,7 @@ dependencies = [
     "tqdm",
     "matplotlib>=3.10.8",
     "statsmodels>=0.14.6",
+    "seaborn>=0.13.2",
 ]
 
 [project.optional-dependencies]
