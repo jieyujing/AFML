@@ -4,13 +4,15 @@ import pandas as pd
 import numpy as np
 
 from afmlkit.feature.core.volatility import ewms
+from afmlkit.feature.core.frac_diff import frac_diff_ffd, optimize_d
 from afmlkit.sampling.filters import cusum_filter
 
 def compute_dynamic_cusum_filter(
     df: pd.DataFrame, 
     price_col: str = 'close', 
     vol_span: int = 50, 
-    threshold_multiplier: float = 2.0
+    threshold_multiplier: float = 2.0,
+    use_frac_diff: bool = True
 ) -> pd.DataFrame:
     """
     通过 CUSUM 对时间序列的微观波动去噪
@@ -50,12 +52,71 @@ def compute_dynamic_cusum_filter(
     # 4. 生成动态阈值
     dynamic_threshold = clean_volatility * threshold_multiplier
     
-    # 5. CUSUM 过滤器
-    print("Applying CUSUM filter...")
-    start_time = time.time()
-    event_indices = cusum_filter(prices, dynamic_threshold)
-    elapsed = time.time() - start_time
-    print(f"CUSUM filter completed in {elapsed:.4f} seconds.")
+    # 如果需要做 FracDiff，我们直接对价格（或者对数价格）做差分。
+    # 最稳健的做法是：
+    # 1. 波动率（Log Returns 的波动率）反映的是百分比变化率。
+    # 2. 如果我们用 CUSUM 走自带的 log(p_i / p_i-1)，相当于在算百分比空间跑。
+    # 3. 如果序列做了分数差分，序列可能含有负数，此时 cusum_filter 内部的 np.log 会崩溃或产生 NaN。
+    # 所以，对于使用 Fractional Differentiation 的情况，必须单独定制 CUSUM。
+
+    if use_frac_diff:
+        print("Applying Fractional Differentiation on log prices...")
+        price_series = np.log(df[price_col])
+        opt_d = optimize_d(price_series)
+        print(f"Optimal d for stationarity: {opt_d}")
+        
+        # Apply frac_diff and keep only valid indices
+        stationary_prices = frac_diff_ffd(price_series, d=opt_d)
+        
+        # We need to align stationary_prices with our current DataFrame `df`
+        # which has already been filtered by `valid_mask` (from volatility calc)
+        common_indices = df.index.intersection(stationary_prices.index)
+        
+        # Re-filter df, stationary_prices, and volatility using common indices
+        df = df.loc[common_indices].copy()
+        
+        # We need dynamic threshold to match `df`. `idx` maps to original raw log_ret/volatility arrays.
+        # But we already filtered by `valid_mask` earlier when we created the subset `clean_volatility`.
+        # It's cleaner to align from the `df` directly using its index positions in the original df.
+        
+        prices_for_cusum = stationary_prices.loc[common_indices].values.astype(np.float64)
+        
+        # Align volatility: find integer positions of common_indices in the currently filtered df
+        valid_positions = df.index.get_indexer(common_indices)
+        aligned_volatility = clean_volatility[valid_positions]
+        dynamic_threshold = aligned_volatility * threshold_multiplier
+        print(f"Aligned data points after FracDiff: {len(prices_for_cusum)}")
+        
+        # 定制的 FracDiff CUSUM，不再依赖底层的 log_returns
+        # 因为此时的价格是经过差分的，本身就已经是“差分量”，我们可以直接对其累加。
+        print("Applying FracDiff Custom CUSUM filter...")
+        start_time = time.time()
+        
+        # 因为 frac_diff 已经是基于 log price 的差分序列了，直接取它的增量以判断累积和的变动
+        diff_series = np.zeros_like(prices_for_cusum)
+        diff_series[1:] = prices_for_cusum[1:] - prices_for_cusum[:-1]
+        
+        event_indices = cusum_filter(diff_series, dynamic_threshold)
+        
+        elapsed = time.time() - start_time
+        print(f"FracDiff CUSUM filter completed in {elapsed:.4f} seconds.")
+    else:
+        prices_for_cusum = prices
+        dynamic_threshold = clean_volatility * threshold_multiplier
+        
+        # 对于不使用 FracDiff 的情况，直接计算对数收益率传给外部的 CUSUM！
+        diff_series = np.zeros_like(prices_for_cusum)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            diff_series[1:] = np.log(prices_for_cusum[1:] / prices_for_cusum[:-1])
+            
+        diff_series = np.nan_to_num(diff_series, nan=0.0)
+        
+        # 5. CUSUM 过滤器
+        print("Applying Standard CUSUM filter...")
+        start_time = time.time()
+        event_indices = cusum_filter(diff_series, dynamic_threshold)
+        elapsed = time.time() - start_time
+        print(f"CUSUM filter completed in {elapsed:.4f} seconds.")
     
     # 6. 数据提取与保存
     filtered_df = df.iloc[event_indices].copy()

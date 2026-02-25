@@ -26,6 +26,7 @@ dependencies = [
     "tables~=3.10.0",
     "tqdm",
     "matplotlib>=3.10.8",
+    "statsmodels>=0.14.6",
 ]
 
 [project.optional-dependencies]

@@ -31,6 +31,8 @@ This skill provides a standardized, industrial-grade workflow for quantitative f
 2.  **Stationarity**:
     *   **Check**: Run Augmented Dickey-Fuller (ADF) test. Is p-value < 0.05?
     *   **Action**: If NO -> Apply **Fractional Differentiation (FracDiff)**. Find minimum `d` such that p < 0.05 while maximizing memory preservation. *Never use integer differencing (d=1).*
+    *   **🚨 Execution Pitfall (Variance Collapse)**: FracDiff inherently compresses the absolute variance of the series (方差坍缩). If you apply a standard log-returns-based CUSUM filter immediately *after* FracDiff without standardizing the threshold, you will suffer from "Scale Mismatch" (量纲错位). The threshold (elephant) will be far too large for the compressed FracDiff diffs (ants), leading to near-zero event sampling.
+    *   **Solution**: Compute the CUSUM diffs identically to the scale of the threshold. If your dynamic threshold is the EWMS of log returns, ensure your input to CUSUM represents the unit-matched percent change space. Do not hardcode `np.log()` inside low-level CUSUM algorithms; pass pre-calculated diffs exactly matching the threshold scale.
 
 ### Phase 2: Labeling & Weighting
 

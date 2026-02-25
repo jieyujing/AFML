@@ -1,49 +1,43 @@
 import numpy as np
-from numba import njit, prange
+from numba import njit
 from numpy.typing import NDArray
 
 
-@njit(nogil=True, parallel=True)
+@njit(nogil=True)
 def cusum_filter(
-    raw_time_series: NDArray[np.float64],
+    diff_time_series: NDArray[np.float64],
     threshold: NDArray
 ) -> NDArray[np.int64]:
     """
-    Apply the CUSUM filter to detect events based on the cumulative sum of log returns.
+    Apply the CUSUM filter to detect events based on a pre-calculated difference series.
 
-    :param raw_time_series: Array of price series.
+    :param diff_time_series: Array of differences (e.g. log returns, absolute differences, or fractional diff increments).
     :param threshold: Threshold values for event detection.
         - If array has 1 element, a constant threshold is used.
-        - If multiple elements, it must be of the same length as `raw_time_series`.
-    :returns: Indices where events occurred. These indices correspond to positions in `raw_time_series`.
+        - If multiple elements, it must be of the same length as `diff_time_series`.
+    :returns: Indices where events occurred. These indices correspond to positions in `diff_time_series`.
 
     .. note::
         This function implements the Symmetric CUSUM Filter, which is designed to detect a shift
         in the mean value of a measured quantity away from a target value. It identifies events
-        when the cumulative sum of log returns exceeds a specified threshold.
+        when the cumulative sum of the given differential series exceeds a specified threshold.
 
         This implementation follows the methodology outlined in:
 
         - Lopez de Prado, Marcos. "Advances in Financial Machine Learning." Wiley, 2018. Snippet 2.4, page 39.
     """
-    if len(raw_time_series) <= 1:
+    if len(diff_time_series) <= 1:
         raise ValueError("Input time series must have at least 2 elements.")
-    if len(threshold) != 1 and len(threshold) != len(raw_time_series):
-        raise ValueError("Threshold array must either contain 1 const. element or len(raw_time_series) elements.")
+    if len(threshold) != 1 and len(threshold) != len(diff_time_series):
+        raise ValueError("Threshold array must either contain 1 const. element or len(diff_time_series) elements.")
 
-    n = len(raw_time_series)
+    n = len(diff_time_series)
 
     # If one threshold element, repeat it to match the length of the price array
     if len(threshold) == 1:
         tmp = np.empty(n, dtype=np.float64)
         tmp.fill(threshold[0])
         threshold = tmp
-
-    # Calculate log returns
-    log_returns = np.zeros(n, dtype=np.float64)
-    log_returns[0] = np.nan
-    for i in prange(1, n):
-        log_returns[i] = np.log(raw_time_series[i] / raw_time_series[i - 1])
 
     # Container for event indices
     event_indices = np.empty(n, dtype=np.int64)
@@ -52,7 +46,7 @@ def cusum_filter(
     s_pos = 0.0
     s_neg = 0.0
     for i in range(1, n):
-        ret = log_returns[i]
+        ret = diff_time_series[i]
         thrs = threshold[i]
 
         s_pos = max(0.0, s_pos + ret)
