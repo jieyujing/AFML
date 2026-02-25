@@ -38,7 +38,8 @@ DATA_PATH = "data/h5/BTCUSDT_PERPum_2301-2601.h5"
 TARGET_FREQS = [4, 6, 10, 20, 50]          # 每日目标 bar 数
 EWMA_SPAN = 20                              # EWMA 平滑窗口
 OUTPUT_DIR = "outputs"
-OUTPUT_FILE = os.path.join(OUTPUT_DIR, "dollar_bars_evaluation.png")
+VISUAL_DIR = os.path.join(OUTPUT_DIR, "visualizations")
+OUTPUT_FILE = os.path.join(VISUAL_DIR, "dollar_bars_evaluation.png")
 BARS_OUTPUT_DIR = os.path.join(OUTPUT_DIR, "dollar_bars")
 
 
@@ -429,6 +430,7 @@ def main():
 
     # 环境检查
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(VISUAL_DIR, exist_ok=True)
     os.makedirs(BARS_OUTPUT_DIR, exist_ok=True)
 
     # 阶段 1: 扫描 daily dollar volume
