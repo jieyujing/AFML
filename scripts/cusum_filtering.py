@@ -6,6 +6,8 @@ import numpy as np
 from afmlkit.feature.core.volatility import ewms
 from afmlkit.feature.core.frac_diff import frac_diff_ffd, optimize_d
 from afmlkit.sampling.filters import cusum_filter
+from afmlkit.bar.data_model import TradesData
+from afmlkit.label.kit import TBMLabel
 
 def compute_dynamic_cusum_filter(
     df: pd.DataFrame, 
@@ -131,6 +133,71 @@ def compute_dynamic_cusum_filter(
     
     return filtered_df
 
+def compute_labels_and_weights(
+    full_df: pd.DataFrame, 
+    sampled_df: pd.DataFrame,
+    vol_col: str = 'volatility'
+) -> pd.DataFrame:
+    """
+    为采样后的事件计算三重屏障标签和样本权重
+    """
+    print("\nStarting Labeling and Weighting...")
+    
+    # 1. 包装为 TradesData (TBM 需要该对象来评估价格路径)
+    # 将 timestamp 转换为 Unix 纳秒整数
+    ts_ns = pd.to_datetime(full_df['timestamp']).values.astype(np.int64)
+    prices = full_df['close'].values.astype(np.float64)
+    volumes = full_df['volume'].values.astype(np.float64)
+    
+    trades_data = TradesData(
+        ts=ts_ns,
+        px=prices,
+        qty=volumes,
+        timestamp_unit='ns',
+        preprocess=False  # 数据已经是 Bars，无需再次 preprocessing
+    )
+    
+    # 2. 准备特征数据 (sampled_df)，确保 DatetimeIndex
+    features = sampled_df.copy()
+    if not isinstance(features.index, pd.DatetimeIndex):
+        features.index = pd.to_datetime(features['timestamp'])
+        
+    # 3. 三重屏障标签
+    # 参数设置参考 AFML 最佳实践：
+    # target_ret_col: 波动率, min_ret: 0, horizontal_barriers: (1, 1), vertical_barrier: 1 day
+    tbm = TBMLabel(
+        features=features,
+        target_ret_col=vol_col,
+        min_ret=0.0,
+        horizontal_barriers=(1.0, 1.0),
+        vertical_barrier=pd.Timedelta(days=1)
+    )
+    
+    print("Computing TBM labels...")
+    _, labels_output = tbm.compute_labels(trades_data)
+    
+    # 4. 样本权重
+    print("Computing sample weights...")
+    weights_df = tbm.compute_weights(trades_data)
+    
+    # 5. 合并结果
+    # labels_output 包含 'bin' (label), 't1' (touch_time), 'ret' (log_return)
+    # weights_df 包含 'avg_uniqueness', 'return_attribution'
+    result_df = pd.concat([labels_output, weights_df], axis=1)
+    
+    # 将 weight 合并回 sampled_df
+    # 确保 sampled_df 也使用相同的 DatetimeIndex 来进行对齐
+    sampled_df_aligned = sampled_df.copy()
+    sampled_df_aligned.index = pd.to_datetime(sampled_df_aligned['timestamp'])
+    
+    # 排除掉因为 TBM evaluation window 被 drop 掉的尾部事件
+    final_df = sampled_df_aligned.loc[result_df.index].copy()
+    for col in result_df.columns:
+        final_df[col] = result_df[col]
+        
+    print(f"Final dataset with weights: {len(final_df)} rows")
+    return final_df
+
 def main():
     input_file = "outputs/dollar_bars/dollar_bars_freq20.csv"
     output_dir = "outputs/dollar_bars"
@@ -149,11 +216,20 @@ def main():
         print(f"Error: 'close' column not found in input data! Available columns: {df.columns.tolist()}")
         return
         
-    # 执行 CUSUM 去噪采样
-    filtered_df = compute_dynamic_cusum_filter(df, price_col='close', vol_span=50, threshold_multiplier=2.0)
+    # 计算波动率（哪怕不采样也需要它作为 TBM 的输入）
+    prices = df['close'].values.astype(np.float64)
+    log_ret = np.log(prices[1:] / prices[:-1])
+    vol = ewms(np.insert(log_ret, 0, np.nan), span=50)
+    df['volatility'] = vol
     
-    print(f"Saving filtered data to {output_file}...")
-    filtered_df.to_csv(output_file, index=False)
+    # 执行 CUSUM 去噪采样
+    sampled_df = compute_dynamic_cusum_filter(df, price_col='close', vol_span=50, threshold_multiplier=2.0)
+    
+    # 执行标签和权重计算
+    final_df = compute_labels_and_weights(df, sampled_df, vol_col='volatility')
+    
+    print(f"Saving enriched data to {output_file}...")
+    final_df.to_csv(output_file, index=False)
     print("Done.")
 
 if __name__ == "__main__":
