@@ -1,6 +1,6 @@
 ---
 name: afmlkit
-description: Local codebase analysis for afmlkit — 基于 Advances in Financial Machine Learning 方法论的高性能金融机器学习工具包，支持 K 线构建、特征工程、三重屏障标签、采样过滤及样本权重计算。当需要使用或修改 afmlkit 代码库、构建 AFML 量化流程（事件驱动采样 → 三重屏障标签 → 样本权重 → 模型训练）、或理解 TradesData/TBMLabel/FeatureKit 等核心类的 API 时使用此 skill。
+description: Local codebase analysis for afmlkit — 基于 Advances in Financial Machine Learning 方法论的高性能金融机器学习工具包，支持 K 线构建、特征工程、三重屏障标签、采样过滤、样本权重计算、特征聚类与重要性评估（Clustered MDA）、以及带 Purge/Embargo 的交叉验证。当需要使用或修改 afmlkit 代码库、构建 AFML 量化流程（事件驱动采样 → 三重屏障标签 → 样本权重 → 特征重要性分析 → 模型训练）、或理解核心类 API 时使用此 skill。
 ---
 
 # AFMLKit
@@ -23,6 +23,9 @@ description: Local codebase analysis for afmlkit — 基于 Advances in Financia
 | `label.kit` | `TBMLabel`, `SampleWeights` | 三重屏障标签高层 API（AFML Ch.3/4） |
 | `label.tbm` | `triple_barrier` | TBM Numba 核心函数 |
 | `label.weights` | `average_uniqueness`, `return_attribution`… | 样本权重 Numba 函数 |
+| `validation.purged_cv` | `PurgedKFold` | Purge + Embargo 交叉验证（AFML Ch.7） |
+| `importance.clustering` | `cluster_features`, `get_feature_distance_matrix`, `hierarchical_clustering` | 特征聚类（相关性距离 + 层次聚类 + 自动 k）（AFML Ch.4） |
+| `importance.mda` | `clustered_mda` | 聚类 MDA 特征重要性（Log-loss + sample_weight）（AFML Ch.8） |
 
 ## 标准 AFML 工作流
 
@@ -36,10 +39,13 @@ from afmlkit.bar.kit import DollarBarKit
 from afmlkit.feature.kit import Feature, FeatureKit
 from afmlkit.sampling.filters import cusum_filter
 from afmlkit.label.kit import TBMLabel, SampleWeights
+from afmlkit.importance.clustering import cluster_features
+from afmlkit.importance.mda import clustered_mda
+from afmlkit.validation.purged_cv import PurgedKFold
 
 trades = TradesData.load_trades_h5('data/trades.h5', start_time='2023-01-01')
 ohlcv  = DollarBarKit(trades, dollar_thrs=1_000_000).build_ohlcv()
-# ... 特征工程 → cusum_filter → TBMLabel → SampleWeights
+# ... 特征工程 → cusum_filter → TBMLabel → SampleWeights → 特征重要性分析
 ```
 
 ## Transform 命名约定
@@ -54,6 +60,43 @@ ohlcv  = DollarBarKit(trades, dollar_thrs=1_000_000).build_ohlcv()
 - **时间戳格式**：`triple_barrier` 和权重函数均需纳秒 `int64`，用 `ts.view('int64')` 转换
 - **元标签 side**：`is_meta=True` 时 `features` 必须含 `side` 列（值为 -1 或 1）
 - **竖直屏障权重**：将 `vertical_touch_weights` 传入 `compute_final_weights` 以降低噪声标签权重
+
+## 特征重要性分析（Feature Importance）
+
+完整流程见 `scripts/feature_importance_analysis.py`。核心步骤：
+
+```python
+from afmlkit.importance.clustering import cluster_features
+from afmlkit.importance.mda import clustered_mda
+
+# 1. 特征聚类 — 自动选 k 或手动指定
+clusters = cluster_features(X_features, method='ward')       # auto k via Silhouette
+clusters = cluster_features(X_features, n_clusters=5)        # manual k
+
+# 2. Clustered MDA — 簇级打乱 + PurgedKFold + Log-loss
+df_importance = clustered_mda(
+    X=X_features, y=y_labels, clusters=clusters,
+    t1=t1_series, sample_weight=weights,
+    n_splits=5, embargo_pct=0.01,
+)
+```
+
+**关键设计选择：**
+- **距离矩阵**：$D = \sqrt{0.5 \times (1 - \rho)}$ 满足度量空间特性，数值稳定
+- **聚类级打乱**：MDA 打乱整个特征簇而非单个特征，消除多重共线性的"替代效应"
+- **Log-loss 评估**：使用带 `sample_weight` 的 Log-loss 而非 Accuracy，因为概率校准质量对 Bet Sizing 至关重要
+- **PurgedKFold**：需传入 `t1`（事件结束时间），自动 Purge 时间重叠样本 + Embargo 缓冲期
+- **诊断输出**：每个 Fold 打印训练集有效样本比例，<30% 时触发警告
+
+**PurgedKFold 单独使用：**
+```python
+from afmlkit.validation.purged_cv import PurgedKFold
+
+cv = PurgedKFold(n_splits=5, t1=t1_series, embargo_pct=0.01)
+for train_idx, test_idx in cv.split(X):
+    model.fit(X.iloc[train_idx], y.iloc[train_idx])
+    # PurgedKFold 兼容 sklearn API，可直接用于 GridSearchCV
+```
 
 ## 深度见解：Dollar Bar 频率评估
 
@@ -75,7 +118,7 @@ ohlcv  = DollarBarKit(trades, dollar_thrs=1_000_000).build_ohlcv()
 
 - **`references/workflow.md`** — 完整工作流代码（标准流程、元标签、HDF5、自定义 Transform）
 - **`references/api_quickref.md`** — API 速查表、函数签名、常见陷阱
-- **`references/api_reference/`** — 各模块详细 API 文档（20 个 .md 文件）
+- **`references/api_reference/`** — 各模块详细 API 文档
   - `kit.md` — TBMLabel / SampleWeights
   - `data_model.md` — TradesData / FootprintData
   - `tbm.md` — triple_barrier Numba 函数
@@ -84,3 +127,8 @@ ohlcv  = DollarBarKit(trades, dollar_thrs=1_000_000).build_ohlcv()
   - `volatility.md` — 波动率系列函数
   - `base.md` — BaseTransform / CoreTransform / SISO / MISO
   - `io.md` — H5Inspector / AddTimeBarH5 / TimeBarReader
+- **源码文件**（新增模块）
+  - `afmlkit/validation/purged_cv.py` — PurgedKFold 实现
+  - `afmlkit/importance/clustering.py` — 特征聚类
+  - `afmlkit/importance/mda.py` — Clustered MDA
+  - `scripts/feature_importance_analysis.py` — 端到端集成脚本

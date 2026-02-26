@@ -53,8 +53,14 @@ This skill provides a standardized, industrial-grade workflow for quantitative f
     *   **Method**: **Purged K-Fold CV**.
     *   **Action**: Enforce an **Embargo** period between training and test sets to eliminate leakage from serial correlation.
 2.  **Feature Importance**:
-    *   **Method**: **MDA (Mean Decrease Accuracy)** or **MDI (Mean Decrease Impurity)**.
-    *   **Action**: Discard features with MDA/MDI <= 0. Use Clustered MDA if multicollinearity is high. *Ignore p-values for feature selection.*
+    *   **Method**: **Clustered MDA (Mean Decrease Accuracy/Log-loss)**.
+    *   **Why Not Vanilla MDA?**: Financial features exhibit extreme multicollinearity (e.g., `vol_ewm_10`, `vol_ewm_50`, `vol_ewm_100` are highly correlated). Vanilla MDA suffers from the **Substitution Effect** — important features get low scores because correlated features "substitute" for them. Clustered MDA groups correlated features into clusters and permutes entire clusters together.
+    *   **Step 1 — Feature Clustering**: Compute distance matrix $D = \sqrt{0.5 \times (1 - \rho)}$ → Hierarchical clustering (Ward linkage) → Auto-select optimal k via Silhouette Score.
+    *   **Step 2 — Clustered MDA**: For each cluster, permute all its features together on the OOS fold, measure drop in negative log-loss.
+    *   **Scoring**: Use **Log-loss with `sample_weight`** (not accuracy). Probability calibration quality matters for downstream Bet Sizing / Meta-labeling.
+    *   **Action**: Discard clusters with MDA ≤ 0 (permuting them *improves* the model — they inject noise).
+    *   **Implementation**: `afmlkit.importance.clustering.cluster_features()` + `afmlkit.importance.mda.clustered_mda()`. See `scripts/feature_importance_analysis.py` for end-to-end pipeline.
+    *   **🔍 Practical Insight**: In BTCUSDT Dollar Bar analysis, `log_return` + `corr_pv_10` cluster dominated importance (0.2047), while momentum/trend indicators were secondary (0.0286). ATR/EMA price-level features had *negative* importance — indicating they added noise. This validates the AFML principle that raw returns and microstructure features often outperform traditional technical indicators.
 
 ### Phase 4: Strategy & Verification
 
