@@ -34,6 +34,25 @@ This skill provides a standardized, industrial-grade workflow for quantitative f
     *   **🚨 Execution Pitfall (Variance Collapse)**: FracDiff inherently compresses the absolute variance of the series (方差坍缩). If you apply a standard log-returns-based CUSUM filter immediately *after* FracDiff without standardizing the threshold, you will suffer from "Scale Mismatch" (量纲错位). The threshold (elephant) will be far too large for the compressed FracDiff diffs (ants), leading to near-zero event sampling.
     *   **Solution**: Compute the CUSUM diffs identically to the scale of the threshold. If your dynamic threshold is the EWMS of log returns, ensure your input to CUSUM represents the unit-matched percent change space. Do not hardcode `np.log()` inside low-level CUSUM algorithms; pass pre-calculated diffs exactly matching the threshold scale.
 
+### Phase 1.5: Primary Model (Side Determination)
+
+**Goal**: Determine the directional bias (Long/Short) for each CUSUM event using a statistically rigorous, parameter-free method.
+
+1.  **Method**: **Trend Scanning** (MLAM Ch.3.5).
+    *   For each CUSUM event at time $t_i$, backward-scan over multiple window lengths $L = [L_1, L_2, \ldots, L_k]$.
+    *   Fit OLS regression $y = a + bx$ in each window, compute the slope's t-statistic.
+    *   Select the window $L^*$ that maximizes $|t_{\text{value}}|$ — the most statistically significant trend.
+    *   **Output**: `side = sign(t_value)` (+1 = Long, -1 = Short) and `|t_value|` as confidence score.
+2.  **Why Trend Scan over Fixed-Window Momentum?**
+    *   **No hyperparameter sensitivity**: No fixed look-back period to tune. The algorithm self-selects the optimal window.
+    *   **White-box logic**: Pure OLS — fully interpretable, no black-box model risk.
+    *   **Dual output**: Side + confidence ($|t_{\text{value}}|$) feeds directly into Meta-Labeling sample weights.
+3.  **Implementation**: `afmlkit.feature.core.trend_scan.trend_scan_labels()`.
+    *   **Performance**: Numba `@njit` compiled, pure math OLS (no `statsmodels`). Handles 4700+ events × 10 windows in <1 second.
+    *   **No look-ahead bias**: Strictly backward-looking windows. Verified by tests.
+    *   **Zero-variance guard**: Flat price segments → `t_value=0, side=0` (filtered out before Meta-Labeling).
+4.  **🚨 Anti-Pattern**: Do NOT use dual moving average crossover, fixed-period momentum, or any method requiring a manually chosen look-back window as your Primary Model. These exhibit catastrophic parameter fragility in volatile markets.
+
 ### Phase 2: Labeling & Weighting
 
 **Goal**: Scientifically define "success" and handle data overlap.
@@ -68,8 +87,10 @@ This skill provides a standardized, industrial-grade workflow for quantitative f
 
 1.  **Strategy Structure**:
     *   **Architecture**: **Meta-Labeling**.
-        *   *Primary Model*: Determines side (Long/Short).
-        *   *Secondary (Meta) Model*: Determines confidence (Probability of Primary Model being correct).
+        *   *Primary Model*: **Trend Scan** — determines side (Long/Short) with self-adaptive window selection. Outputs `side` and `|t_value|` confidence score. See Phase 1.5.
+        *   *Secondary (Meta) Model*: Determines confidence (Probability of Primary Model being correct). Uses `|t_value|` as sample weight multiplier.
+    *   **Pipeline**: CUSUM events → `trend_scan_labels()` → inject `side` into `TBMLabel(is_meta=True)` → normalize `|t_value|` × `avg_uniqueness` → Meta-Model training.
+    *   **Implementation**: See `scripts/cusum_filtering.py` for the complete end-to-end pipeline.
     *   **Bet Sizing**: Position size is a function of the Meta-Model's probability output.
     *   **Allocation**: For multi-asset portfolios, use **Hierarchical Risk Parity (HRP)** instead of Mean-Variance (MV). HRP exploits graph theory and clustering, avoids covariance inversion, and is robust to noise.
 2.  **Final Acceptance**:

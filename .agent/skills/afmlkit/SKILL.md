@@ -1,6 +1,6 @@
 ---
 name: afmlkit
-description: Local codebase analysis for afmlkit — 基于 Advances in Financial Machine Learning 方法论的高性能金融机器学习工具包，支持 K 线构建、特征工程、三重屏障标签、采样过滤、样本权重计算、特征聚类与重要性评估（Clustered MDA）、以及带 Purge/Embargo 的交叉验证。当需要使用或修改 afmlkit 代码库、构建 AFML 量化流程（事件驱动采样 → 三重屏障标签 → 样本权重 → 特征重要性分析 → 模型训练）、或理解核心类 API 时使用此 skill。
+description: Local codebase analysis for afmlkit — 基于 Advances in Financial Machine Learning 方法论的高性能金融机器学习工具包，支持 K 线构建、特征工程、Trend Scan 主模型、三重屏障标签、Meta-Labeling、采样过滤、样本权重计算、特征聚类与重要性评估（Clustered MDA）、以及带 Purge/Embargo 的交叉验证。当需要使用或修改 afmlkit 代码库、构建 AFML 量化流程（事件驱动采样 → Trend Scan 主模型 → 三重屏障 Meta-Labeling → 样本权重 → 特征重要性分析 → 模型训练）、或理解核心类 API 时使用此 skill。
 ---
 
 # AFMLKit
@@ -19,6 +19,7 @@ description: Local codebase analysis for afmlkit — 基于 Advances in Financia
 | `feature.base` | `SISOTransform`, `MISOTransform` | 自定义 Transform 基类（含双后端支持） |
 | `feature.kit` | `Feature`, `FeatureKit` | 特征运算与管道构建 |
 | `feature.core.*` | `ewma`, `ewmst`, `atr`, `realized_vol`… | 内置技术指标（Numba 加速） |
+| `feature.core.trend_scan` | `_trend_scan_core`, `trend_scan_labels` | Trend Scan 主模型 — OLS t-统计量动态趋势识别（MLAM Ch.3.5）|
 | `sampling.filters` | `cusum_filter`, `z_score_peak_filter` | 事件检测过滤器（AFML Ch.2） |
 | `label.kit` | `TBMLabel`, `SampleWeights` | 三重屏障标签高层 API（AFML Ch.3/4） |
 | `label.tbm` | `triple_barrier` | TBM Numba 核心函数 |
@@ -38,6 +39,7 @@ from afmlkit.bar.data_model import TradesData
 from afmlkit.bar.kit import DollarBarKit
 from afmlkit.feature.kit import Feature, FeatureKit
 from afmlkit.sampling.filters import cusum_filter
+from afmlkit.feature.core.trend_scan import trend_scan_labels
 from afmlkit.label.kit import TBMLabel, SampleWeights
 from afmlkit.importance.clustering import cluster_features
 from afmlkit.importance.mda import clustered_mda
@@ -45,7 +47,7 @@ from afmlkit.validation.purged_cv import PurgedKFold
 
 trades = TradesData.load_trades_h5('data/trades.h5', start_time='2023-01-01')
 ohlcv  = DollarBarKit(trades, dollar_thrs=1_000_000).build_ohlcv()
-# ... 特征工程 → cusum_filter → TBMLabel → SampleWeights → 特征重要性分析
+# ... 特征工程 → cusum_filter → trend_scan_labels → TBMLabel(is_meta) → SampleWeights → 特征重要性分析
 ```
 
 ## Transform 命名约定
@@ -58,8 +60,48 @@ ohlcv  = DollarBarKit(trades, dollar_thrs=1_000_000).build_ohlcv()
 
 - **Numba JIT 首次慢**：测试用 `$env:NUMBA_DISABLE_JIT=1; uv run pytest`
 - **时间戳格式**：`triple_barrier` 和权重函数均需纳秒 `int64`，用 `ts.view('int64')` 转换
-- **元标签 side**：`is_meta=True` 时 `features` 必须含 `side` 列（值为 -1 或 1）
+- **元标签 side**：`is_meta=True` 时 `features` 必须含 `side` 列（值为 -1 或 1）。推荐使用 `trend_scan_labels()` 动态生成 side。
 - **竖直屏障权重**：将 `vertical_touch_weights` 传入 `compute_final_weights` 以降低噪声标签权重
+
+## Trend Scan Primary Model（趋势扫描主模型）
+
+基于 MLAM Ch.3.5 的动态趋势识别，用于替代固定窗口的动量/均线方向判定。完整流水线见 `scripts/cusum_filtering.py`。
+
+```python
+from afmlkit.feature.core.trend_scan import trend_scan_labels
+
+# 在 CUSUM 事件点上运行 Trend Scan
+trend_df = trend_scan_labels(
+    price_series=close_prices,   # pd.Series with DatetimeIndex
+    t_events=t_events,           # pd.DatetimeIndex from CUSUM
+    L_windows=[10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
+)
+# trend_df 含 3 列:
+#   t1      — 最优窗口长度 (int64)
+#   t_value — OLS 斜率的 t-统计量 (float64)
+#   side    — 趋势方向 +1/-1 (int8)
+```
+
+**核心架构决策：**
+- **Numba `@njit` 纯数学 OLS**：弃用 `statsmodels.OLS`，直接用累加公式（$S_{xx}, S_{xy}, S_{yy}$）计算斜率 t-统计量，性能提升 1000x+
+- **后视扫描（Backward Scan）**：仅在 $t_{events}$ 位置启动，向过去回溯 $L$ 条数据，杜绝前视偏差
+- **零方差保护**：`epsilon = 1e-12` 捕获完全横盘段，返回 `t_value=0, side=0`
+- **不开 `parallel=True`**：各事件的窗口扫描是路径依赖的穷举搜索，`prange` 反而降速
+
+**与 Meta-Labeling 的集成：**
+```python
+# 1. 将 side 注入 features DataFrame
+features['side'] = trend_df.loc[features.index, 'side'].astype(int)
+
+# 2. 启用 Meta-Labeling
+tbm = TBMLabel(features=features, target_ret_col='volatility',
+               horizontal_barriers=(1, 1), vertical_barrier=pd.Timedelta(days=1),
+               min_ret=0.0, is_meta=True)
+
+# 3. |t_value| → 标准化 → 乘入 avg_uniqueness 作为 trend-weighted sample weight
+t_normalized = trend_df['t_value'].abs() / trend_df['t_value'].abs().max()
+trend_weighted_uniqueness = avg_uniqueness * t_normalized
+```
 
 ## 特征重要性分析（Feature Importance）
 
@@ -128,7 +170,10 @@ for train_idx, test_idx in cv.split(X):
   - `base.md` — BaseTransform / CoreTransform / SISO / MISO
   - `io.md` — H5Inspector / AddTimeBarH5 / TimeBarReader
 - **源码文件**（新增模块）
+  - `afmlkit/feature/core/trend_scan.py` — Trend Scan 主模型（Numba 核心 + Pandas 前端）
   - `afmlkit/validation/purged_cv.py` — PurgedKFold 实现
   - `afmlkit/importance/clustering.py` — 特征聚类
   - `afmlkit/importance/mda.py` — Clustered MDA
+  - `scripts/cusum_filtering.py` — CUSUM → Trend Scan → Meta-Labeling 端到端流水线
   - `scripts/feature_importance_analysis.py` — 端到端集成脚本
+  - `tests/features/test_trend_scan.py` — Trend Scan 正确性与无偏差验证（15 tests）
