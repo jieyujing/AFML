@@ -78,6 +78,7 @@ This skill provides a standardized, industrial-grade workflow for quantitative f
     *   **Step 2 — Clustered MDA**: For each cluster, permute all its features together on the OOS fold, measure drop in negative log-loss.
     *   **Scoring**: Use **Log-loss with `sample_weight`** (not accuracy). Probability calibration quality matters for downstream Bet Sizing / Meta-labeling.
     *   **Action**: Discard clusters with MDA ≤ 0 (permuting them *improves* the model — they inject noise).
+    *   **🚨 Execution Pitfall (The Masking Effect)**: When using tree-based models (Random Forest or Bagging) for financial feature importance, NEVER use `max_features='sqrt'` or `'auto'`. **Force `max_features=1`**. This forces the trees to evaluate "weak" features independently, preventing dominant features (like market momentum) from "masking" or drowning out subtle but valuable signals (like volatility or microstructure regimes).
     *   **Implementation**: `afmlkit.importance.clustering.cluster_features()` + `afmlkit.importance.mda.clustered_mda()`. See `scripts/feature_importance_analysis.py` for end-to-end pipeline.
     *   **🔍 Practical Insight**: In BTCUSDT Dollar Bar analysis, `log_return` + `corr_pv_10` cluster dominated importance (0.2047), while momentum/trend indicators were secondary (0.0286). ATR/EMA price-level features had *negative* importance — indicating they added noise. This validates the AFML principle that raw returns and microstructure features often outperform traditional technical indicators.
 
@@ -90,8 +91,11 @@ This skill provides a standardized, industrial-grade workflow for quantitative f
         *   *Primary Model*: **Trend Scan** — determines side (Long/Short) with self-adaptive window selection. Outputs `side` and `|t_value|` confidence score. See Phase 1.5.
         *   *Secondary (Meta) Model*: Determines confidence (Probability of Primary Model being correct). Uses `|t_value|` as sample weight multiplier.
     *   **Pipeline**: CUSUM events → `trend_scan_labels()` → inject `side` into `TBMLabel(is_meta=True)` → normalize `|t_value|` × `avg_uniqueness` → Meta-Model training.
-    *   **Implementation**: See `scripts/cusum_filtering.py` for the complete end-to-end pipeline.
-    *   **Bet Sizing**: Position size is a function of the Meta-Model's probability output.
+    *   **Implementation**: See `scripts/cusum_filtering.py` for the complete end-to-end pipeline and `scripts/meta_model_training.py` for model training details.
+    *   **Bet Sizing / Risk Controls**: 
+        *   **Probability Calibration**: Use **Reliability Curves** (Calibration Curve) to verify that the Meta-Model's predicted probability $P$ accurately reflects the true win rate. A "self-aware" model is critical for Kelly-style sizing.
+        *   **Bet Size Distribution**: Monitor the histogram of bet sizes. A healthy Meta-Model should ideally show a high concentration near 0 (filtering out noise) and selective high-conviction peaks, rather than constant "all-in" signals.
+        *   **Fold Variance**: Monitor performance across **Purged CV Folds**. High variance in ROC-AUC or Log-loss across folds suggests non-stationarity or severe overfitting to specific regimes.
     *   **Allocation**: For multi-asset portfolios, use **Hierarchical Risk Parity (HRP)** instead of Mean-Variance (MV). HRP exploits graph theory and clustering, avoids covariance inversion, and is robust to noise.
 2.  **Final Acceptance**:
     *   **Metric**: **Deflated Sharpe Ratio (DSR)**.

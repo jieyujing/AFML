@@ -1,0 +1,8 @@
+cluster_id,features,mean_importance,std_importance
+5,['vol_rel_20'],0.005096580474327128,0.0021429592309528483
+1,"['vol_bb_pct_b_20', 'log_dist_ema_short', 'log_dist_ema_long', 'ema_diff', 'rsi_14', 'mom_roc_10', 'mom_stoch_k_14']",0.0015334931592166923,0.0028366142696845957
+6,['trend_variance_ratio_20'],0.0006563015612815138,0.0011773177293936336
+7,['corr_pv_10'],-1.247820301646385e-05,0.00032934230855478024
+4,"['vol_parkinson', 'liq_amihud']",-0.0007172931726384446,0.000573858461672954
+3,"['vol_ewm_10', 'vol_ewm_50', 'vol_ewm_100']",-0.0012834119510198416,0.0009123158134738761
+2,"['vol_atr_14', 'ema_short', 'ema_long', 'ffd_log_price']",-0.0014483560466300948,0.002388095318656322

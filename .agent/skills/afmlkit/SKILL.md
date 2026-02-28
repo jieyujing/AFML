@@ -132,13 +132,25 @@ df_importance = clustered_mda(
 
 **PurgedKFold 单独使用：**
 ```python
-from afmlkit.validation.purged_cv import PurgedKFold
-
 cv = PurgedKFold(n_splits=5, t1=t1_series, embargo_pct=0.01)
 for train_idx, test_idx in cv.split(X):
     model.fit(X.iloc[train_idx], y.iloc[train_idx])
     # PurgedKFold 兼容 sklearn API，可直接用于 GridSearchCV
 ```
+
+## Meta-Model 训练与评估（Meta-Model Training）
+
+基于 Meta-Labeling 架构，Meta-Model 预测主模型信号是否正确。完整流程见 `scripts/meta_model_training.py`。
+
+**关键技术规范：**
+- **去重 Bagging (Uniqueness-constrained Bagging)**：使用 `BaggingClassifier(max_samples=avgU_mean)`。通过平均唯一性限制子模型采样比例，防止因金融数据高度重叠导致的树同质化。
+- **防止遮蔽效应 (Avoid Masking Effects)**：在 DecisionTreeClassifier 中必须强制设置 **`max_features=1`**。在传统的机器学习中习惯使用 `sqrt`，但在金融特征重要性评估中，如果树每次分裂能看到多个特征，强特征（如动量）会系统性地“遮蔽”弱信号（如微观结构），导致重要性分析产生偏差。
+- **权重调制**：使用 `trend_weighted_uniqueness` 作为 `sample_weight`，将主模型的置信度（$|t_{value}|$）融入元模型训练。
+- **评估指标**：优先看 **Brier Score** 和 **可靠性曲线 (Reliability Curve)**。由于元模型的输出直接决定 Bet Sizing，概率预测的准确度比分类准确率更重要。
+- **可视化输出**：
+    - `probability_calibration.png`：检验 AI 是否“自大”或“过度谨慎”。
+    - `bet_size_distribution.png`：检验过滤后的仓位分布（是否过度集中在 0 或 1）。
+    - `purged_cv_scores.png`：观察各个 Fold 的方差，警惕性能不稳定。
 
 ## 深度见解：Dollar Bar 频率评估
 
