@@ -206,3 +206,92 @@ class PurgedKFold(BaseCrossValidator):
             end = (i + 1) * fold_size if i < self._n_splits - 1 else n_samples
             bounds.append((start, end))
         return bounds
+
+import itertools
+from scipy.special import comb
+
+class CombinatorialPurgedKFold(BaseCrossValidator):
+    def __init__(self, n_groups=6, n_test_groups=2, t1=None, embargo_pct=0.01):
+        super().__init__()
+        if t1 is None:
+            raise ValueError("CombinatorialPurgedKFold requires the `t1` series.")
+        self.n_groups = n_groups
+        self.n_test_groups = n_test_groups
+        self.t1 = t1
+        self.embargo_pct = embargo_pct
+        
+    def get_n_splits(self, X=None, y=None, groups=None) -> int:
+        return int(comb(self.n_groups, self.n_test_groups))
+        
+    def _get_fold_bounds(self, n_samples: int) -> list[tuple[int, int]]:
+        fold_size = n_samples // self.n_groups
+        bounds = []
+        for i in range(self.n_groups):
+            start = i * fold_size
+            end = (i + 1) * fold_size if i < self.n_groups - 1 else n_samples
+            bounds.append((start, end))
+        return bounds
+        
+    def get_sample_groups(self, n_samples: int) -> np.ndarray:
+        bounds = self._get_fold_bounds(n_samples)
+        groups = np.zeros(n_samples, dtype=int)
+        for g, (start, end) in enumerate(bounds):
+            groups[start:end] = g
+        return groups
+
+    def split(self, X, y=None, groups=None):
+        if not isinstance(X, pd.DataFrame):
+            raise ValueError("X must be a Dataframe with DatetimeIndex.")
+            
+        n_samples = len(X)
+        indices = np.arange(n_samples)
+        embargo_width = int(n_samples * self.embargo_pct)
+        group_bounds = self._get_fold_bounds(n_samples)
+        
+        group_indices = list(range(self.n_groups))
+        combos = list(itertools.combinations(group_indices, self.n_test_groups))
+        
+        # Purge tool function
+        # Instantiate a dummy PurgedKFold just to use its purge/embargo methods easily
+        from afmlkit.validation.purged_cv import PurgedKFold
+        pkf = PurgedKFold(n_splits=self.n_groups, t1=self.t1, embargo_pct=self.embargo_pct)
+        
+        for combo in combos:
+            test_groups = combo
+            train_groups = [g for g in group_indices if g not in test_groups]
+            
+            test_indices = []
+            for g in test_groups:
+                s, e = group_bounds[g]
+                test_indices.extend(indices[s:e])
+            test_indices = np.array(test_indices)
+            
+            all_train = []
+            for g in train_groups:
+                s, e = group_bounds[g]
+                all_train.extend(indices[s:e])
+            all_train = np.array(all_train)
+            
+            # Purge & Embargo against EACH test group separately
+            for g in test_groups:
+                ts, te = group_bounds[g]
+                test_start_time = X.index[ts]
+                test_end_time = X.index[max(0, te - 1)]
+                all_train = pkf._purge(X, all_train, test_indices, test_start_time, test_end_time)
+                all_train = pkf._embargo(all_train, te, n_samples, embargo_width)
+                
+            yield all_train, test_indices
+
+    def get_paths(self):
+        group_indices = list(range(self.n_groups))
+        combos = list(itertools.combinations(group_indices, self.n_test_groups))
+        n_paths = int(comb(self.n_groups - 1, self.n_test_groups - 1))
+        
+        paths = {p: {} for p in range(n_paths)}
+        for split_idx, combo in enumerate(combos):
+            for group in combo:
+                for p in range(n_paths):
+                    if group not in paths[p]:
+                        paths[p][group] = split_idx
+                        break
+        return paths

@@ -229,7 +229,7 @@ def compute_labels_and_weights(
         target_ret_col=vol_col,
         min_ret=0.0,
         horizontal_barriers=(1.0, 1.0),
-        vertical_barrier=pd.Timedelta(days=1),
+        vertical_barrier=pd.Timedelta(days=2),
         is_meta=is_meta,
     )
     
@@ -307,6 +307,9 @@ def main():
     vol = ewms(np.insert(log_ret, 0, np.nan), span=50)
     df['volatility'] = vol
     
+    # 假设均值是 1.2 hrs/bar，一天大约 20 个 bars。将 1-bar 波动率缩放到日度波动率
+    df['daily_vol_est'] = vol * np.sqrt(20)
+    
     # ======== CUSUM → Trend Scan → Meta-Labeling Pipeline ========
     
     # Step 1: CUSUM 去噪采样 — 返回 (sampled_df, t_events)
@@ -325,22 +328,25 @@ def main():
     print("\n" + "=" * 60)
     print("Running Trend Scan Primary Model...")
     print("=" * 60)
+    # Align L_windows to approximate 1-2 days (max 40 bars = ~48 hours)
     trend_df = trend_scan_labels(
         price_series=price_series,
         t_events=t_events,
-        L_windows=[10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
+        L_windows=[5, 10, 15, 20, 25, 30, 40],
     )
     
     # 打印 Trend Scan 概要
     print(f"\nTrend Scan Results:")
     print(f"  Events analyzed : {len(trend_df)}")
     print(f"  Mean |t_value|  : {trend_df['t_value'].abs().mean():.4f}")
-    print(f"  Side distribution: {dict(trend_df['side'].value_counts())}")
-    print(f"  Most common L   : {trend_df['t1'].mode().iloc[0] if len(trend_df) > 0 else 'N/A'}")
+    if 'side' in trend_df.columns:
+        print(f"  Side distribution: {dict(trend_df['side'].value_counts())}")
+        print(f"  Most common L   : {trend_df['t1'].mode().iloc[0] if len(trend_df) > 0 else 'N/A'}")
     
     # Step 3: Meta-Labeling — Trend Scan Side + t_value 驱动三重屏障
+    # Using the daily volatility equivalent for target return so price doesn't hit TP/SL in 1 bar
     final_df = compute_labels_and_weights(
-        df, sampled_df, vol_col='volatility', trend_df=trend_df
+        df, sampled_df, vol_col='daily_vol_est', trend_df=trend_df
     )
     
     print(f"\nSaving enriched data to {output_file}...")

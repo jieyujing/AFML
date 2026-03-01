@@ -1,0 +1,113 @@
+[Data] Using 'trend_weighted_uniqueness' as sample weights.
+[Data] Loaded 4704 samples with 19 features.
+[Data] Label distribution: {1: 2371, 0: 2333}
+[Data] Mean base uniqueness: 0.7323
+[Model] Using max_samples = 0.7323 based on mean uniqueness
+
+[CV] Running Purged 5-Fold CV...
+  [PurgedKFold] Fold test=[0:940] | train_eff=3717/4704 (79.0%)
+  --> Fold 1  Train: 3717, Test: 940
+/Users/link/Documents/AFMLKIT/.venv/lib/python3.13/site-packages/scipy/_lib/_util.py:1235: RuntimeWarning: divide by zero encountered in vecdot
+  return np.vecdot(x1, x2, axis=axis)
+/Users/link/Documents/AFMLKIT/.venv/lib/python3.13/site-packages/scipy/_lib/_util.py:1235: RuntimeWarning: overflow encountered in vecdot
+  return np.vecdot(x1, x2, axis=axis)
+/Users/link/Documents/AFMLKIT/.venv/lib/python3.13/site-packages/scipy/_lib/_util.py:1235: RuntimeWarning: invalid value encountered in vecdot
+  return np.vecdot(x1, x2, axis=axis)
+  [PurgedKFold] Fold test=[940:1880] | train_eff=3717/4704 (79.0%)
+  --> Fold 2  Train: 3717, Test: 940
+  [PurgedKFold] Fold test=[1880:2820] | train_eff=3717/4704 (79.0%)
+  --> Fold 3  Train: 3717, Test: 940
+  [PurgedKFold] Fold test=[2820:3760] | train_eff=3717/4704 (79.0%)
+  --> Fold 4  Train: 3717, Test: 940
+  [PurgedKFold] Fold test=[3760:4704] | train_eff=3760/4704 (79.9%)
+  --> Fold 5  Train: 3760, Test: 944
+
+[CV] Metrics Summary:
+  roc_auc: 0.5215 ± 0.0178
+  accuracy: 0.5115 ± 0.0190
+  f1: 0.4693 ± 0.0824
+
+[Model] Training final model on entire dataset...
+  Saved final model to outputs/models/meta_model/meta_model.pkl
+
+[Vis] Generating Visualizations...
+
+[MDA] Running Clustered MDA feature importance...
+[Feature Clustering] Auto-selected k=7 (Silhouette)
+[Feature Clustering] 7 clusters from 19 features
+  Cluster 1: ['vol_bb_pct_b_20', 'log_dist_ema_short', 'log_dist_ema_long', 'ema_diff', 'rsi_14', 'mom_roc_10', 'mom_stoch_k_14']
+  Cluster 2: ['vol_atr_14', 'ema_short', 'ema_long', 'ffd_log_price']
+  Cluster 3: ['vol_ewm_10', 'vol_ewm_50', 'vol_ewm_100']
+  Cluster 4: ['vol_parkinson', 'liq_amihud']
+  Cluster 5: ['vol_rel_20']
+  Cluster 6: ['trend_variance_ratio_20']
+  Cluster 7: ['corr_pv_10']
+  Found 7 feature clusters.
+  [PurgedKFold] Fold test=[0:940] | train_eff=3717/4704 (79.0%)
+
+[Clustered MDA] === Fold 1/5 ===
+  Baseline neg-log-loss: -0.692949
+  Cluster 3 (['vol_ewm_10', 'vol_ewm_50', 'vol_ewm_100']): drop=-0.001751
+  Cluster 4 (['vol_parkinson', 'liq_amihud']): drop=-0.001006
+  Cluster 2 (['vol_atr_14', 'ema_short', 'ema_long', 'ffd_log_price']): drop=-0.005495
+  Cluster 1 (['vol_bb_pct_b_20', 'log_dist_ema_short', 'log_dist_ema_long', 'ema_diff', 'rsi_14', 'mom_roc_10', 'mom_stoch_k_14']): drop=0.005613
+  Cluster 6 (['trend_variance_ratio_20']): drop=0.002076
+  Cluster 7 (['corr_pv_10']): drop=-0.000152
+  Cluster 5 (['vol_rel_20']): drop=0.001503
+  [PurgedKFold] Fold test=[940:1880] | train_eff=3717/4704 (79.0%)
+
+[Clustered MDA] === Fold 2/5 ===
+  Baseline neg-log-loss: -0.693680
+  Cluster 3 (['vol_ewm_10', 'vol_ewm_50', 'vol_ewm_100']): drop=0.000472
+  Cluster 4 (['vol_parkinson', 'liq_amihud']): drop=-0.001563
+  Cluster 2 (['vol_atr_14', 'ema_short', 'ema_long', 'ffd_log_price']): drop=-0.002332
+  Cluster 1 (['vol_bb_pct_b_20', 'log_dist_ema_short', 'log_dist_ema_long', 'ema_diff', 'rsi_14', 'mom_roc_10', 'mom_stoch_k_14']): drop=0.000726
+  Cluster 6 (['trend_variance_ratio_20']): drop=0.000171
+  Cluster 7 (['corr_pv_10']): drop=0.000335
+  Cluster 5 (['vol_rel_20']): drop=0.004894
+  [PurgedKFold] Fold test=[1880:2820] | train_eff=3717/4704 (79.0%)
+
+[Clustered MDA] === Fold 3/5 ===
+  Baseline neg-log-loss: -0.686890
+  Cluster 3 (['vol_ewm_10', 'vol_ewm_50', 'vol_ewm_100']): drop=-0.001743
+  Cluster 4 (['vol_parkinson', 'liq_amihud']): drop=0.000182
+  Cluster 2 (['vol_atr_14', 'ema_short', 'ema_long', 'ffd_log_price']): drop=0.001551
+  Cluster 1 (['vol_bb_pct_b_20', 'log_dist_ema_short', 'log_dist_ema_long', 'ema_diff', 'rsi_14', 'mom_roc_10', 'mom_stoch_k_14']): drop=0.003032
+  Cluster 6 (['trend_variance_ratio_20']): drop=-0.001150
+  Cluster 7 (['corr_pv_10']): drop=0.000425
+  Cluster 5 (['vol_rel_20']): drop=0.007850
+  [PurgedKFold] Fold test=[2820:3760] | train_eff=3717/4704 (79.0%)
+
+[Clustered MDA] === Fold 4/5 ===
+  Baseline neg-log-loss: -0.689713
+  Cluster 3 (['vol_ewm_10', 'vol_ewm_50', 'vol_ewm_100']): drop=-0.002089
+  Cluster 4 (['vol_parkinson', 'liq_amihud']): drop=-0.000521
+  Cluster 2 (['vol_atr_14', 'ema_short', 'ema_long', 'ffd_log_price']): drop=0.000017
+  Cluster 1 (['vol_bb_pct_b_20', 'log_dist_ema_short', 'log_dist_ema_long', 'ema_diff', 'rsi_14', 'mom_roc_10', 'mom_stoch_k_14']): drop=0.001306
+  Cluster 6 (['trend_variance_ratio_20']): drop=0.000373
+  Cluster 7 (['corr_pv_10']): drop=-0.000303
+  Cluster 5 (['vol_rel_20']): drop=0.004647
+  [PurgedKFold] Fold test=[3760:4704] | train_eff=3760/4704 (79.9%)
+
+[Clustered MDA] === Fold 5/5 ===
+  Baseline neg-log-loss: -0.692260
+  Cluster 3 (['vol_ewm_10', 'vol_ewm_50', 'vol_ewm_100']): drop=-0.001306
+  Cluster 4 (['vol_parkinson', 'liq_amihud']): drop=-0.000678
+  Cluster 2 (['vol_atr_14', 'ema_short', 'ema_long', 'ffd_log_price']): drop=-0.000983
+  Cluster 1 (['vol_bb_pct_b_20', 'log_dist_ema_short', 'log_dist_ema_long', 'ema_diff', 'rsi_14', 'mom_roc_10', 'mom_stoch_k_14']): drop=-0.003010
+  Cluster 6 (['trend_variance_ratio_20']): drop=0.001811
+  Cluster 7 (['corr_pv_10']): drop=-0.000367
+  Cluster 5 (['vol_rel_20']): drop=0.006589
+
+[Clustered MDA] Final Importance Ranking:
+  Cluster 5: importance=0.005097 ± 0.002143  features=['vol_rel_20']
+  Cluster 1: importance=0.001533 ± 0.002837  features=['vol_bb_pct_b_20', 'log_dist_ema_short', 'log_dist_ema_long', 'ema_diff', 'rsi_14', 'mom_roc_10', 'mom_stoch_k_14']
+  Cluster 6: importance=0.000656 ± 0.001177  features=['trend_variance_ratio_20']
+  Cluster 7: importance=-0.000012 ± 0.000329  features=['corr_pv_10']
+  Cluster 4: importance=-0.000717 ± 0.000574  features=['vol_parkinson', 'liq_amihud']
+  Cluster 3: importance=-0.001283 ± 0.000912  features=['vol_ewm_10', 'vol_ewm_50', 'vol_ewm_100']
+  Cluster 2: importance=-0.001448 ± 0.002388  features=['vol_atr_14', 'ema_short', 'ema_long', 'ffd_log_price']
+[MDA] Saved MDA results to outputs/models/meta_model/clustered_mda_results.csv
+
+All tasks completed successfully!
+Outputs generated in: outputs/models/meta_model

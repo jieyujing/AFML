@@ -155,7 +155,9 @@ def get_concurrent_sizes(
     
     # 5. Calculate average size
     avg_size = active_sum / active_count
-    # Handle division by zero where active_count == 0
-    avg_size = avg_size.fillna(0.0)
+    
+    # Handle division by zero and extreme values
+    # Replace inf/-inf with 0.0 before filling NaN
+    avg_size = avg_size.replace([np.inf, -np.inf], 0.0).fillna(0.0)
     
     return avg_size

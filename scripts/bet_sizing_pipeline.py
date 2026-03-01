@@ -10,42 +10,67 @@ from afmlkit.label.bet_size import (
 )
 
 def simulate_bet_sizing():
-    input_file = "outputs/dollar_bars/cusum_sampled_bars.csv"
-    if not os.path.exists(input_file):
-        print(f"File not found: {input_file}. Creating synthetic data for simulation.")
-        # Create synthetic data
+    import joblib
+    
+    features_file = "outputs/dollar_bars/feature_matrix.csv"
+    labels_file = "outputs/dollar_bars/tbm_labels.csv"
+    model_file = "outputs/models/meta_model/meta_model.pkl"
+    
+    if not os.path.exists(features_file) or not os.path.exists(model_file) or not os.path.exists(labels_file):
+        print("Required files for actual bet sizing are missing. Running synthetic simulation.")
+        # Fallback to simple random df if no files
         dates = pd.date_range("2023-01-01", periods=10, freq="D")
         df = pd.DataFrame({
             'timestamp': dates,
             'side': np.random.choice([-1, 1], size=10),
-            't1': dates + pd.Timedelta(days=2), # Exit 2 days later
+            't1': dates + pd.Timedelta(days=2),
+            'prob': np.random.uniform(0.3, 0.99, size=10)
         })
     else:
-        print(f"Loading data from {input_file}...")
-        df = pd.read_csv(input_file)
+        print("Loading feature matrix and actual Meta-Model...")
+        df_feat = pd.read_csv(features_file, parse_dates=['timestamp'])
+        df_lab = pd.read_csv(labels_file, parse_dates=['timestamp'])
         
-    print("Simulating Meta-Model probabilities...")
-    # Add random probabilities between 0.3 and 0.99
-    np.random.seed(42)
-    df['prob'] = np.random.uniform(0.3, 0.99, size=len(df))
-    
-    # Needs side, t1, and timestamp
-    if 'side' not in df.columns:
-        df['side'] = np.random.choice([-1, 1], size=len(df))
+        # tbm_labels contains the original side as 'bin' (1 or -1)
+        df_side = df_lab[['timestamp', 'bin']].rename(columns={'bin': 'side'})
         
-    if 't1' not in df.columns:
-        df['t1'] = pd.to_datetime(df['timestamp']) + pd.Timedelta(hours=48)
+        df = pd.merge(df_feat, df_side, on='timestamp', how='left')
+        df = df.set_index('timestamp')
+        df = df.dropna(subset=['side', 't1'])
+        
+        # Prepare features for prediction exactly as training
+        # Drop excluded cols
+        META_COLS = ['open', 'high', 'low', 'close', 'volume', 'vwap', 'trades', 'median_trade_size', 'log_return', 'bin', 't1', 'avg_uniqueness', 'return_attribution', 'timestamp']
+        exclude_cols = META_COLS + ['trend_weighted_uniqueness', 'trend_confidence', 'vertical_touch_weights', 'event_idx', 'touch_idx', 'ret', 'side']
+        
+        # Drop noisy features 
+        noisy_features = [
+            'vol_parkinson', 'liq_amihud',  # Cluster 4
+            'trend_variance_ratio_20',      # Cluster 6
+            'vol_atr_14', 'ema_short', 'ema_long', 'ffd_log_price'  # Cluster 2
+        ]
+        exclude_cols.extend(noisy_features)
+        
+        feature_cols = [c for c in df.columns if c not in exclude_cols]
+        X = df[feature_cols].copy().ffill().bfill()
+        
+        # Load model and predict
+        model = joblib.load(model_file)
+        
+        # predict_proba returns [prob_class_0, prob_class_1]
+        probs = model.predict_proba(X)
+        
+        # We want the probability of class 1 (meta-model says TRUE)
+        df['prob'] = probs[:, 1]
+        df = df.reset_index()
         
     print("Calculating base signal sizes...")
     df['base_size'] = get_signal_size(df['prob'], df['side'])
     
     # Create required inputs for concurrent sizes
     t_events = pd.DatetimeIndex(pd.to_datetime(df['timestamp']))
-    # Handle missing t1
-    has_t1 = df['t1'].notna()
-    if not has_t1.all():
-        print(f"Warning: {has_t1.sum()} events do not have t1 (exit time). Forward filling them or dropping them.")
-    t_exits = pd.Series(pd.to_datetime(df['t1']).values, index=t_events)
+    df['t1'] = pd.to_datetime(df['t1'])
+    t_exits = pd.Series(df['t1'].values, index=t_events)
     
     # We want to evaluate the sizes over all unique times
     print("Calculating concurrent active sizes...")

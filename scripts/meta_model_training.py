@@ -84,6 +84,16 @@ def load_and_prepare_data():
     
     # Feature columns
     exclude_cols = META_COLS + ['trend_weighted_uniqueness', 'trend_confidence', 'vertical_touch_weights', 'event_idx', 'touch_idx', 'ret']
+    
+    # Drop noisy features identified from Clustered MDA (importance <= 0)
+    noisy_features = [
+        'vol_parkinson', 'liq_amihud',  # Cluster 4
+        'trend_variance_ratio_20',      # Cluster 6
+        'vol_atr_14', 'ema_short', 'ema_long', 'ffd_log_price'  # Cluster 2
+    ]
+    
+    exclude_cols.extend(noisy_features)
+    
     feature_cols = [c for c in df.columns if c not in exclude_cols]
     
     X = df[feature_cols].copy()

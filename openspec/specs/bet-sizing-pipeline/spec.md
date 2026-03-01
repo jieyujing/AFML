@@ -25,6 +25,9 @@ The pipeline SHALL aggregate overlapping event signals by averaging the active t
 - **WHEN** a set of $N$ active signals exists
 - **THEN** it MUST compute the mean of their base theoretical sizes $s_k$ to determine $S_t$
 - **THEN** it MUST output $S_t = 0$ if no active signals are present
+- **THEN** it MUST detect `inf` or `-inf` in the result
+- **THEN** if an infinite or NaN value is detected, it MUST replace it with $0.0$ to ensure trading continuity
+- **THEN** it MUST ensure that even at boundary points of rapid signal switching, no non-numeric results are output.
 
 ### Requirement: Actionable Size Discretization
 The pipeline SHALL enforce a configurable filter step size to minimize excessive small trades due to continuous probability drifting.
