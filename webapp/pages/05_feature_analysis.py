@@ -7,6 +7,10 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from session import SessionManager
+from components.sidebar import render_sidebar, navigate_to
+from components.charts import render_heatmap, render_bar_chart, render_clustered_mda_chart
+
 st.set_page_config(page_title="特征分析", page_icon="📊", layout="wide")
 
 # ── Helper Functions ──────────────────────────────────────────────────
@@ -99,7 +103,7 @@ def _render_clustered_mda_section(
         # 毒药簇警告
         poison_clusters = mda_df[mda_df['mean_importance'] <= 0]
         if len(poison_clusters) > 0:
-            st.warning(f"""
+            st.warning("""
             ⚠️ **毒药簇警告：**
 
             以下簇在打乱后模型表现反而变好（重要性 ≤ 0），说明这些特征严重误导模型：
@@ -137,8 +141,6 @@ def _render_simple_mda_section(
     - 测量模型性能下降程度
     - 下降越多，特征越重要
     """)
-
-    n_repeats = st.number_input("重复次数", min_value=1, max_value=50, value=10, key="simple_mda_repeats")
 
     if not st.button("计算简单 MDA"):
         st.stop()
@@ -242,10 +244,6 @@ def _render_simple_mda_section(
 
 # ── Main Logic ────────────────────────────────────────────────────────
 
-from session import SessionManager
-from components.sidebar import render_sidebar, navigate_to
-from components.charts import render_heatmap, render_bar_chart, render_line_chart, render_clustered_mda_chart
-
 # 初始化会话
 SessionManager.init_session()
 
@@ -315,7 +313,7 @@ if step == "1. 特征聚类":
 
             # 层次聚类
             status_text.text("执行层次聚类...")
-            from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
+            from scipy.cluster.hierarchy import linkage, dendrogram
             from scipy.spatial.distance import squareform
 
             linkage_matrix = linkage(squareform(distance_matrix.values), method='ward')
@@ -356,7 +354,6 @@ if step == "1. 特征聚类":
             )
 
             # 用 matplotlib  dendrogram 数据创建 plotly 图形
-            from scipy.cluster.hierarchy import dendrogram
             import matplotlib.pyplot as plt
 
             fig_mpl, ax = plt.subplots(figsize=(14, 8))
