@@ -59,7 +59,7 @@ def frac_diff_ffd(series: pd.Series, d: float, thres: float = 1e-5) -> pd.Series
 def optimize_d(series: pd.Series, thres: float = 1e-4, d_step: float = 0.05, max_d: float = 1.0) -> float:
     """
     Find the minimum d that makes the fractionally differentiated series stationary.
-    
+
     :param series: The price series to apply FracDiff to
     :param thres: Threshold for weight cutoff in FFD
     :param d_step: Step size for exploring d values
@@ -72,17 +72,18 @@ def optimize_d(series: pd.Series, thres: float = 1e-4, d_step: float = 0.05, max
         p_val_orig = adfuller(valid_series)[1]
         if p_val_orig < 0.05:
             return 0.0
-            
+
     for d in np.arange(0.01, max_d + d_step, d_step):
         diff_series = frac_diff_ffd(series, d=d, thres=thres)
+        diff_series = diff_series.dropna()
         if len(diff_series) < 10:
             continue
-            
+
         # ADF Test
         p_val = adfuller(diff_series)[1]
-        
+
         if p_val < 0.05:
             return round(d, 4)
-            
+
     # Default to 1.0 if no d < 1 creates stationarity
     return 1.0
