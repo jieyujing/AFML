@@ -1,5 +1,6 @@
 """特征工程页面"""
 import streamlit as st
+import pandas as pd
 from pathlib import Path
 import sys
 
@@ -31,8 +32,40 @@ st.title("🔧 特征工程")
 bar_data = SessionManager.get('bar_data')
 dollar_bars = SessionManager.get('dollar_bars')
 
-# 数据源选择逻辑
+# 如果 Session 中没有数据，尝试从文件加载
 if bar_data is None and dollar_bars is None:
+    # 尝试从 outputs/dollar_bars 加载已生成的 Dollar Bars
+    output_dir = Path("outputs/dollar_bars")
+    if output_dir.exists():
+        dollar_bar_files = list(output_dir.glob("dollar_bars_*.csv"))
+        if dollar_bar_files:
+            st.info(f"📁 从 `{output_dir}` 发现 {len(dollar_bar_files)} 个 Dollar Bars 文件")
+
+            # 让用户选择文件
+            file_options = {f.name: f for f in dollar_bar_files}
+            selected_file_name = st.selectbox(
+                "选择 Dollar Bars 文件",
+                options=list(file_options.keys())
+            )
+
+            if selected_file_name:
+                selected_file = file_options[selected_file_name]
+                try:
+                    df = pd.read_csv(selected_file, parse_dates=["timestamp"])
+                    df = df.set_index("timestamp")
+
+                    # 提取频率（从文件名）
+                    freq = selected_file.stem.replace("dollar_bars_", "")
+
+                    # 保存到 Session
+                    SessionManager.update('dollar_bars', {freq: df})
+                    dollar_bars = SessionManager.get('dollar_bars')
+                    st.success(f"✅ 已加载：{selected_file_name}")
+                except Exception as e:
+                    st.error(f"加载失败：{e}")
+
+# 数据源选择逻辑
+if bar_data is None and (dollar_bars is None or all(len(df) == 0 for df in dollar_bars.values())):
     # 既没有 bar_data 也没有 dollar_bars
     st.warning("⚠️ 请先导入数据并构建 K 线")
     if st.button("前往数据导入"):
