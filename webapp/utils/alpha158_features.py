@@ -161,3 +161,42 @@ def compute_ffd_ma(
         result[ema_col] = pd.Series(ema_values, index=ffd_series.index)
 
     return result
+
+
+def compute_ffd_rank(
+    df: pd.DataFrame,
+    feature_cols: List[str] = None,
+    rank_window: int = DEFAULT_RANK_WINDOW
+) -> pd.DataFrame:
+    """
+    Compute rolling rank features (percentile rank within rolling window).
+
+    This implements temporal rank: where does current value sit relative to
+    the past `rank_window` observations? Single-stock alternative to cross-sectional rank.
+
+    Args:
+        df: DataFrame containing base features
+        feature_cols: List of feature columns to rank (default: all ffd_* columns)
+        rank_window: Rolling window size for percentile rank (default: 20)
+
+    Returns:
+        DataFrame: Original columns + ffd_rank_{feature}_{window} columns
+    """
+    result = df.copy()
+
+    if feature_cols is None:
+        # Default: rank all ffd_* prefixed columns
+        feature_cols = [col for col in df.columns if col.startswith('ffd_')]
+
+    for col in feature_cols:
+        if col not in df.columns:
+            continue
+
+        rank_col = f"ffd_rank_{col}_{rank_window}"
+        # Percentile rank: 0 = lowest in window, 1 = highest in window
+        result[rank_col] = df[col].rolling(window=rank_window, min_periods=1).apply(
+            lambda x: pd.Series(x).rank(pct=True).iloc[-1],
+            raw=False
+        )
+
+    return result

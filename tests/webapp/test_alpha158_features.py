@@ -171,3 +171,59 @@ def test_compute_ffd_ma_preserves_index():
 
     assert isinstance(result.index, pd.DatetimeIndex)
     assert len(result) == 100
+
+
+# ============== compute_ffd_rank tests ==============
+
+def test_compute_ffd_rank_basic():
+    """Test FFD rank feature computation."""
+    from webapp.utils.alpha158_features import compute_ffd_rank
+
+    np.random.seed(42)
+    dates = pd.date_range('2023-01-01', periods=100, freq='min')
+
+    df = pd.DataFrame({
+        'ffd_ma_5': pd.Series(np.random.randn(100), index=dates),
+        'ffd_vol_std_10': pd.Series(np.random.randn(100), index=dates)
+    })
+
+    result = compute_ffd_rank(df, feature_cols=['ffd_ma_5', 'ffd_vol_std_10'], rank_window=20)
+
+    # Check rank columns exist
+    assert 'ffd_rank_ffd_ma_5_20' in result.columns
+    assert 'ffd_rank_ffd_vol_std_10_20' in result.columns
+
+    # Check values are in [0, 1] range
+    assert result['ffd_rank_ffd_ma_5_20'].between(0, 1).all()
+    assert result['ffd_rank_ffd_vol_std_10_20'].between(0, 1).all()
+
+
+def test_compute_ffd_rank_single_feature():
+    """Test FFD rank with single feature."""
+    from webapp.utils.alpha158_features import compute_ffd_rank
+
+    np.random.seed(42)
+    df = pd.DataFrame({'ffd_ma_5': np.random.randn(50)})
+
+    result = compute_ffd_rank(df, feature_cols=['ffd_ma_5'], rank_window=10)
+
+    assert 'ffd_rank_ffd_ma_5_10' in result.columns
+    assert len(result) == 50
+
+
+def test_compute_ffd_rank_preserves_original():
+    """Test FFD rank doesn't modify original columns."""
+    from webapp.utils.alpha158_features import compute_ffd_rank
+
+    np.random.seed(42)
+    df = pd.DataFrame({
+        'ffd_ma_5': np.random.randn(50),
+        'other_col': np.random.randn(50)
+    })
+
+    result = compute_ffd_rank(df, feature_cols=['ffd_ma_5'], rank_window=10)
+
+    # Original columns preserved
+    assert 'ffd_ma_5' in result.columns
+    assert 'other_col' in result.columns
+    assert 'ffd_rank_ffd_ma_5_10' in result.columns
