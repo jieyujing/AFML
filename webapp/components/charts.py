@@ -332,3 +332,76 @@ def display_metrics(metrics: Dict[str, Any]):
                 st.metric(name, f"{value:,}")
             else:
                 st.metric(name, str(value))
+
+
+def render_clustered_mda_chart(
+    mda_df: pd.DataFrame,
+    title: str = "Clustered MDA 特征重要性",
+    highlight_poison: bool = True,
+) -> go.Figure:
+    """
+    绘制 Clustered MDA 水平条形图（带误差线）
+
+    :param mda_df: DataFrame with columns [cluster_id, features, mean_importance, std_importance]
+    :param title: 图表标题
+    :param highlight_poison: 是否高亮毒药簇（重要性 ≤ 0）
+    :returns: Plotly Figure
+    """
+    if mda_df.empty:
+        raise ValueError("MDA DataFrame cannot be empty")
+
+    # 按重要性降序排序
+    mda_df = mda_df.sort_values('mean_importance', ascending=False).reset_index(drop=True)
+
+    # 准备数据
+    y_labels = [f"Cluster {cid}: {feats}" for cid, feats in zip(
+        mda_df['cluster_id'], mda_df['features']
+    )]
+    importance = mda_df['mean_importance'].values
+    std = mda_df['std_importance'].values
+
+    # 确定条形颜色（毒药簇用红色）
+    colors = []
+    for imp in importance:
+        if highlight_poison and imp <= 0:
+            colors.append('#d62728')  # 红色
+        else:
+            colors.append('#1f77b4')  # 蓝色
+
+    # 创建图形
+    fig = go.Figure()
+
+    # 添加条形图
+    fig.add_trace(go.Bar(
+        y=y_labels,
+        x=importance,
+        orientation='h',
+        marker_color=colors,
+        error_x=dict(
+            type='data',
+            array=std,
+            width=6,
+            color='red'
+        ),
+        name='特征重要性'
+    ))
+
+    # 添加 0 轴参考线
+    fig.add_shape(
+        type='line',
+        x0=0, y0=-0.5,
+        x1=0, y1=len(y_labels) - 0.5,
+        line=dict(color='gray', dash='dash'),
+    )
+
+    # 更新布局
+    fig.update_layout(
+        title=title,
+        xaxis_title='特征重要性 (MDA 分数)',
+        yaxis_title='特征簇',
+        template='plotly_white',
+        height=max(400, len(y_labels) * 60),
+        showlegend=False
+    )
+
+    return fig
