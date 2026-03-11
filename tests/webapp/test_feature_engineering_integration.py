@@ -162,3 +162,34 @@ def test_feature_calculator_with_missing_columns(sample_dollar_bars):
     # 验证依赖 high/low 的特征不存在或为 NaN
     assert 'vol_parkinson' not in result.columns
     assert 'mom_stoch_k_14' not in result.columns
+
+
+def test_compute_all_features_with_alpha158(sample_dollar_bars):
+    """Test compute_all_features with Alpha158 enabled."""
+    config = {
+        'volatility': {'spans': [10]},
+        'alpha158': {
+            'enabled': True,
+            'volatility': {'spans': [5, 10]},
+            'ma': {'windows': [5, 10]},
+            'rank': {'enabled': True, 'window': 20}
+        }
+    }
+
+    result, metadata = compute_all_features(
+        df=sample_dollar_bars,
+        config=config,
+        align_to_cusum=False
+    )
+
+    # Check existing features
+    assert 'vol_ewm_10' in result.columns
+
+    # Check Alpha158 features
+    assert 'ffd_ma_5' in result.columns
+    assert 'ffd_vol_std_5' in result.columns
+    assert 'ffd_rank_ffd_ma_5_20' in result.columns
+
+    # Check metadata
+    assert metadata.get('alpha158_enabled') is True
+    assert 'alpha158_optimal_d' in metadata

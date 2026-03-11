@@ -13,6 +13,9 @@ from afmlkit.feature.core.ma import ewma, sma
 from afmlkit.feature.core.momentum import rsi_wilder, roc, stoch_k
 from afmlkit.feature.core.correlation import rolling_price_volume_correlation
 
+# Optional Alpha158 features
+# from webapp.utils.alpha158_features import compute_alpha158_features
+
 
 # ── Hyper-parameters ──────────────────────────────────────────────────
 VOL_SPANS = [10, 50, 100]          # EWM volatility windows
@@ -182,6 +185,23 @@ def compute_all_features(
     d_step = fracdiff_config.get("d_step", FRACDIFF_D_STEP)
     df, optimal_d = compute_fracdiff_features(df, thres=thres, d_step=d_step)
     metadata["optimal_d"] = optimal_d
+
+    # --- Alpha158 features (optional) ---
+    alpha158_config = config.get('alpha158', {})
+    if alpha158_config.get('enabled', False):
+        from webapp.utils.alpha158_features import compute_alpha158_features
+
+        alpha158_df, alpha158_meta = compute_alpha158_features(df, config=alpha158_config)
+
+        # Merge features (with ffd_* prefix to avoid collisions)
+        for col in alpha158_df.columns:
+            if col not in df.columns:
+                df[col] = alpha158_df[col]
+
+        # Update metadata
+        metadata['alpha158_enabled'] = True
+        metadata['alpha158_columns'] = alpha158_df.columns.tolist()
+        metadata['alpha158_optimal_d'] = alpha158_meta.get('optimal_d')
 
     if align_to_cusum and cusum_path:
         df = align_features_with_cusum(df, cusum_path)
