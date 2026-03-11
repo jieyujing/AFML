@@ -80,3 +80,40 @@ def compute_ffd_base(
     ffd_series.name = "ffd_log_price"
 
     return ffd_series, optimal_d
+
+
+def compute_ffd_volatility(
+    ffd_series: pd.Series,
+    spans: List[int] = None
+) -> pd.DataFrame:
+    """
+    Compute volatility features based on FFD series.
+
+    Calculates:
+    - Rolling standard deviation (ffd_vol_std_{span})
+    - EWM volatility (ffd_vol_ewm_{span})
+
+    Args:
+        ffd_series: FFD-transformed series (typically ffd_log_price)
+        spans: List of span values for volatility calculation (default: [5, 10, 20])
+
+    Returns:
+        DataFrame: Contains ffd_vol_std_* and ffd_vol_ewm_* columns
+    """
+    if spans is None:
+        spans = DEFAULT_VOLATILITY_SPANS
+
+    result = pd.DataFrame(index=ffd_series.index)
+    ffd_values = ffd_series.values.astype(np.float64)
+
+    for span in spans:
+        # Rolling standard deviation
+        std_col = f"ffd_vol_std_{span}"
+        result[std_col] = pd.Series(ffd_values, index=ffd_series.index).rolling(window=span).std()
+
+        # EWM volatility (using log returns of FFD series)
+        ewm_col = f"ffd_vol_ewm_{span}"
+        ewm_vol = ewms(ffd_values, span)
+        result[ewm_col] = pd.Series(ewm_vol, index=ffd_series.index)
+
+    return result
