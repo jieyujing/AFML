@@ -9,9 +9,242 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 st.set_page_config(page_title="特征分析", page_icon="📊", layout="wide")
 
+# ── Helper Functions ──────────────────────────────────────────────────
+
+
+def _render_clustered_mda_section(
+    features_data: pd.DataFrame,
+    labels_data: pd.DataFrame,
+) -> None:
+    """渲染 Clustered MDA 分析部分"""
+    from afmlkit.importance.clustering import cluster_features
+    from afmlkit.importance.mda import clustered_mda
+
+    st.markdown("#### Clustered MDA (聚类 MDA) 特征重要性")
+
+    st.markdown("""
+    **Clustered MDA** 通过打乱整个特征簇来测量重要性，消除替代效应：
+    - 使用 ONC 算法自动确定最优聚类数
+    - 同时打乱同一簇内的所有特征
+    - 使用 Purged CV 和 Log-loss 计算样本外重要性
+    """)
+
+    # 参数配置
+    with st.expander("Clustered MDA 参数", expanded=False):
+        n_repeats = st.number_input("重复次数", min_value=1, max_value=50, value=10)
+        n_splits = st.number_input("CV 折数", min_value=2, max_value=10, value=5)
+        embargo_pct = st.number_input("Embargo 比例", min_value=0.0, max_value=0.1, value=0.01, step=0.005)
+        random_state = st.number_input("随机种子", value=42)
+
+    if not st.button("计算 Clustered MDA"):
+        st.stop()
+
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    try:
+        # 准备数据
+        status_text.text("准备数据...")
+        numeric_cols = features_data.select_dtypes(include=[np.number]).columns.tolist()
+        feature_cols = [c for c in numeric_cols if c not in ['open', 'high', 'low', 'close', 'volume']]
+
+        X = features_data[feature_cols].dropna()
+
+        # 获取 Triple Barrier 标签
+        if isinstance(labels_data, pd.Series):
+            y = labels_data
+            t1 = y.index + pd.Timedelta(minutes=30)  # 默认 30 分钟
+        else:
+            y = labels_data.get('bin', labels_data.iloc[:, 0])
+            t1 = labels_data.get('t1', y.index + pd.Timedelta(minutes=30))
+
+        # 对齐索引
+        common_idx = X.index.intersection(y.index).intersection(t1.index)
+        X = X.loc[common_idx]
+        y = y.loc[common_idx]
+        t1 = t1.loc[common_idx]
+
+        progress_bar.progress(20)
+
+        # Step 1: 特征聚类
+        status_text.text("执行特征聚类...")
+        clusters = cluster_features(X)
+        progress_bar.progress(40)
+
+        # 显示聚类结果
+        with st.expander("📊 聚类结果预览", expanded=True):
+            st.write(f"**最优聚类数：** {len(clusters)} (通过 Silhouette Score 自动选择)")
+            for cid, feats in sorted(clusters.items()):
+                st.write(f"- **Cluster {cid}**: {', '.join(feats)}")
+
+        # Step 2: 计算 Clustered MDA
+        status_text.text("计算 Clustered MDA (可能需要几分钟)...")
+        mda_df = clustered_mda(
+            X=X,
+            y=y,
+            clusters=clusters,
+            t1=t1,
+            n_splits=n_splits,
+            embargo_pct=embargo_pct,
+            n_repeats=n_repeats,
+            random_state=random_state
+        )
+        progress_bar.progress(80)
+
+        # Step 3: 可视化
+        status_text.text("渲染图表...")
+        fig = render_clustered_mda_chart(mda_df, highlight_poison=True)
+        st.plotly_chart(fig, use_container_width=True)
+
+        # 毒药簇警告
+        poison_clusters = mda_df[mda_df['mean_importance'] <= 0]
+        if len(poison_clusters) > 0:
+            st.warning(f"""
+            ⚠️ **毒药簇警告：**
+
+            以下簇在打乱后模型表现反而变好（重要性 ≤ 0），说明这些特征严重误导模型：
+            """)
+            for _, row in poison_clusters.iterrows():
+                st.write(f"- **Cluster {row['cluster_id']}** (重要性={row['mean_importance']:.4f}): {', '.join(row['features'])}")
+            st.write("""
+            **建议：** 在实盘代码中直接 drop 掉这些特征！
+            """)
+
+        # 保存结果
+        SessionManager.update('mda_results', mda_df)
+        SessionManager.update('feature_clusters', clusters)
+
+        status_text.text("分析完成!")
+        progress_bar.progress(100)
+        st.success("✅ Clustered MDA 分析完成")
+
+    except Exception as e:
+        st.error(f"Clustered MDA 分析失败：{str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
+
+
+def _render_simple_mda_section(
+    features_data: pd.DataFrame,
+    labels_data: pd.DataFrame,
+) -> None:
+    """渲染简单 MDA 分析部分（保留原有逻辑）"""
+    st.markdown("#### 简单 MDA (单个特征) 特征重要性")
+
+    st.markdown("""
+    **MDA (Mean Decrease Accuracy)** 通过打乱特征值来测量特征重要性：
+    - 打乱某个特征的值
+    - 测量模型性能下降程度
+    - 下降越多，特征越重要
+    """)
+
+    n_repeats = st.number_input("重复次数", min_value=1, max_value=50, value=10, key="simple_mda_repeats")
+
+    if not st.button("计算简单 MDA"):
+        st.stop()
+
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    try:
+        # 准备数据
+        status_text.text("准备数据...")
+        numeric_cols = features_data.select_dtypes(include=[np.number]).columns.tolist()
+        feature_cols = [c for c in numeric_cols if c not in ['open', 'high', 'low', 'close', 'volume']]
+
+        X = features_data[feature_cols].dropna()
+
+        # 获取标签
+        if isinstance(labels_data, pd.Series):
+            y = labels_data
+        else:
+            y = labels_data.get('bin', labels_data.iloc[:, 0])
+
+        # 对齐索引
+        common_idx = X.index.intersection(y.index)
+        X = X.loc[common_idx]
+        y = y.loc[common_idx]
+
+        progress_bar.progress(20)
+
+        # 使用随机森林计算重要性
+        status_text.text("训练随机森林模型...")
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.model_selection import cross_val_score
+
+        clf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+
+        # 交叉验证
+        cv_scores = cross_val_score(clf, X, y, cv=5, scoring='accuracy')
+        st.info(f"交叉验证准确率：{cv_scores.mean():.4f} (+/- {cv_scores.std() * 2:.4f})")
+
+        # 训练完整模型
+        clf.fit(X, y)
+        progress_bar.progress(50)
+
+        # 获取特征重要性
+        status_text.text("计算特征重要性...")
+        importance_df = pd.DataFrame({
+            'feature': feature_cols,
+            'importance': clf.feature_importances_
+        }).sort_values('importance', ascending=False)
+
+        progress_bar.progress(70)
+
+        # MDA 计算
+        status_text.text("执行 MDA 分析...")
+        from sklearn.metrics import accuracy_score
+
+        baseline_score = accuracy_score(y, clf.predict(X))
+
+        mda_scores = []
+        for feat in feature_cols:
+            X_permuted = X.copy()
+            X_permuted[feat] = np.random.permutation(X_permuted[feat])
+            permuted_score = accuracy_score(y, clf.predict(X_permuted))
+            mda_scores.append(baseline_score - permuted_score)
+
+        importance_df['mda_score'] = mda_scores
+        importance_df = importance_df.sort_values('mda_score', ascending=False)
+
+        progress_bar.progress(90)
+
+        # 保存结果
+        SessionManager.update('feature_importance', importance_df)
+        SessionManager.update('model', clf)
+
+        status_text.text("分析完成!")
+        progress_bar.progress(100)
+
+        st.success("✅ 特征重要性分析完成")
+
+        # 显示重要性图
+        st.markdown("#### 特征重要性 (MDA)")
+
+        top_n = st.slider("显示 Top N 特征", 5, 50, 20)
+
+        fig = render_bar_chart(
+            importance_df.head(top_n)['mda_score'],
+            title=f"Top {top_n} 特征重要性 (MDA)",
+            orientation='h'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # 重要性表格
+        st.markdown("#### 重要性排名")
+        st.dataframe(importance_df.head(top_n))
+
+    except Exception as e:
+        st.error(f"特征重要性分析失败：{str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
+
+
+# ── Main Logic ────────────────────────────────────────────────────────
+
 from session import SessionManager
 from components.sidebar import render_sidebar, navigate_to
-from components.charts import render_heatmap, render_bar_chart, render_line_chart
+from components.charts import render_heatmap, render_bar_chart, render_line_chart, render_clustered_mda_chart
 
 # 初始化会话
 SessionManager.init_session()
@@ -191,7 +424,7 @@ elif step == "2. 特征距离":
         else:
             st.info("没有发现高相关性特征对")
 
-elif step == "3. 特征重要性":
+if step == "3. 特征重要性":
     st.markdown("### 3️⃣ 特征重要性分析")
 
     features_data = SessionManager.get('features')
@@ -200,113 +433,17 @@ elif step == "3. 特征重要性":
     if features_data is None or labels_data is None:
         st.warning("请确保已有特征和标签数据")
     else:
-        st.markdown("#### Clustered MDA (聚类 MDA) 特征重要性")
+        # 模式选择
+        mode = st.radio(
+            "分析模式",
+            ["快速 MDA (单个特征)", "Clustered MDA (推荐)"],
+            horizontal=True
+        )
 
-        st.markdown("""
-        **MDA (Mean Decrease Accuracy)** 通过打乱特征值来测量特征重要性：
-        - 打乱某个特征的值
-        - 测量模型性能下降程度
-        - 下降越多，特征越重要
-        """)
-
-        n_repeats = st.number_input("重复次数", min_value=1, max_value=50, value=10)
-
-        if st.button("计算特征重要性"):
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-
-            try:
-                # 准备数据
-                status_text.text("准备数据...")
-                numeric_cols = features_data.select_dtypes(include=[np.number]).columns.tolist()
-                feature_cols = [c for c in numeric_cols if c not in ['open', 'high', 'low', 'close', 'volume']]
-
-                X = features_data[feature_cols].dropna()
-
-                # 获取标签
-                if isinstance(labels_data, pd.Series):
-                    y = labels_data
-                else:
-                    y = labels_data.get('bin', labels_data.iloc[:, 0])
-
-                # 对齐索引
-                common_idx = X.index.intersection(y.index)
-                X = X.loc[common_idx]
-                y = y.loc[common_idx]
-
-                progress_bar.progress(20)
-
-                # 使用随机森林计算重要性
-                status_text.text("训练随机森林模型...")
-                from sklearn.ensemble import RandomForestClassifier
-                from sklearn.model_selection import cross_val_score
-
-                clf = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
-
-                # 交叉验证
-                cv_scores = cross_val_score(clf, X, y, cv=5, scoring='accuracy')
-                st.info(f"交叉验证准确率：{cv_scores.mean():.4f} (+/- {cv_scores.std() * 2:.4f})")
-
-                # 训练完整模型
-                clf.fit(X, y)
-                progress_bar.progress(50)
-
-                # 获取特征重要性
-                status_text.text("计算特征重要性...")
-                importance_df = pd.DataFrame({
-                    'feature': feature_cols,
-                    'importance': clf.feature_importances_
-                }).sort_values('importance', ascending=False)
-
-                progress_bar.progress(70)
-
-                # MDA 计算
-                status_text.text("执行 MDA 分析...")
-                from sklearn.metrics import accuracy_score
-
-                baseline_score = accuracy_score(y, clf.predict(X))
-
-                mda_scores = []
-                for feat in feature_cols:
-                    X_permuted = X.copy()
-                    X_permuted[feat] = np.random.permutation(X_permuted[feat])
-                    permuted_score = accuracy_score(y, clf.predict(X_permuted))
-                    mda_scores.append(baseline_score - permuted_score)
-
-                importance_df['mda_score'] = mda_scores
-                importance_df = importance_df.sort_values('mda_score', ascending=False)
-
-                progress_bar.progress(90)
-
-                # 保存结果
-                SessionManager.update('feature_importance', importance_df)
-                SessionManager.update('model', clf)
-
-                status_text.text("分析完成!")
-                progress_bar.progress(100)
-
-                st.success("✅ 特征重要性分析完成")
-
-                # 显示重要性图
-                st.markdown("#### 特征重要性 (MDA)")
-
-                top_n = st.slider("显示 Top N 特征", 5, 50, 20)
-
-                fig = render_bar_chart(
-                    importance_df.head(top_n)['mda_score'],
-                    title=f"Top {top_n} 特征重要性 (MDA)",
-                    orientation='h'
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
-                # 重要性表格
-                st.markdown("#### 重要性排名")
-                st.dataframe(importance_df.head(top_n))
-
-            except Exception as e:
-                st.error(f"特征重要性分析失败：{str(e)}")
-                import traceback
-                st.code(traceback.format_exc())
+        if mode == "Clustered MDA (推荐)":
+            _render_clustered_mda_section(features_data, labels_data)
+        else:
+            _render_simple_mda_section(features_data, labels_data)
 
 elif step == "4. 特征选择":
     st.markdown("### 4️⃣ 特征选择")
