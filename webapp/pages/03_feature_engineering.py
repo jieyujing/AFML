@@ -1,21 +1,18 @@
 """特征工程页面"""
 import streamlit as st
-import pandas as pd
-import numpy as np
 from pathlib import Path
 import sys
 
+# Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-st.set_page_config(page_title="特征工程", page_icon="🔧", layout="wide")
-
+# Import project modules
 from session import SessionManager
 from components.sidebar import render_sidebar, navigate_to
-from components.charts import render_line_chart, display_metrics
-from components.param_editor import render_param_editor
-from webapp.utils.feature_calculator import (
-    compute_all_features,
-)
+from components.charts import render_line_chart
+from webapp.utils.feature_calculator import compute_all_features
+
+st.set_page_config(page_title="特征工程", page_icon="🔧", layout="wide")
 
 # 初始化会话
 SessionManager.init_session()

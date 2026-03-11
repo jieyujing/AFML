@@ -2,7 +2,6 @@
 """特征计算器 - 实现与 scripts/feature_engineering.py 一致的特征计算逻辑"""
 import numpy as np
 import pandas as pd
-from pathlib import Path
 from typing import Tuple, List, Optional, Dict, Any
 
 # afmlkit core imports
@@ -152,9 +151,8 @@ def align_features_with_cusum(
 
 
 def purge_nan_rows(df: pd.DataFrame) -> pd.DataFrame:
-    n_before = len(df)
-    df_clean = df.dropna()
-    return df_clean
+    """Drop rows with NaN values."""
+    return df.dropna()
 
 
 def compute_all_features(
