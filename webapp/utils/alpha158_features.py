@@ -12,6 +12,7 @@ Key design principles:
 
 All features use 'ffd_*' prefix for clear identification.
 """
+
 import numpy as np
 import pandas as pd
 from typing import Tuple, List, Optional, Dict, Any
@@ -33,7 +34,7 @@ DEFAULT_FFD_D_STEP = 0.05
 def compute_ffd_base(
     close: pd.Series,
     thres: float = DEFAULT_FFD_THRES,
-    d_step: float = DEFAULT_FFD_D_STEP
+    d_step: float = DEFAULT_FFD_D_STEP,
 ) -> Tuple[pd.Series, float]:
     """
     Compute FFD base series and return optimal d*.
@@ -70,9 +71,7 @@ def compute_ffd_base(
 
     # Apply FFD with optimal d
     log_price_named = pd.Series(
-        log_price.values,
-        index=log_price.index,
-        name="log_close"
+        log_price.values, index=log_price.index, name="log_close"
     )
     ffd_series = frac_diff_ffd(log_price_named, d=optimal_d, thres=thres)
 
@@ -83,8 +82,7 @@ def compute_ffd_base(
 
 
 def compute_ffd_volatility(
-    ffd_series: pd.Series,
-    spans: List[int] = None
+    ffd_series: pd.Series, spans: List[int] = None
 ) -> pd.DataFrame:
     """
     Compute volatility features based on FFD series.
@@ -109,7 +107,9 @@ def compute_ffd_volatility(
     for span in spans:
         # Rolling standard deviation
         std_col = f"ffd_vol_std_{span}"
-        result[std_col] = pd.Series(ffd_values, index=ffd_series.index).rolling(window=span).std()
+        result[std_col] = (
+            pd.Series(ffd_values, index=ffd_series.index).rolling(window=span).std()
+        )
 
         # EWM volatility (using log returns of FFD series)
         ewm_col = f"ffd_vol_ewm_{span}"
@@ -120,9 +120,7 @@ def compute_ffd_volatility(
 
 
 def compute_ffd_ma(
-    ffd_series: pd.Series,
-    windows: List[int] = None,
-    ema_windows: List[int] = None
+    ffd_series: pd.Series, windows: List[int] = None, ema_windows: List[int] = None
 ) -> pd.DataFrame:
     """
     Compute moving average features based on FFD series.
@@ -166,7 +164,7 @@ def compute_ffd_ma(
 def compute_ffd_rank(
     df: pd.DataFrame,
     feature_cols: List[str] = None,
-    rank_window: int = DEFAULT_RANK_WINDOW
+    rank_window: int = DEFAULT_RANK_WINDOW,
 ) -> pd.DataFrame:
     """
     Compute rolling rank features (percentile rank within rolling window).
@@ -186,7 +184,7 @@ def compute_ffd_rank(
 
     if feature_cols is None:
         # Default: rank all ffd_* prefixed columns
-        feature_cols = [col for col in df.columns if col.startswith('ffd_')]
+        feature_cols = [col for col in df.columns if col.startswith("ffd_")]
 
     for col in feature_cols:
         if col not in df.columns:
@@ -194,9 +192,10 @@ def compute_ffd_rank(
 
         rank_col = f"ffd_rank_{col}_{rank_window}"
         # Percentile rank: 0 = lowest in window, 1 = highest in window
-        result[rank_col] = df[col].rolling(window=rank_window, min_periods=1).apply(
-            lambda x: pd.Series(x).rank(pct=True).iloc[-1],
-            raw=False
+        result[rank_col] = (
+            df[col]
+            .rolling(window=rank_window, min_periods=1)
+            .apply(lambda x: pd.Series(x).rank(pct=True).iloc[-1], raw=False)
         )
 
     return result
@@ -224,24 +223,25 @@ def compute_volume_features(df: pd.DataFrame) -> pd.DataFrame:
     result = pd.DataFrame(index=df.index)
 
     # Amount (dollar volume) - only requires close and volume
-    if 'close' in df.columns and 'volume' in df.columns:
-        result['ffd_amount'] = df['close'] * df['volume']
+    if "close" in df.columns and "volume" in df.columns:
+        result["ffd_amount"] = df["close"] * df["volume"]
 
     # VWAP - rolling 5-period volume-weighted average price (requires high/low/close/volume)
-    if all(col in df.columns for col in ['high', 'low', 'close', 'volume']):
-        typical_price = (df['high'] + df['low'] + df['close']) / 3
-        result['ffd_vwap'] = (typical_price * df['volume']).rolling(5).sum() / df['volume'].rolling(5).sum()
+    if all(col in df.columns for col in ["high", "low", "close", "volume"]):
+        typical_price = (df["high"] + df["low"] + df["close"]) / 3
+        result["ffd_vwap"] = (typical_price * df["volume"]).rolling(5).sum() / df[
+            "volume"
+        ].rolling(5).sum()
 
         # Amplification (range / open) - requires open
-        if 'open' in df.columns:
-            result['ffd_amplification'] = (df['high'] - df['low']) / df['open']
+        if "open" in df.columns:
+            result["ffd_amplification"] = (df["high"] - df["low"]) / df["open"]
 
     return result
 
 
 def compute_alpha158_features(
-    df: pd.DataFrame,
-    config: Optional[Dict[str, Any]] = None
+    df: pd.DataFrame, config: Optional[Dict[str, Any]] = None
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """
     Compute complete Alpha158-style features (FFD-transformed version).
@@ -277,74 +277,76 @@ def compute_alpha158_features(
     metadata = {}
 
     # Validate input
-    if 'close' not in df.columns:
+    if "close" not in df.columns:
         raise ValueError("DataFrame must contain 'close' column")
 
     # Ensure datetime index
     if not isinstance(df.index, pd.DatetimeIndex):
-        if 'timestamp' in df.columns:
-            df = df.set_index('timestamp')
+        if "timestamp" in df.columns:
+            df = df.set_index("timestamp")
         else:
             raise ValueError("DataFrame must have DatetimeIndex or 'timestamp' column")
 
     df = df.sort_index().copy()
 
     # --- Step 1: Compute FFD base series ---
-    ffd_config = config.get('ffd', {})
-    thres = ffd_config.get('thres', DEFAULT_FFD_THRES)
-    d_step = ffd_config.get('d_step', DEFAULT_FFD_D_STEP)
+    ffd_config = config.get("ffd", {})
+    thres = ffd_config.get("thres", DEFAULT_FFD_THRES)
+    d_step = ffd_config.get("d_step", DEFAULT_FFD_D_STEP)
 
-    ffd_series, optimal_d = compute_ffd_base(
-        df['close'],
-        thres=thres,
-        d_step=d_step
-    )
+    ffd_series, optimal_d = compute_ffd_base(df["close"], thres=thres, d_step=d_step)
 
     # Start building result DataFrame
     result = pd.DataFrame(index=df.index)
-    result['ffd_log_price'] = ffd_series
+    result["ffd_log_price"] = ffd_series
 
     # --- Step 2: Compute volatility features ---
-    vol_config = config.get('volatility', {})
-    vol_spans = vol_config.get('spans', DEFAULT_VOLATILITY_SPANS)
+    vol_config = config.get("volatility", {})
+    vol_spans = vol_config.get("spans", DEFAULT_VOLATILITY_SPANS)
 
     vol_features = compute_ffd_volatility(ffd_series, spans=vol_spans)
     result = pd.concat([result, vol_features], axis=1)
 
     # --- Step 3: Compute MA features ---
-    ma_config = config.get('ma', {})
-    ma_windows = ma_config.get('windows', DEFAULT_MA_WINDOWS)
-    ema_windows = ma_config.get('ema_windows', DEFAULT_EMA_WINDOWS)
+    ma_config = config.get("ma", {})
+    ma_windows = ma_config.get("windows", DEFAULT_MA_WINDOWS)
+    ema_windows = ma_config.get("ema_windows", DEFAULT_EMA_WINDOWS)
 
-    ma_features = compute_ffd_ma(ffd_series, windows=ma_windows, ema_windows=ema_windows)
+    ma_features = compute_ffd_ma(
+        ffd_series, windows=ma_windows, ema_windows=ema_windows
+    )
     result = pd.concat([result, ma_features], axis=1)
 
     # --- Step 4: Add momentum feature (FFD series itself) ---
-    result['ffd_mom'] = ffd_series
+    result["ffd_mom"] = ffd_series
 
     # --- Step 5: Compute volume features ---
-    volume_config = config.get('volume', {})
-    if volume_config.get('enabled', True):
-        if all(col in df.columns for col in ['close', 'volume']):
+    volume_config = config.get("volume", {})
+    if volume_config.get("enabled", True):
+        if all(col in df.columns for col in ["close", "volume"]):
             vol_features = compute_volume_features(df)
             result = pd.concat([result, vol_features], axis=1)
 
     # --- Step 6: Compute rank features ---
-    rank_config = config.get('rank', {})
-    if rank_config.get('enabled', False):
-        rank_window = rank_config.get('window', DEFAULT_RANK_WINDOW)
+    rank_config = config.get("rank", {})
+    if rank_config.get("enabled", False):
+        rank_window = rank_config.get("window", DEFAULT_RANK_WINDOW)
         ma_cols = [f"ffd_ma_{w}" for w in ma_windows if f"ffd_ma_{w}" in result.columns]
         result = compute_ffd_rank(result, feature_cols=ma_cols, rank_window=rank_window)
 
     # --- Step 7: Collect metadata ---
-    metadata['optimal_d'] = optimal_d
-    metadata['feature_columns'] = [col for col in result.columns if col != 'ffd_log_price']
-    metadata['rows_before_clean'] = len(result)
+    metadata["optimal_d"] = optimal_d
+    metadata["feature_columns"] = [
+        col for col in result.columns if col != "ffd_log_price"
+    ]
+    metadata["rows_before_clean"] = len(result)
 
     # --- Step 8: Clean NaN rows ---
     result = result.dropna()
-    metadata['rows_after_clean'] = len(result)
-    metadata['rows_dropped'] = metadata['rows_before_clean'] - metadata['rows_after_clean']
-    metadata['config'] = config
+    metadata["rows_after_clean"] = len(result)
+    metadata["rows_dropped"] = (
+        metadata["rows_before_clean"] - metadata["rows_after_clean"]
+    )
+    metadata["config"] = config
 
     return result, metadata

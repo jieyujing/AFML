@@ -194,17 +194,16 @@ class CSVDataloader:
         """
         filepath = Path(filepath)
 
-        # 简化路径处理逻辑
+        # 简化路径处理逻辑：优先使用原路径，不存在时再尝试拼接 data_dir
         if not filepath.is_absolute():
-            # 1. 先尝试直接使用相对路径
+            # 1. 如果文件已存在（可能已经包含 data_dir 前缀），直接使用
             if filepath.exists():
-                pass  # 直接使用原路径
+                pass
             # 2. 如果不存在，尝试在 data_dir 中查找
             elif (self.data_dir / filepath).exists():
                 filepath = self.data_dir / filepath
-            # 3. 如果仍不存在，保持原路径让 load_file 抛出异常
-            #    或者尝试不带目录名的文件名
-            elif not filepath.exists():
+            # 3. 如果仍不存在，尝试只用文件名在 data_dir 中查找
+            else:
                 filename_only = Path(filepath.name)
                 candidate = self.data_dir / filename_only
                 if candidate.exists():

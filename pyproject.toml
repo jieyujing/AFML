@@ -29,6 +29,9 @@ dependencies = [
     "statsmodels>=0.14.6",
     "seaborn>=0.13.2",
     "scikit-learn>=1.7.2",
+    "pyyaml>=6.0.3",
+    "streamlit>=1.55.0",
+    "plotly>=6.6.0",
 ]
 
 [project.optional-dependencies]
@@ -38,6 +41,15 @@ dev = [
     "flake8",
     "black",
 ]
+webapp = [
+    "streamlit>=1.30.0",
+    "plotly>=5.18.0",
+    "pyyaml>=6.0",
+    "watchdog>=3.0.0",
+]
+
+[project.scripts]
+afmlkit-web = "webapp.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/quantscious/afmlkit"
@@ -45,7 +57,7 @@ Documentation = "https://afmlkit.readthedocs.io"
 Repository = "https://github.com/quantscious/afmlkit"
 
 [tool.setuptools]
-packages = ["afmlkit"]
+packages = ["afmlkit", "webapp", "webapp.components", "webapp.pages", "webapp.utils"]
 
 [tool.setuptools.dynamic]
 version = {attr = "afmlkit._version.__version__"}

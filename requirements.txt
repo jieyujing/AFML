@@ -6,3 +6,14 @@ python-dotenv~=1.0.1
 pympler~=1.1
 tables~=3.10.0
 tqdm
+matplotlib>=3.10.8
+statsmodels>=0.14.6
+seaborn>=0.13.2
+scikit-learn>=1.7.2
+
+# Web UI dependencies (optional)
+# install with: pip install -e ".[webapp]"
+# streamlit>=1.30.0
+# plotly>=5.18.0
+# pyyaml>=6.0
+# watchdog>=3.0.0

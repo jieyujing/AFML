@@ -1,5 +1,6 @@
 # webapp/utils/feature_calculator.py
 """特征计算器 - 实现与 scripts/feature_engineering.py 一致的特征计算逻辑"""
+
 import numpy as np
 import pandas as pd
 from typing import Tuple, List, Optional, Dict, Any
@@ -7,7 +8,11 @@ from typing import Tuple, List, Optional, Dict, Any
 # afmlkit core imports
 from afmlkit.feature.core.frac_diff import frac_diff_ffd, optimize_d
 from afmlkit.feature.core.volatility import (
-    ewms, parkinson_range, atr, bollinger_percent_b, variance_ratio_1_4_core
+    ewms,
+    parkinson_range,
+    atr,
+    bollinger_percent_b,
+    variance_ratio_1_4_core,
 )
 from afmlkit.feature.core.ma import ewma, sma
 from afmlkit.feature.core.momentum import rsi_wilder, roc, stoch_k
@@ -18,12 +23,12 @@ from afmlkit.feature.core.correlation import rolling_price_volume_correlation
 
 
 # ── Hyper-parameters ──────────────────────────────────────────────────
-VOL_SPANS = [10, 50, 100]          # EWM volatility windows
-EMA_SHORT_SPAN = 12                # Short EMA for crossover
-EMA_LONG_SPAN = 26                 # Long EMA
-RSI_WINDOW = 14                    # RSI lookback
-FRACDIFF_THRES = 1e-4              # FFD weight truncation threshold
-FRACDIFF_D_STEP = 0.05             # Step size for d optimisation
+VOL_SPANS = [10, 50, 100]  # EWM volatility windows
+EMA_SHORT_SPAN = 12  # Short EMA for crossover
+EMA_LONG_SPAN = 26  # Long EMA
+RSI_WINDOW = 14  # RSI lookback
+FRACDIFF_THRES = 1e-4  # FFD weight truncation threshold
+FRACDIFF_D_STEP = 0.05  # Step size for d optimisation
 
 
 def compute_log_returns(df: pd.DataFrame) -> pd.DataFrame:
@@ -34,8 +39,7 @@ def compute_log_returns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def compute_volatility_features(
-    df: pd.DataFrame,
-    spans: List[int] = None
+    df: pd.DataFrame, spans: List[int] = None
 ) -> pd.DataFrame:
     spans = spans or VOL_SPANS
     df = df.copy()
@@ -118,9 +122,7 @@ def compute_momentum_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def compute_fracdiff_features(
-    df: pd.DataFrame,
-    thres: float = FRACDIFF_THRES,
-    d_step: float = FRACDIFF_D_STEP
+    df: pd.DataFrame, thres: float = FRACDIFF_THRES, d_step: float = FRACDIFF_D_STEP
 ) -> Tuple[pd.DataFrame, float]:
     df = df.copy()
     log_price = np.log(df["close"])
@@ -135,9 +137,7 @@ def compute_fracdiff_features(
 
 
 def align_features_with_cusum(
-    features_df: pd.DataFrame,
-    cusum_path: str,
-    label_cols: List[str] = None
+    features_df: pd.DataFrame, cusum_path: str, label_cols: List[str] = None
 ) -> pd.DataFrame:
     labels_df = pd.read_csv(cusum_path, index_col=0, parse_dates=True)
     labels_df = labels_df.sort_index()
@@ -162,7 +162,7 @@ def compute_all_features(
     df: pd.DataFrame,
     config: Optional[Dict[str, Any]] = None,
     cusum_path: Optional[str] = None,
-    align_to_cusum: bool = False
+    align_to_cusum: bool = False,
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     config = config or {}
     metadata = {}
@@ -187,11 +187,13 @@ def compute_all_features(
     metadata["optimal_d"] = optimal_d
 
     # --- Alpha158 features (optional) ---
-    alpha158_config = config.get('alpha158', {})
-    if alpha158_config.get('enabled', False):
+    alpha158_config = config.get("alpha158", {})
+    if alpha158_config.get("enabled", False):
         from webapp.utils.alpha158_features import compute_alpha158_features
 
-        alpha158_df, alpha158_meta = compute_alpha158_features(df, config=alpha158_config)
+        alpha158_df, alpha158_meta = compute_alpha158_features(
+            df, config=alpha158_config
+        )
 
         # Merge features (with ffd_* prefix to avoid collisions)
         for col in alpha158_df.columns:
@@ -199,9 +201,9 @@ def compute_all_features(
                 df[col] = alpha158_df[col]
 
         # Update metadata
-        metadata['alpha158_enabled'] = True
-        metadata['alpha158_columns'] = alpha158_df.columns.tolist()
-        metadata['alpha158_optimal_d'] = alpha158_meta.get('optimal_d')
+        metadata["alpha158_enabled"] = True
+        metadata["alpha158_columns"] = alpha158_df.columns.tolist()
+        metadata["alpha158_optimal_d"] = alpha158_meta.get("optimal_d")
 
     if align_to_cusum and cusum_path:
         df = align_features_with_cusum(df, cusum_path)
