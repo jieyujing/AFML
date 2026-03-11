@@ -134,3 +134,70 @@ def compute_all_features(
 - `final_shape`: 最终形状
 - `feature_columns`: 特征列列表
 - `label_distribution`: 标签分布（如果有）
+
+---
+
+## Clustered MDA 特征重要性分析
+
+### 为什么使用 Clustered MDA？
+
+传统 MDA（单个特征打乱）存在**替代效应**问题：当两个特征高度相关时，打乱其中一个，另一个可以替代它，导致重要性被低估。
+
+Clustered MDA 的解决方案：
+1. 使用 ONC 算法自动识别特征簇
+2. 同时打乱整个簇的所有特征
+3. 使用 Purged CV 计算样本外 Log-loss 变化
+
+### 解读结果
+
+**条形图：**
+- 蓝色条形：重要性 > 0，特征有价值
+- 红色条形：重要性 ≤ 0，"毒药"簇
+
+**误差线：**
+- 红色误差线表示标准差
+- 误差线越短，重要性估计越稳定
+
+**毒药簇警告：**
+如果发现红色簇（重要性 ≤ 0），说明这些特征在打乱后模型表现反而变好。这通常意味着：
+- 特征包含严重噪音
+- 特征导致模型过拟合
+- 建议：直接从特征池中移除
+
+### 使用示例
+
+```python
+from afmlkit.importance.clustering import cluster_features
+from afmlkit.importance.mda import clustered_mda
+
+# Step 1: 特征聚类
+clusters = cluster_features(X_features)
+
+# Step 2: 计算 Clustered MDA
+mda_df = clustered_mda(
+    X=X_features,
+    y=y_labels,
+    clusters=clusters,
+    t1=t1_events,
+    n_splits=5,
+    embargo_pct=0.01,
+    n_repeats=10
+)
+
+# Step 3: 识别毒药簇
+poison = mda_df[mda_df['mean_importance'] <= 0]
+print(f"需要移除的簇：{poison['cluster_id'].tolist()}")
+```
+
+### WebUI 操作流程
+
+1. 进入"特征分析"页面
+2. 选择"3. 特征重要性"步骤
+3. 选择"Clustered MDA (推荐)"模式
+4. 配置参数：
+   - 重复次数：建议 10-20 次
+   - CV 折数：建议 5 折
+   - Embargo 比例：建议 0.01 (1%)
+5. 点击"计算 Clustered MDA"
+6. 查看聚类结果和重要性图表
+7. 关注毒药簇警告，考虑移除相关特征
