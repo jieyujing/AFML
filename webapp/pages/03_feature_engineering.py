@@ -182,17 +182,6 @@ if step == "1. 特征配置":
                 "d 步长", min_value=0.01, max_value=0.2, value=0.05, step=0.01
             )
 
-    # CUSUM 对齐选项
-    with st.expander("CUSUM 事件对齐", expanded=False):
-        align_to_cusum = st.checkbox(
-            "对齐到 CUSUM 事件时间戳",
-            value=True,
-            help="如果启用，特征将与 CUSUM 采样的事件时间戳对齐",
-        )
-        cusum_path = st.text_input(
-            "CUSUM 文件路径", value="outputs/dollar_bars/cusum_sampled_bars.csv"
-        )
-
     # Alpha158 配置 (FFD 改造版)
     with st.expander("Alpha158 特征 (FFD 改造版)", expanded=False):
         alpha158_enabled = st.checkbox(
@@ -221,6 +210,17 @@ if step == "1. 特征配置":
             alpha158_rank_window = st.number_input(
                 "Rank 窗口", min_value=5, max_value=60, value=20
             )
+
+    # CUSUM 对齐选项
+    with st.expander("CUSUM 事件对齐", expanded=False):
+        align_to_cusum = st.checkbox(
+            "对齐到 CUSUM 事件时间戳",
+            value=True,
+            help="如果启用，特征将与 CUSUM 采样的事件时间戳对齐",
+        )
+        cusum_path = st.text_input(
+            "CUSUM 文件路径", value="outputs/dollar_bars/cusum_sampled_bars.csv"
+        )
 
     # 保存配置
     if st.button("保存特征配置"):
