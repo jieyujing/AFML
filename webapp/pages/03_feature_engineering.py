@@ -188,6 +188,43 @@ if step == "1. 特征配置":
             value="outputs/dollar_bars/cusum_sampled_bars.csv"
         )
 
+    # Alpha158 配置 (FFD 改造版)
+    with st.expander("Alpha158 特征 (FFD 改造版)", expanded=False):
+        alpha158_enabled = st.checkbox(
+            "启用 Alpha158 特征",
+            value=False,
+            help="启用后将计算 FFD 变换的 Alpha158 风格特征，与现有特征并存"
+        )
+
+        if alpha158_enabled:
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**波动率窗口**")
+                alpha158_vol_spans = st.text_input(
+                    "波动率 spans (逗号分隔)",
+                    value="5,10,20"
+                )
+
+            with col2:
+                st.markdown("**均线窗口**")
+                alpha158_ma_windows = st.text_input(
+                    "MA windows (逗号分隔)",
+                    value="5,10,20"
+                )
+
+            alpha158_rank_enabled = st.checkbox(
+                "启用时序 Rank 特征",
+                value=True
+            )
+
+            alpha158_rank_window = st.number_input(
+                "Rank 窗口",
+                min_value=5,
+                max_value=60,
+                value=20
+            )
+
     # 保存配置
     if st.button("保存特征配置"):
         feature_config = {
@@ -207,6 +244,23 @@ if step == "1. 特征配置":
                 'path': cusum_path
             }
         }
+
+        # Add Alpha158 config if enabled
+        if alpha158_enabled:
+            feature_config['alpha158'] = {
+                'enabled': True,
+                'volatility': {
+                    'spans': [int(x.strip()) for x in alpha158_vol_spans.split(',') if x.strip().isdigit()]
+                },
+                'ma': {
+                    'windows': [int(x.strip()) for x in alpha158_ma_windows.split(',') if x.strip().isdigit()]
+                },
+                'rank': {
+                    'enabled': alpha158_rank_enabled,
+                    'window': alpha158_rank_window
+                }
+            }
+
         SessionManager.update('feature_config', feature_config)
         st.success("特征配置已保存")
         st.json(feature_config)
@@ -265,6 +319,12 @@ elif step == "2. 特征计算":
                     st.metric("清理后行数", f"{metadata.get('rows_after_clean', 0):,}")
                 with col3:
                     st.metric("丢弃行数", f"{metadata.get('rows_dropped', 0):,}")
+
+                # Alpha158 metadata
+                if metadata.get('alpha158_enabled'):
+                    st.markdown("**Alpha158 特征:**")
+                    st.write(f"  - 最优 d*: {metadata.get('alpha158_optimal_d', 'N/A'):.4f}")
+                    st.write(f"  - 特征数量：{len(metadata.get('alpha158_columns', []))}")
 
                 if metadata.get('label_distribution'):
                     st.markdown("**标签分布:**")
