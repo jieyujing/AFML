@@ -28,3 +28,55 @@ DEFAULT_EMA_WINDOWS = [5, 10]
 DEFAULT_RANK_WINDOW = 20
 DEFAULT_FFD_THRES = 1e-4
 DEFAULT_FFD_D_STEP = 0.05
+
+
+def compute_ffd_base(
+    close: pd.Series,
+    thres: float = DEFAULT_FFD_THRES,
+    d_step: float = DEFAULT_FFD_D_STEP
+) -> Tuple[pd.Series, float]:
+    """
+    Compute FFD base series and return optimal d*.
+
+    Applies fractional differentiation to log(close) using the Fixed-Width Window
+    method. Automatically searches for the minimum d that makes the series stationary.
+
+    Args:
+        close: Closing price series (can be raw or log-transformed)
+        thres: FFD weight truncation threshold (default: 1e-4)
+        d_step: Step size for d search (default: 0.05)
+
+    Returns:
+        tuple: (ffd_log_price Series, optimal d value)
+
+    Example:
+        >>> close = pd.Series([100, 101, 102, ...])
+        >>> ffd_series, d_star = compute_ffd_base(close)
+    """
+    # Ensure input is float64 for numerical stability
+    close = close.astype(np.float64)
+
+    # Compute log price if close is in raw form (heuristic: all values > 0)
+    if close.min() > 0:
+        log_price = np.log(close)
+    else:
+        log_price = close.copy()
+
+    # Remove any existing NaN before FFD
+    log_price = log_price.dropna()
+
+    # Find optimal d* using ADF test
+    optimal_d = optimize_d(log_price, thres=thres, d_step=d_step)
+
+    # Apply FFD with optimal d
+    log_price_named = pd.Series(
+        log_price.values,
+        index=log_price.index,
+        name="log_close"
+    )
+    ffd_series = frac_diff_ffd(log_price_named, d=optimal_d, thres=thres)
+
+    # Rename for clarity
+    ffd_series.name = "ffd_log_price"
+
+    return ffd_series, optimal_d
