@@ -237,3 +237,114 @@ def compute_volume_features(df: pd.DataFrame) -> pd.DataFrame:
             result['ffd_amplification'] = (df['high'] - df['low']) / df['open']
 
     return result
+
+
+def compute_alpha158_features(
+    df: pd.DataFrame,
+    config: Optional[Dict[str, Any]] = None
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """
+    Compute complete Alpha158-style features (FFD-transformed version).
+
+    This is the main entry point that orchestrates all feature computation:
+    1. Compute FFD base series (ffd_log_price) with optimal d*
+    2. Compute volatility features based on FFD series
+    3. Compute MA/EMA features based on FFD series
+    4. Compute volume features from raw OHLCV
+    5. Compute rolling rank features
+    6. Clean NaN rows and return metadata
+
+    Args:
+        df: Input DataFrame with OHLCV columns (must have 'close', optionally 'open/high/low/volume')
+        config: Feature configuration dictionary with keys:
+            - volatility: {spans: [5, 10, 20]}
+            - ma: {windows: [5, 10, 20], ema_windows: [5, 10]}
+            - rank: {enabled: True, window: 20}
+            - volume: {enabled: True}
+            - ffd: {thres: 1e-4, d_step: 0.05}
+
+    Returns:
+        tuple: (feature DataFrame, metadata dict)
+
+    Metadata contains:
+        - optimal_d: FFD optimal d* value
+        - feature_columns: List of computed feature column names
+        - rows_before_clean: Row count before NaN cleanup
+        - rows_after_clean: Row count after NaN cleanup
+        - config: Actual configuration used
+    """
+    config = config or {}
+    metadata = {}
+
+    # Validate input
+    if 'close' not in df.columns:
+        raise ValueError("DataFrame must contain 'close' column")
+
+    # Ensure datetime index
+    if not isinstance(df.index, pd.DatetimeIndex):
+        if 'timestamp' in df.columns:
+            df = df.set_index('timestamp')
+        else:
+            raise ValueError("DataFrame must have DatetimeIndex or 'timestamp' column")
+
+    df = df.sort_index().copy()
+
+    # --- Step 1: Compute FFD base series ---
+    ffd_config = config.get('ffd', {})
+    thres = ffd_config.get('thres', DEFAULT_FFD_THRES)
+    d_step = ffd_config.get('d_step', DEFAULT_FFD_D_STEP)
+
+    ffd_series, optimal_d = compute_ffd_base(
+        df['close'],
+        thres=thres,
+        d_step=d_step
+    )
+
+    # Start building result DataFrame
+    result = pd.DataFrame(index=df.index)
+    result['ffd_log_price'] = ffd_series
+
+    # --- Step 2: Compute volatility features ---
+    vol_config = config.get('volatility', {})
+    vol_spans = vol_config.get('spans', DEFAULT_VOLATILITY_SPANS)
+
+    vol_features = compute_ffd_volatility(ffd_series, spans=vol_spans)
+    result = pd.concat([result, vol_features], axis=1)
+
+    # --- Step 3: Compute MA features ---
+    ma_config = config.get('ma', {})
+    ma_windows = ma_config.get('windows', DEFAULT_MA_WINDOWS)
+    ema_windows = ma_config.get('ema_windows', DEFAULT_EMA_WINDOWS)
+
+    ma_features = compute_ffd_ma(ffd_series, windows=ma_windows, ema_windows=ema_windows)
+    result = pd.concat([result, ma_features], axis=1)
+
+    # --- Step 4: Add momentum feature (FFD series itself) ---
+    result['ffd_mom'] = ffd_series
+
+    # --- Step 5: Compute volume features ---
+    volume_config = config.get('volume', {})
+    if volume_config.get('enabled', True):
+        if all(col in df.columns for col in ['close', 'volume']):
+            vol_features = compute_volume_features(df)
+            result = pd.concat([result, vol_features], axis=1)
+
+    # --- Step 6: Compute rank features ---
+    rank_config = config.get('rank', {})
+    if rank_config.get('enabled', False):
+        rank_window = rank_config.get('window', DEFAULT_RANK_WINDOW)
+        ma_cols = [f"ffd_ma_{w}" for w in ma_windows if f"ffd_ma_{w}" in result.columns]
+        result = compute_ffd_rank(result, feature_cols=ma_cols, rank_window=rank_window)
+
+    # --- Step 7: Collect metadata ---
+    metadata['optimal_d'] = optimal_d
+    metadata['feature_columns'] = [col for col in result.columns if col != 'ffd_log_price']
+    metadata['rows_before_clean'] = len(result)
+
+    # --- Step 8: Clean NaN rows ---
+    result = result.dropna()
+    metadata['rows_after_clean'] = len(result)
+    metadata['rows_dropped'] = metadata['rows_before_clean'] - metadata['rows_after_clean']
+    metadata['config'] = config
+
+    return result, metadata

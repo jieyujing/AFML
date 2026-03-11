@@ -268,3 +268,96 @@ def test_compute_volume_amount():
     expected_amount = df['close'] * df['volume']
     # Skip first row due to rolling window
     assert result['ffd_amount'].iloc[1:].equals(expected_amount.iloc[1:])
+
+
+# ============== compute_alpha158_features tests ==============
+
+def test_compute_alpha158_features_complete():
+    """Test complete Alpha158 feature computation."""
+    from webapp.utils.alpha158_features import compute_alpha158_features
+
+    np.random.seed(42)
+    dates = pd.date_range('2023-01-01', periods=200, freq='min')
+
+    df = pd.DataFrame({
+        'open': np.linspace(100, 110, 200),
+        'high': np.linspace(101, 111, 200),
+        'low': np.linspace(99, 109, 200),
+        'close': np.linspace(100, 110, 200),
+        'volume': np.random.exponential(1000, 200)
+    }, index=dates)
+
+    result, metadata = compute_alpha158_features(df)
+
+    # Check base FFD feature
+    assert 'ffd_log_price' in result.columns
+
+    # Check volatility features
+    assert 'ffd_vol_std_5' in result.columns
+    assert 'ffd_vol_std_10' in result.columns
+    assert 'ffd_vol_std_20' in result.columns
+
+    # Check MA features
+    assert 'ffd_ma_5' in result.columns
+    assert 'ffd_ma_10' in result.columns
+    assert 'ffd_ma_20' in result.columns
+
+    # Check volume features
+    assert 'ffd_vwap' in result.columns
+    assert 'ffd_amount' in result.columns
+
+    # Check metadata
+    assert 'optimal_d' in metadata
+    assert 0.0 <= metadata['optimal_d'] <= 1.0
+    assert 'feature_columns' in metadata
+
+
+def test_compute_alpha158_features_with_config():
+    """Test Alpha158 with custom config."""
+    from webapp.utils.alpha158_features import compute_alpha158_features
+
+    np.random.seed(42)
+    dates = pd.date_range('2023-01-01', periods=200, freq='min')
+
+    df = pd.DataFrame({
+        'open': np.linspace(100, 110, 200),
+        'high': np.linspace(101, 111, 200),
+        'low': np.linspace(99, 109, 200),
+        'close': np.linspace(100, 110, 200),
+        'volume': np.random.exponential(1000, 200)
+    }, index=dates)
+
+    config = {
+        'volatility': {'spans': [5, 10]},
+        'ma': {'windows': [5, 10]},
+        'rank': {'enabled': True, 'window': 20}
+    }
+
+    result, metadata = compute_alpha158_features(df, config=config)
+
+    # Check custom spans
+    assert 'ffd_vol_std_5' in result.columns
+    assert 'ffd_vol_std_10' in result.columns
+    assert 'ffd_vol_std_20' not in result.columns  # Not in config
+
+    # Check rank features enabled
+    assert 'ffd_rank_ffd_ma_5_20' in result.columns
+
+
+def test_compute_alpha158_features_missing_columns():
+    """Test Alpha158 gracefully handles missing columns."""
+    from webapp.utils.alpha158_features import compute_alpha158_features
+
+    np.random.seed(42)
+    dates = pd.date_range('2023-01-01', periods=200, freq='min')
+    df = pd.DataFrame({
+        'close': np.linspace(100, 110, 200),
+        'volume': np.random.exponential(1000, 200)
+    }, index=dates)
+
+    # Should not raise error, just skip features requiring missing columns
+    result, metadata = compute_alpha158_features(df)
+
+    # Core features should still be computed
+    assert 'ffd_log_price' in result.columns
+    assert 'ffd_ma_5' in result.columns
