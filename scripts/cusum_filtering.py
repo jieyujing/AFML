@@ -65,7 +65,7 @@ def compute_dynamic_cusum_filter(
     if use_frac_diff:
         print("Applying Fractional Differentiation on log prices...")
         price_series = np.log(df[price_col])
-        opt_d = optimize_d(price_series, min_corr=0.0)
+        opt_d = optimize_d(price_series)
         print(f"Optimal d for stationarity: {opt_d}")
         
         # Apply frac_diff and keep only valid indices
@@ -181,25 +181,34 @@ def compute_labels_and_weights(
     is_meta = trend_df is not None
     mode_str = "Meta-Labeling" if is_meta else "Standard"
     print(f"\nStarting {mode_str} Labeling and Weighting...")
-    
+
     # 1. 包装为 TradesData (TBM 需要该对象来评估价格路径)
     # 将 timestamp 转换为 Unix 纳秒整数
-    ts_ns = pd.to_datetime(full_df['timestamp']).values.astype(np.int64)
+    if 'timestamp' in full_df.columns:
+        ts_ns = pd.to_datetime(full_df['timestamp']).values.astype(np.int64)
+    elif isinstance(full_df.index, pd.DatetimeIndex):
+        ts_ns = full_df.index.values.astype(np.int64)
+    else:
+        raise ValueError("full_df must have 'timestamp' column or DatetimeIndex")
+
     prices = full_df['close'].values.astype(np.float64)
     volumes = full_df['volume'].values.astype(np.float64)
-    
+
     trades_data = TradesData(
         ts=ts_ns,
         px=prices,
         qty=volumes,
         timestamp_unit='ns',
-        preprocess=False  # 数据已经是 Bars，无需再次 preprocessing
+        preprocess=False
     )
-    
+
     # 2. 准备特征数据 (sampled_df)，确保 DatetimeIndex
     features = sampled_df.copy()
     if not isinstance(features.index, pd.DatetimeIndex):
-        features.index = pd.to_datetime(features['timestamp'])
+        if 'timestamp' in features.columns:
+            features.index = pd.to_datetime(features['timestamp'])
+        else:
+            features.index = pd.to_datetime(features.index)
     
     # 3. 如果有 Trend Scan 输出，注入 side 列启用 Meta-Labeling
     if is_meta:
@@ -273,13 +282,17 @@ def compute_labels_and_weights(
     # 将 weight 合并回 sampled_df
     # 确保 sampled_df 也使用相同的 DatetimeIndex 来进行对齐
     sampled_df_aligned = sampled_df.copy()
-    sampled_df_aligned.index = pd.to_datetime(sampled_df_aligned['timestamp'])
-    
+    if not isinstance(sampled_df_aligned.index, pd.DatetimeIndex):
+        if 'timestamp' in sampled_df_aligned.columns:
+            sampled_df_aligned.index = pd.to_datetime(sampled_df_aligned['timestamp'])
+        else:
+            sampled_df_aligned.index = pd.to_datetime(sampled_df_aligned.index)
+
     # 排除掉因为 TBM evaluation window 被 drop 掉的尾部事件
     final_df = sampled_df_aligned.loc[result_df.index].copy()
     for col in result_df.columns:
         final_df[col] = result_df[col]
-        
+
     print(f"Final dataset with weights: {len(final_df)} rows")
     return final_df
 
@@ -295,8 +308,16 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
         
     print(f"Loading data from {input_file}...")
-    df = pd.read_csv(input_file)
-    
+    df = pd.read_csv(input_file, index_col=0, parse_dates=True)
+
+    # Ensure index is DatetimeIndex
+    if not isinstance(df.index, pd.DatetimeIndex):
+        if 'timestamp' in df.columns:
+            df = df.set_index('timestamp')
+        else:
+            print("Error: Cannot determine timestamp index from input file.")
+            return
+
     if 'close' not in df.columns:
         print(f"Error: 'close' column not found in input data! Available columns: {df.columns.tolist()}")
         return
@@ -319,9 +340,17 @@ def main():
     
     # Step 2: Trend Scan Primary Model — 动态趋势方向与置信度
     # 构建 DatetimeIndex 的价格序列（Trend Scan 需要完整连续价格）
+    if 'timestamp' in df.columns:
+        price_index = pd.to_datetime(df['timestamp'])
+    elif isinstance(df.index, pd.DatetimeIndex):
+        price_index = df.index
+    else:
+        print("Error: Cannot determine price index for Trend Scan.")
+        return
+
     price_series = pd.Series(
         df['close'].values,
-        index=pd.to_datetime(df['timestamp']),
+        index=price_index,
         name='close',
     )
     
@@ -350,7 +379,7 @@ def main():
     )
     
     print(f"\nSaving enriched data to {output_file}...")
-    final_df.to_csv(output_file, index=False)
+    final_df.to_csv(output_file, index=True)
     print("Done.")
 
 if __name__ == "__main__":

@@ -29,7 +29,6 @@ EMA_LONG_SPAN = 26  # Long EMA
 RSI_WINDOW = 14  # RSI lookback
 FRACDIFF_THRES = 1e-4  # FFD weight truncation threshold
 FRACDIFF_D_STEP = 0.05  # Step size for d optimisation
-FRACDIFF_MIN_CORR = 0.0  # Minimum correlation with original series (0.0-1.0)
 
 
 def compute_log_returns(df: pd.DataFrame) -> pd.DataFrame:
@@ -126,13 +125,12 @@ def compute_fracdiff_features(
     df: pd.DataFrame,
     thres: float = FRACDIFF_THRES,
     d_step: float = FRACDIFF_D_STEP,
-    min_corr: float = FRACDIFF_MIN_CORR,
 ) -> Tuple[pd.DataFrame, float]:
     df = df.copy()
     log_price = np.log(df["close"])
     log_price_series = pd.Series(log_price, index=df.index, name="log_close")
 
-    optimal_d = optimize_d(log_price_series, thres=thres, d_step=d_step, min_corr=min_corr)
+    optimal_d = optimize_d(log_price_series, thres=thres, d_step=d_step)
     ffd_series = frac_diff_ffd(log_price_series, d=optimal_d, thres=thres)
     ffd_series.name = "ffd_log_price"
     df["ffd_log_price"] = ffd_series
@@ -150,7 +148,50 @@ def align_features_with_cusum(
         label_cols = ["bin", "t1", "avg_uniqueness", "return_attribution"]
         label_cols = [c for c in label_cols if c in labels_df.columns]
 
+    # Try exact index intersection first
     common_idx = features_df.index.intersection(labels_df.index)
+
+    # If no exact match, try date-based matching (truncate time component)
+    if len(common_idx) == 0:
+        # Create date-only index for matching
+        features_dates = features_df.index.normalize()
+        labels_dates = labels_df.index.normalize()
+
+        # Find matching dates
+        common_dates = features_dates.intersection(labels_dates)
+
+        if len(common_dates) > 0:
+            # Map back to original indices
+            features_mask = features_dates.isin(common_dates)
+            labels_mask = labels_dates.isin(common_dates)
+
+            features_filtered = features_df[features_mask]
+            labels_filtered = labels_df[labels_mask]
+
+            # Use merge_asof for time-based alignment
+            features_reset = features_filtered.reset_index()
+            labels_reset = labels_filtered.reset_index()
+
+            # Rename timestamp column for merge_asof
+            features_reset = features_reset.rename(columns={'index': 'timestamp'})
+            labels_reset = labels_reset.rename(columns={'index': 'timestamp'})
+
+            # Merge on closest timestamp (backward direction: use CUSUM labels for previous event)
+            aligned = pd.merge_asof(
+                features_reset.sort_values('timestamp'),
+                labels_reset.sort_values('timestamp'),
+                on='timestamp',
+                direction='nearest',
+                tolerance=pd.Timedelta('1D')
+            )
+
+            aligned = aligned.set_index('timestamp')
+            return aligned
+        else:
+            # No common dates at all - return empty DataFrame with warning
+            return features_df.iloc[:0].copy()
+
+    # Original exact match logic
     aligned_features = features_df.loc[common_idx].copy()
     aligned = aligned_features.join(labels_df[label_cols], how="inner")
 

@@ -61,69 +61,49 @@ def optimize_d(
     thres: float = 1e-4,
     d_step: float = 0.05,
     max_d: float = 1.0,
-    min_corr: float = 0.0
 ) -> float:
     """
-    Find the minimum d that makes the fractionally differentiated series stationary.
+    寻找使序列平稳的最小 d 值。
 
-    :param series: The price series to apply FracDiff to
-    :param thres: Threshold for weight cutoff in FFD
-    :param d_step: Step size for exploring d values
-    :param max_d: Maximum value for d to check
-    :param min_corr: Minimum correlation coefficient with original series (0.0-1.0).
-                     Set to 0.0 to disable correlation check.
-                     Recommended: 0.7-0.8 for balanced memory retention.
-    :return: optimal d value
+    :param series: 输入价格序列
+    :param thres: FFD 权重截断阈值
+    :param d_step: d 的搜索步长，默认 0.05
+    :param max_d: d 的最大搜索值，默认 1.0（极端情况下可调至 2.0）
+    :return: 最优 d 值
     """
-    # Track the best d that satisfies correlation constraint (for fallback)
-    best_d_with_corr: float | None = None
-
-    # Check if the original series is already stationary
+    # 检查原始序列是否已平稳
     valid_series = series.dropna()
     if len(valid_series) > 10:
         p_val_orig = adfuller(valid_series)[1]
         if p_val_orig < 0.05:
             return 0.0
 
-    for d in np.arange(0.01, max_d + d_step, d_step):
+    # 网格搜索：d 从 0.0 开始，每次增加 d_step
+    for d in np.arange(0.0, max_d + d_step, d_step):
         diff_series = frac_diff_ffd(series, d=float(d), thres=thres)
         diff_series = diff_series.dropna()
         if len(diff_series) < 10:
             continue
 
-        # ADF Test
+        # ADF 检验
         p_val = adfuller(diff_series)[1]
 
+        # 熔断机制：p < 0.05 立即停止
         if p_val < 0.05:
-            # Check correlation with original series if min_corr is specified
-            if min_corr > 0:
-                # Align indices for correlation calculation
-                common_idx = diff_series.index.intersection(series.index)
+            # 计算与原始序列的相关性（仅日志观察，不干预选择）
+            common_idx = diff_series.index.intersection(series.index)
+            if len(common_idx) >= 10:
+                diff_aligned = diff_series.loc[common_idx]
+                orig_aligned = series.loc[common_idx].dropna()
+                common_idx = diff_aligned.index.intersection(orig_aligned.index)
                 if len(common_idx) >= 10:
-                    diff_aligned = diff_series.loc[common_idx]
-                    orig_aligned = series.loc[common_idx].dropna()
-                    common_idx = diff_aligned.index.intersection(orig_aligned.index)
-                    if len(common_idx) >= 10:
-                        corr = np.corrcoef(
-                            diff_aligned.loc[common_idx].values,
-                            orig_aligned.loc[common_idx].values
-                        )[0, 1]
+                    corr = np.corrcoef(
+                        diff_aligned.loc[common_idx].values,
+                        orig_aligned.loc[common_idx].values
+                    )[0, 1]
+                    # 日志输出相关性供观察
+                    # print(f"[optimize_d] d*={d:.4f}, corr={corr:.4f}")
+            return float(round(d, 4))
 
-                        # Return immediately if correlation is sufficient
-                        if corr >= min_corr:
-                            return float(round(d, 4))
-                        # Track this d as fallback (it's stationary, just not enough corr)
-                        if best_d_with_corr is None:
-                            best_d_with_corr = float(round(d, 4))
-                        continue  # Try next d for better correlation
-            else:
-                # No correlation constraint, return immediately
-                return float(round(d, 4))
-
-    # If min_corr > 0 and no d satisfied both conditions:
-    # Return the first stationary d found (best effort) or default to 1.0
-    if min_corr > 0 and best_d_with_corr is not None:
-        return best_d_with_corr
-
-    # Default to 1.0 if no d < 1 creates stationarity
-    return 1.0
+    # 若所有 d 都无法使序列平稳，返回上限值
+    return max_d
