@@ -122,3 +122,52 @@ def test_compute_ffd_volatility_preserves_index():
 
     assert isinstance(result.index, pd.DatetimeIndex)
     assert len(result) == 100
+
+
+# ============== compute_ffd_ma tests ==============
+
+def test_compute_ffd_ma_basic():
+    """Test FFD moving average feature computation."""
+    from webapp.utils.alpha158_features import compute_ffd_ma
+
+    np.random.seed(42)
+    ffd_series = pd.Series(np.random.randn(100), name="ffd_log_price")
+
+    result = compute_ffd_ma(ffd_series, windows=[5, 10, 20])
+
+    # Check all expected columns exist
+    assert 'ffd_ma_5' in result.columns
+    assert 'ffd_ma_10' in result.columns
+    assert 'ffd_ma_20' in result.columns
+    assert 'ffd_ema_5' in result.columns
+    assert 'ffd_ema_10' in result.columns
+    assert 'ffd_ema_20' in result.columns
+
+
+def test_compute_ffd_ma_custom_windows():
+    """Test FFD MA with custom windows."""
+    from webapp.utils.alpha158_features import compute_ffd_ma
+
+    np.random.seed(42)
+    ffd_series = pd.Series(np.random.randn(100))
+
+    result = compute_ffd_ma(ffd_series, windows=[3, 7])
+
+    assert 'ffd_ma_3' in result.columns
+    assert 'ffd_ma_7' in result.columns
+    assert 'ffd_ema_3' in result.columns
+    assert 'ffd_ema_7' in result.columns
+
+
+def test_compute_ffd_ma_preserves_index():
+    """Test FFD MA preserves datetime index."""
+    from webapp.utils.alpha158_features import compute_ffd_ma
+
+    np.random.seed(42)
+    dates = pd.date_range('2023-01-01', periods=100, freq='min')
+    ffd_series = pd.Series(np.random.randn(100), index=dates, name="ffd_log_price")
+
+    result = compute_ffd_ma(ffd_series, windows=[5])
+
+    assert isinstance(result.index, pd.DatetimeIndex)
+    assert len(result) == 100

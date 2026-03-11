@@ -117,3 +117,47 @@ def compute_ffd_volatility(
         result[ewm_col] = pd.Series(ewm_vol, index=ffd_series.index)
 
     return result
+
+
+def compute_ffd_ma(
+    ffd_series: pd.Series,
+    windows: List[int] = None,
+    ema_windows: List[int] = None
+) -> pd.DataFrame:
+    """
+    Compute moving average features based on FFD series.
+
+    Calculates:
+    - Simple moving average (ffd_ma_{window})
+    - Exponential moving average (ffd_ema_{window})
+
+    Args:
+        ffd_series: FFD-transformed series
+        windows: List of window sizes for SMA (default: [5, 10, 20])
+        ema_windows: List of window sizes for EMA (default: same as windows)
+
+    Returns:
+        DataFrame: Contains ffd_ma_* and ffd_ema_* columns
+    """
+    if windows is None:
+        windows = DEFAULT_MA_WINDOWS
+
+    if ema_windows is None:
+        ema_windows = windows
+
+    result = pd.DataFrame(index=ffd_series.index)
+    ffd_values = ffd_series.values.astype(np.float64)
+
+    # Simple Moving Averages
+    for window in windows:
+        ma_col = f"ffd_ma_{window}"
+        ma_values = sma(ffd_values, window=window)
+        result[ma_col] = pd.Series(ma_values, index=ffd_series.index)
+
+    # Exponential Moving Averages
+    for window in ema_windows:
+        ema_col = f"ffd_ema_{window}"
+        ema_values = ewma(ffd_values, span=window)
+        result[ema_col] = pd.Series(ema_values, index=ffd_series.index)
+
+    return result
