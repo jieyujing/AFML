@@ -13,5 +13,5 @@ dist/
 .coverage
 coverage.xml
 *.parquet
-data/
+data/h5
 .DS_Store
