@@ -65,7 +65,7 @@ def compute_dynamic_cusum_filter(
     if use_frac_diff:
         print("Applying Fractional Differentiation on log prices...")
         price_series = np.log(df[price_col])
-        opt_d = optimize_d(price_series)
+        opt_d = optimize_d(price_series, min_corr=0.0)
         print(f"Optimal d for stationarity: {opt_d}")
         
         # Apply frac_diff and keep only valid indices

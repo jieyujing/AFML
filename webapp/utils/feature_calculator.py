@@ -29,6 +29,7 @@ EMA_LONG_SPAN = 26  # Long EMA
 RSI_WINDOW = 14  # RSI lookback
 FRACDIFF_THRES = 1e-4  # FFD weight truncation threshold
 FRACDIFF_D_STEP = 0.05  # Step size for d optimisation
+FRACDIFF_MIN_CORR = 0.0  # Minimum correlation with original series (0.0-1.0)
 
 
 def compute_log_returns(df: pd.DataFrame) -> pd.DataFrame:
@@ -122,13 +123,16 @@ def compute_momentum_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def compute_fracdiff_features(
-    df: pd.DataFrame, thres: float = FRACDIFF_THRES, d_step: float = FRACDIFF_D_STEP
+    df: pd.DataFrame,
+    thres: float = FRACDIFF_THRES,
+    d_step: float = FRACDIFF_D_STEP,
+    min_corr: float = FRACDIFF_MIN_CORR,
 ) -> Tuple[pd.DataFrame, float]:
     df = df.copy()
     log_price = np.log(df["close"])
     log_price_series = pd.Series(log_price, index=df.index, name="log_close")
 
-    optimal_d = optimize_d(log_price_series, thres=thres, d_step=d_step)
+    optimal_d = optimize_d(log_price_series, thres=thres, d_step=d_step, min_corr=min_corr)
     ffd_series = frac_diff_ffd(log_price_series, d=optimal_d, thres=thres)
     ffd_series.name = "ffd_log_price"
     df["ffd_log_price"] = ffd_series

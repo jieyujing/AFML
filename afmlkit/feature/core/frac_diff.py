@@ -56,7 +56,13 @@ def frac_diff_ffd(series: pd.Series, d: float, thres: float = 1e-5) -> pd.Series
     )
     return res
 
-def optimize_d(series: pd.Series, thres: float = 1e-4, d_step: float = 0.05, max_d: float = 1.0) -> float:
+def optimize_d(
+    series: pd.Series,
+    thres: float = 1e-4,
+    d_step: float = 0.05,
+    max_d: float = 1.0,
+    min_corr: float = 0.0
+) -> float:
     """
     Find the minimum d that makes the fractionally differentiated series stationary.
 
@@ -64,8 +70,14 @@ def optimize_d(series: pd.Series, thres: float = 1e-4, d_step: float = 0.05, max
     :param thres: Threshold for weight cutoff in FFD
     :param d_step: Step size for exploring d values
     :param max_d: Maximum value for d to check
+    :param min_corr: Minimum correlation coefficient with original series (0.0-1.0).
+                     Set to 0.0 to disable correlation check.
+                     Recommended: 0.7-0.8 for balanced memory retention.
     :return: optimal d value
     """
+    # Track the best d that satisfies correlation constraint (for fallback)
+    best_d_with_corr: float | None = None
+
     # Check if the original series is already stationary
     valid_series = series.dropna()
     if len(valid_series) > 10:
@@ -74,7 +86,7 @@ def optimize_d(series: pd.Series, thres: float = 1e-4, d_step: float = 0.05, max
             return 0.0
 
     for d in np.arange(0.01, max_d + d_step, d_step):
-        diff_series = frac_diff_ffd(series, d=d, thres=thres)
+        diff_series = frac_diff_ffd(series, d=float(d), thres=thres)
         diff_series = diff_series.dropna()
         if len(diff_series) < 10:
             continue
@@ -83,7 +95,35 @@ def optimize_d(series: pd.Series, thres: float = 1e-4, d_step: float = 0.05, max
         p_val = adfuller(diff_series)[1]
 
         if p_val < 0.05:
-            return round(d, 4)
+            # Check correlation with original series if min_corr is specified
+            if min_corr > 0:
+                # Align indices for correlation calculation
+                common_idx = diff_series.index.intersection(series.index)
+                if len(common_idx) >= 10:
+                    diff_aligned = diff_series.loc[common_idx]
+                    orig_aligned = series.loc[common_idx].dropna()
+                    common_idx = diff_aligned.index.intersection(orig_aligned.index)
+                    if len(common_idx) >= 10:
+                        corr = np.corrcoef(
+                            diff_aligned.loc[common_idx].values,
+                            orig_aligned.loc[common_idx].values
+                        )[0, 1]
+
+                        # Return immediately if correlation is sufficient
+                        if corr >= min_corr:
+                            return float(round(d, 4))
+                        # Track this d as fallback (it's stationary, just not enough corr)
+                        if best_d_with_corr is None:
+                            best_d_with_corr = float(round(d, 4))
+                        continue  # Try next d for better correlation
+            else:
+                # No correlation constraint, return immediately
+                return float(round(d, 4))
+
+    # If min_corr > 0 and no d satisfied both conditions:
+    # Return the first stationary d found (best effort) or default to 1.0
+    if min_corr > 0 and best_d_with_corr is not None:
+        return best_d_with_corr
 
     # Default to 1.0 if no d < 1 creates stationarity
     return 1.0

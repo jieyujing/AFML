@@ -41,6 +41,7 @@ EMA_LONG_SPAN = 26                 # Long EMA
 RSI_WINDOW = 14                    # RSI lookback
 FRACDIFF_THRES = 1e-4              # FFD weight truncation threshold
 FRACDIFF_D_STEP = 0.05             # Step size for d optimisation
+FRACDIFF_MIN_CORR = 0.0            # Minimum correlation with original series (0.0-1.0)
 
 
 def load_dollar_bars(path: str) -> pd.DataFrame:
@@ -144,7 +145,7 @@ def compute_fracdiff_features(df: pd.DataFrame) -> tuple[pd.DataFrame, float]:
     log_price = np.log(df["close"])
 
     # --- Optimise d via ADF test ---
-    optimal_d = optimize_d(log_price, thres=FRACDIFF_THRES, d_step=FRACDIFF_D_STEP)
+    optimal_d = optimize_d(log_price, thres=FRACDIFF_THRES, d_step=FRACDIFF_D_STEP, min_corr=FRACDIFF_MIN_CORR)
     print(f"[4/6] Optimal fractional differencing order d = {optimal_d}")
 
     # --- Apply FFD ---
