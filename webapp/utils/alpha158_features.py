@@ -200,3 +200,40 @@ def compute_ffd_rank(
         )
 
     return result
+
+
+def compute_volume_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute volume and price-based features.
+
+    These features use raw OHLCV data (not FFD-transformed) because:
+    - Volume is already a stationary flow variable
+    - Price levels are needed for VWAP, amount calculations
+
+    Calculates:
+    - ffd_vwap: Volume-weighted average price (rolling 5-period)
+    - ffd_amount: Dollar amount (close * volume)
+    - ffd_amplification: Price range relative to open
+
+    Args:
+        df: DataFrame with OHLCV columns
+
+    Returns:
+        DataFrame: Contains ffd_vwap, ffd_amount, ffd_amplification columns
+    """
+    result = pd.DataFrame(index=df.index)
+
+    # Amount (dollar volume) - only requires close and volume
+    if 'close' in df.columns and 'volume' in df.columns:
+        result['ffd_amount'] = df['close'] * df['volume']
+
+    # VWAP - rolling 5-period volume-weighted average price (requires high/low/close/volume)
+    if all(col in df.columns for col in ['high', 'low', 'close', 'volume']):
+        typical_price = (df['high'] + df['low'] + df['close']) / 3
+        result['ffd_vwap'] = (typical_price * df['volume']).rolling(5).sum() / df['volume'].rolling(5).sum()
+
+        # Amplification (range / open) - requires open
+        if 'open' in df.columns:
+            result['ffd_amplification'] = (df['high'] - df['low']) / df['open']
+
+    return result

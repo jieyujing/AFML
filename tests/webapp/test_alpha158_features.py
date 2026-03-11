@@ -227,3 +227,44 @@ def test_compute_ffd_rank_preserves_original():
     assert 'ffd_ma_5' in result.columns
     assert 'other_col' in result.columns
     assert 'ffd_rank_ffd_ma_5_10' in result.columns
+
+
+# ============== compute_volume_features tests ==============
+
+def test_compute_volume_features_basic():
+    """Test volume feature computation."""
+    from webapp.utils.alpha158_features import compute_volume_features
+
+    np.random.seed(42)
+    dates = pd.date_range('2023-01-01', periods=100, freq='min')
+
+    df = pd.DataFrame({
+        'open': np.linspace(100, 110, 100),
+        'high': np.linspace(101, 111, 100),
+        'low': np.linspace(99, 109, 100),
+        'close': np.linspace(100, 110, 100),
+        'volume': np.random.exponential(1000, 100)
+    }, index=dates)
+
+    result = compute_volume_features(df)
+
+    # Check expected columns
+    assert 'ffd_vwap' in result.columns
+    assert 'ffd_amount' in result.columns
+    assert 'ffd_amplification' in result.columns
+
+
+def test_compute_volume_amount():
+    """Test amount = close * volume."""
+    from webapp.utils.alpha158_features import compute_volume_features
+
+    df = pd.DataFrame({
+        'close': [100.0, 101.0, 102.0],
+        'volume': [1000, 1100, 1200]
+    })
+
+    result = compute_volume_features(df)
+
+    expected_amount = df['close'] * df['volume']
+    # Skip first row due to rolling window
+    assert result['ffd_amount'].iloc[1:].equals(expected_amount.iloc[1:])
