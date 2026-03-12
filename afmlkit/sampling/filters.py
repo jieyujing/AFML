@@ -1,6 +1,7 @@
 import numpy as np
 from numba import njit
 from numpy.typing import NDArray
+from typing import Tuple
 
 
 @njit(nogil=True)
@@ -62,6 +63,73 @@ def cusum_filter(
             num_events += 1
 
     return event_indices[:num_events]
+
+
+@njit(nogil=True)
+def cusum_filter_with_state(
+    diff_time_series: NDArray[np.float64],
+    threshold: NDArray
+) -> Tuple[NDArray[np.int64], NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
+    """
+    Apply the CUSUM filter and return intermediate states for visualization.
+
+    :param diff_time_series: Array of differences (e.g. log returns, absolute differences, or fractional diff increments).
+    :param threshold: Threshold values for event detection.
+    :returns: Tuple of (event_indices, s_pos_history, s_neg_history, threshold_array)
+
+    .. note::
+        This function extends cusum_filter to return the full history of cumulative sums
+        for visualization purposes. Use this when you need to plot the CUSUM curves.
+    """
+    if len(diff_time_series) <= 1:
+        raise ValueError("Input time series must have at least 2 elements.")
+    if len(threshold) != 1 and len(threshold) != len(diff_time_series):
+        raise ValueError("Threshold array must either contain 1 const. element or len(diff_time_series) elements.")
+
+    n = len(diff_time_series)
+
+    # If one threshold element, repeat it to match the length of the price array
+    if len(threshold) == 1:
+        tmp = np.empty(n, dtype=np.float64)
+        tmp.fill(threshold[0])
+        threshold = tmp
+
+    # Container for event indices
+    event_indices = np.empty(n, dtype=np.int64)
+    num_events = 0
+
+    # State history for visualization
+    s_pos_history = np.empty(n, dtype=np.float64)
+    s_neg_history = np.empty(n, dtype=np.float64)
+
+    s_pos = 0.0
+    s_neg = 0.0
+    for i in range(1, n):
+        ret = diff_time_series[i]
+        thrs = threshold[i]
+
+        s_pos = max(0.0, s_pos + ret)
+        s_neg = min(0.0, s_neg + ret)
+
+        # Record state history
+        s_pos_history[i] = s_pos
+        s_neg_history[i] = s_neg
+
+        if s_neg < -thrs:
+            s_neg = 0.0
+            event_indices[num_events] = i
+            num_events += 1
+        elif s_pos > thrs:
+            s_pos = 0.0
+            event_indices[num_events] = i
+            num_events += 1
+
+    return (
+        event_indices[:num_events],
+        s_pos_history,
+        s_neg_history,
+        threshold
+    )
 
 
 @njit(nogil=True)
