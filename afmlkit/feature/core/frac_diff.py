@@ -61,6 +61,7 @@ def optimize_d(
     thres: float = 1e-4,
     d_step: float = 0.05,
     max_d: float = 1.0,
+    min_corr: float = 0.0,
 ) -> float:
     """
     寻找使序列平稳的最小 d 值。
@@ -69,6 +70,8 @@ def optimize_d(
     :param thres: FFD 权重截断阈值
     :param d_step: d 的搜索步长，默认 0.05
     :param max_d: d 的最大搜索值，默认 1.0（极端情况下可调至 2.0）
+    :param min_corr: 与原始序列的最小相关性阈值，默认 0.0（不约束）。
+                     推荐值：0.9-0.95 以保持高记忆性
     :return: 最优 d 值
     """
     # 检查原始序列是否已平稳
@@ -88,9 +91,9 @@ def optimize_d(
         # ADF 检验
         p_val = adfuller(diff_series)[1]
 
-        # 熔断机制：p < 0.05 立即停止
+        # 检查平稳性和相关性
         if p_val < 0.05:
-            # 计算与原始序列的相关性（仅日志观察，不干预选择）
+            # 计算与原始序列的相关性
             common_idx = diff_series.index.intersection(series.index)
             if len(common_idx) >= 10:
                 diff_aligned = diff_series.loc[common_idx]
@@ -101,8 +104,14 @@ def optimize_d(
                         diff_aligned.loc[common_idx].values,
                         orig_aligned.loc[common_idx].values
                     )[0, 1]
-                    # 日志输出相关性供观察
-                    # print(f"[optimize_d] d*={d:.4f}, corr={corr:.4f}")
+
+                    # 如果相关性满足要求，返回当前 d
+                    if corr >= min_corr:
+                        return float(round(d, 4))
+                    # 相关性不足，继续搜索更大的 d
+                    continue
+
+            # 无法计算相关性但序列平稳，返回当前 d
             return float(round(d, 4))
 
     # 若所有 d 都无法使序列平稳，返回上限值
