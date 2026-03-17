@@ -39,6 +39,7 @@
 | `webapp/session.py` | 添加 CUSUM 状态键 |
 | `webapp/components/sidebar.py` | 更新 PAGES、steps、step_mapping、数据状态面板 |
 | `webapp/pages/01_data_import.py` | 移除 cusum K 线选项代码 |
+| `webapp/utils/feature_calculator.py` | 添加 cusum_data 参数支持 DataFrame 输入 |
 | `webapp/pages/04_feature_engineering.py` | 从 Session 读取 cusum_sampled_data |
 
 ---
@@ -630,7 +631,88 @@ git commit -m "refactor: remove CUSUM option from data import page"
 
 ---
 
-## Task 6: 更新特征工程页面兼容性
+## Task 6: 更新 feature_calculator.py 支持 DataFrame 输入
+
+**Files:**
+- Modify: `webapp/utils/feature_calculator.py:141-143` (align_features_with_cusum 函数签名)
+- Modify: `webapp/utils/feature_calculator.py:206-211` (compute_all_features 函数签名)
+- Modify: `webapp/utils/feature_calculator.py:253-257` (对齐逻辑)
+
+- [ ] **Step 1: 修改 align_features_with_cusum 函数签名**
+
+找到第 141-143 行，将函数签名修改为支持 DataFrame 或文件路径：
+
+```python
+from typing import Union
+
+def align_features_with_cusum(
+    features_df: pd.DataFrame,
+    cusum_data: Optional[Union[str, pd.DataFrame]] = None,
+    label_cols: List[str] = None
+) -> pd.DataFrame:
+    """对齐特征到 CUSUM 事件时间戳
+
+    Args:
+        features_df: 特征 DataFrame
+        cusum_data: CUSUM 数据，可以是文件路径 (str) 或 DataFrame
+        label_cols: 标签列名列表
+    """
+    if cusum_data is None:
+        return features_df
+
+    # 支持 DataFrame 或文件路径输入
+    if isinstance(cusum_data, str):
+        labels_df = pd.read_csv(cusum_data, index_col=0, parse_dates=True)
+    else:
+        labels_df = cusum_data.copy()
+
+    labels_df = labels_df.sort_index()
+```
+
+- [ ] **Step 2: 为 compute_all_features 添加 cusum_data 参数**
+
+找到第 206-211 行，修改函数签名：
+
+```python
+def compute_all_features(
+    df: pd.DataFrame,
+    config: Optional[Dict[str, Any]] = None,
+    cusum_path: Optional[str] = None,
+    cusum_data: Optional[pd.DataFrame] = None,  # 新增
+    align_to_cusum: bool = False,
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+```
+
+- [ ] **Step 3: 更新对齐逻辑**
+
+找到第 253-257 行，修改为优先使用 cusum_data：
+
+```python
+    # 优先使用 cusum_data (DataFrame)，fallback 到 cusum_path
+    cusum_source = cusum_data if cusum_data is not None else cusum_path
+
+    if align_to_cusum and cusum_source is not None:
+        df = align_features_with_cusum(df, cusum_source)
+        metadata["aligned_to_cusum"] = True
+    else:
+        metadata["aligned_to_cusum"] = False
+```
+
+- [ ] **Step 4: 验证语法正确**
+
+Run: `python -m py_compile webapp/utils/feature_calculator.py`
+Expected: 无错误输出
+
+- [ ] **Step 5: 提交更改**
+
+```bash
+git add webapp/utils/feature_calculator.py
+git commit -m "feat: add cusum_data parameter to feature calculator"
+```
+
+---
+
+## Task 7: 更新特征工程页面兼容性
 
 **Files:**
 - Modify: `webapp/pages/04_feature_engineering.py:214-223` (CUSUM 配置区块)
@@ -676,8 +758,6 @@ git commit -m "refactor: remove CUSUM option from data import page"
 
             # 优先使用 Session 数据
             cusum_data = SessionManager.get('cusum_sampled_data')
-            if align_enabled and cusum_data is not None:
-                cusum_path = None  # 使用 cusum_data
 
             status_text.text("计算特征 (可能需要几分钟)...")
             progress_bar.progress(30)
@@ -685,7 +765,8 @@ git commit -m "refactor: remove CUSUM option from data import page"
             features_df, metadata = compute_all_features(
                 df=df,
                 config=feature_config,
-                cusum_path=cusum_path if not cusum_data else None,
+                cusum_path=cusum_path,
+                cusum_data=cusum_data,  # 传入 Session 数据
                 align_to_cusum=align_enabled,
             )
 ```
@@ -704,7 +785,7 @@ git commit -m "feat: update feature engineering to read CUSUM from Session"
 
 ---
 
-## Task 7: 端到端测试
+## Task 8: 端到端测试
 
 - [ ] **Step 1: 启动 Web UI**
 
