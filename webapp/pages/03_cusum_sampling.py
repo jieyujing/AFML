@@ -13,7 +13,11 @@ st.set_page_config(page_title="CUSUM 采样", page_icon="🔬", layout="wide")
 
 from session import SessionManager
 from components.sidebar import render_sidebar, navigate_to
-from components.cusum_viz import plot_price_with_events, render_sampling_rate_panel
+from components.cusum_viz import (
+    plot_price_with_events,
+    render_sampling_rate_panel,
+    plot_cusum_dual_layer
+)
 
 # 初始化会话
 SessionManager.init_session()
@@ -44,6 +48,39 @@ selected_freq = None
 
 if data_source_mode == "从 Dollar Bars 采样":
     dollar_bars = SessionManager.get('dollar_bars')
+
+    # 如果 Session 中没有数据，尝试从文件加载
+    if dollar_bars is None or all(len(df) == 0 for df in dollar_bars.values()):
+        output_dir = Path("outputs/dollar_bars")
+        if output_dir.exists():
+            dollar_bar_files = list(output_dir.glob("dollar_bars_*.csv"))
+
+            if dollar_bar_files:
+                st.info(f"📁 从 `{output_dir}` 发现 {len(dollar_bar_files)} 个 Dollar Bars 文件")
+
+                # 让用户选择文件
+                file_options = {f.name: f for f in dollar_bar_files}
+                selected_file_name = st.selectbox(
+                    "选择 Dollar Bars 文件",
+                    options=list(file_options.keys())
+                )
+
+                if selected_file_name:
+                    selected_file = file_options[selected_file_name]
+                    try:
+                        df = pd.read_csv(selected_file, parse_dates=["timestamp"])
+                        df = df.set_index("timestamp")
+
+                        # 提取频率（从文件名）
+                        freq = selected_file.stem.replace("dollar_bars_", "")
+
+                        # 保存到 Session
+                        SessionManager.update("dollar_bars", {freq: df})
+                        dollar_bars = SessionManager.get("dollar_bars")
+                        st.success(f"✅ 已加载：{selected_file_name}")
+                    except Exception as e:
+                        st.error(f"加载失败：{e}")
+                        st.stop()
 
     if dollar_bars is None or all(len(df) == 0 for df in dollar_bars.values()):
         st.warning("⚠️ 请先生成 Dollar Bars 数据")
@@ -151,12 +188,13 @@ if st.button("🔬 执行 CUSUM 采样", type="primary"):
         progress_bar = st.progress(0, text="正在执行 CUSUM 过滤...")
 
         # 执行 CUSUM filter
-        sampled_df, t_events = compute_dynamic_cusum_filter(
+        sampled_df, t_events, cusum_state = compute_dynamic_cusum_filter(
             selected_df,
             price_col='close',
             vol_span=vol_span,
             threshold_multiplier=threshold_multiplier,
-            use_frac_diff=use_frac_diff
+            use_frac_diff=use_frac_diff,
+            return_state=True
         )
 
         progress_bar.progress(100, text="采样完成!")
@@ -165,6 +203,7 @@ if st.button("🔬 执行 CUSUM 采样", type="primary"):
         SessionManager.update('cusum_sampled_data', sampled_df)
         SessionManager.update('cusum_events', t_events)
         SessionManager.update('cusum_config', cusum_config)
+        SessionManager.update('cusum_state', cusum_state)
         SessionManager.set_processing(False)
 
         st.success(f"✅ 检测到 {len(t_events)} 个 CUSUM 事件")
@@ -216,16 +255,29 @@ if cusum_sampled_data is not None:
 
         # 价格序列 + 事件标记图
         cusum_events = SessionManager.get('cusum_events')
+        cusum_state = SessionManager.get('cusum_state')
+
         if cusum_events is not None and len(cusum_events) > 0:
+            # 获取事件在 cusum_state['time_index'] 中的位置
+            cusum_time_index = cusum_state['time_index'] if cusum_state else original_df.index
             event_indices = np.array([
-                original_df.index.get_loc(t)
+                cusum_time_index.get_loc(t)
                 for t in cusum_events
-                if t in original_df.index
+                if t in cusum_time_index
             ])
 
             if len(event_indices) > 0:
-                fig_price = plot_price_with_events(original_df, event_indices)
-                st.plotly_chart(fig_price, use_container_width=True)
+                if cusum_state is not None:
+                    fig = plot_cusum_dual_layer(
+                        price_df=original_df,
+                        event_indices=event_indices,
+                        cusum_state=cusum_state
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    # Fallback：无状态数据时使用旧版单层图
+                    fig_price = plot_price_with_events(original_df, event_indices)
+                    st.plotly_chart(fig_price, use_container_width=True)
 
     # 数据预览
     with st.expander("📋 采样数据预览"):
