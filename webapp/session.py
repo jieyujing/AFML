@@ -55,7 +55,7 @@ class SessionManager:
         'current_step', 'is_processing', 'last_updated',
         'experiment_name', 'experiment_notes',
         'iid_results', 'iid_score_df', 'best_freq', 'generation_time',
-        'cusum_config', 'cusum_sampled_data', 'cusum_events'
+        'cusum_config', 'cusum_sampled_data', 'cusum_events', 'cusum_state'
     ]
 
     @staticmethod
