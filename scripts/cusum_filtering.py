@@ -1,24 +1,40 @@
 import os
 import time
+from typing import Union, Tuple
+
 import pandas as pd
 import numpy as np
 
 from afmlkit.feature.core.volatility import ewms
 from afmlkit.feature.core.frac_diff import frac_diff_ffd, optimize_d
 from afmlkit.feature.core.trend_scan import trend_scan_labels
-from afmlkit.sampling.filters import cusum_filter
+from afmlkit.sampling.filters import cusum_filter, cusum_filter_with_state
 from afmlkit.bar.data_model import TradesData
 from afmlkit.label.kit import TBMLabel
 
 def compute_dynamic_cusum_filter(
-    df: pd.DataFrame, 
-    price_col: str = 'close', 
-    vol_span: int = 50, 
+    df: pd.DataFrame,
+    price_col: str = 'close',
+    vol_span: int = 50,
     threshold_multiplier: float = 2.0,
-    use_frac_diff: bool = True
-) -> pd.DataFrame:
+    use_frac_diff: bool = True,
+    return_state: bool = False,
+) -> Union[
+    Tuple[pd.DataFrame, pd.DatetimeIndex],
+    Tuple[pd.DataFrame, pd.DatetimeIndex, dict]
+]:
     """
-    通过 CUSUM 对时间序列的微观波动去噪
+    通过 CUSUM 对时间序列的微观波动去噪。
+
+    :param df: 输入数据框，包含价格和成交量列。
+    :param price_col: 价格列名。
+    :param vol_span: 波动率计算的指数加权窗口。
+    :param threshold_multiplier: 动态阈值乘数。
+    :param use_frac_diff: 是否使用分数差分。
+    :param return_state: 如果为 True，返回 CUSUM 状态历史用于可视化。
+    :returns:
+        - return_state=False: (filtered_df, t_events)
+        - return_state=True: (filtered_df, t_events, cusum_state)
     """
     print("Starting CUSUM filtering...")
     print(f"Parameters: price_col={price_col}, vol_span={vol_span}, threshold_multiplier={threshold_multiplier}")
@@ -91,33 +107,64 @@ def compute_dynamic_cusum_filter(
         print(f"Aligned data points after FracDiff: {len(prices_for_cusum)}")
         
         # 定制的 FracDiff CUSUM，不再依赖底层的 log_returns
-        # 因为此时的价格是经过差分的，本身就已经是“差分量”，我们可以直接对其累加。
+        # 因为此时的价格是经过差分的，本身就已经是"差分量"，我们可以直接对其累加。
         print("Applying FracDiff Custom CUSUM filter...")
         start_time = time.time()
-        
+
         # 因为 frac_diff 已经是基于 log price 的差分序列了，直接取它的增量以判断累积和的变动
         diff_series = np.zeros_like(prices_for_cusum)
         diff_series[1:] = prices_for_cusum[1:] - prices_for_cusum[:-1]
-        
-        event_indices = cusum_filter(diff_series, dynamic_threshold)
-        
+
+        if return_state:
+            event_indices, s_pos_history, s_neg_history, threshold_arr = cusum_filter_with_state(
+                diff_series, dynamic_threshold
+            )
+            s_pos_history[0] = 0.0
+            s_neg_history[0] = 0.0
+            cusum_state = {
+                's_pos': s_pos_history,
+                's_neg': s_neg_history,
+                'threshold': float(np.mean(threshold_arr)),
+                'time_index': df.index  # 二次过滤后的 df
+            }
+        else:
+            event_indices = cusum_filter(diff_series, dynamic_threshold)
+            cusum_state = None
+
         elapsed = time.time() - start_time
         print(f"FracDiff CUSUM filter completed in {elapsed:.4f} seconds.")
     else:
         prices_for_cusum = prices
         dynamic_threshold = clean_volatility * threshold_multiplier
-        
+
         # 对于不使用 FracDiff 的情况，直接计算对数收益率传给外部的 CUSUM！
         diff_series = np.zeros_like(prices_for_cusum)
         with np.errstate(divide='ignore', invalid='ignore'):
             diff_series[1:] = np.log(prices_for_cusum[1:] / prices_for_cusum[:-1])
-            
+
         diff_series = np.nan_to_num(diff_series, nan=0.0)
-        
+
         # 5. CUSUM 过滤器
         print("Applying Standard CUSUM filter...")
         start_time = time.time()
-        event_indices = cusum_filter(diff_series, dynamic_threshold)
+
+        if return_state:
+            event_indices, s_pos_history, s_neg_history, threshold_arr = cusum_filter_with_state(
+                diff_series, dynamic_threshold
+            )
+            # 初始化 s_pos/s_neg[0]
+            s_pos_history[0] = 0.0
+            s_neg_history[0] = 0.0
+            cusum_state = {
+                's_pos': s_pos_history,
+                's_neg': s_neg_history,
+                'threshold': float(np.mean(threshold_arr)),
+                'time_index': df.index
+            }
+        else:
+            event_indices = cusum_filter(diff_series, dynamic_threshold)
+            cusum_state = None
+
         elapsed = time.time() - start_time
         print(f"CUSUM filter completed in {elapsed:.4f} seconds.")
     
@@ -150,8 +197,11 @@ def compute_dynamic_cusum_filter(
         t_events = t_events.sort_values()
     
     print(f"Exported t_events: {len(t_events)} discrete timestamps")
-    
-    return filtered_df, t_events
+
+    if return_state:
+        return filtered_df, t_events, cusum_state
+    else:
+        return filtered_df, t_events
 
 def compute_labels_and_weights(
     full_df: pd.DataFrame, 
