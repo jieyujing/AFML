@@ -272,3 +272,156 @@ SessionManager.update('cusum_state', cusum_state)
 | 状态数据量大时内存占用 | 仅在 `return_state=True` 时计算和返回 |
 | 时间索引对齐复杂 | 在数据层严格对齐，可视化层直接使用 |
 | 现有功能回归 | 保留原有函数，新增函数独立实现 |
+
+---
+
+## 补充：数据层实现细节
+
+### Import 变更
+
+`scripts/cusum_filtering.py` 需要新增 import：
+
+```python
+# 现有
+from afmlkit.sampling.filters import cusum_filter
+
+# 改为
+from afmlkit.sampling.filters import cusum_filter, cusum_filter_with_state
+```
+
+### 时间索引构建
+
+在 `compute_dynamic_cusum_filter` 中，状态数组与经过 `valid_mask` 过滤后的 `df` 对齐：
+
+```python
+# 在 return_state=True 分支中
+# df 已经过 valid_mask 过滤（波动率计算前置处理）
+# 状态数组的长度与 df 相同
+time_index = df.index  # 直接使用过滤后的 df 索引
+
+cusum_state = {
+    's_pos': s_pos_history,
+    's_neg': s_neg_history,
+    'threshold': float(np.mean(threshold)),
+    'time_index': time_index
+}
+```
+
+### s_pos_history[0] 初始化
+
+`cusum_filter_with_state` 返回的数组 `s_pos_history[0]` 和 `s_neg_history[0]` 未初始化（垃圾值）。
+
+**处理方案**：在数据层初始化为 0
+
+```python
+# 在调用 cusum_filter_with_state 后
+s_pos_history[0] = 0.0
+s_neg_history[0] = 0.0
+```
+
+---
+
+## 补充：SessionManager 更新
+
+### 改动文件
+
+`webapp/session.py`
+
+### 改动内容
+
+在 `SessionManager.KEYS` 列表中添加 `'cusum_state'`：
+
+```python
+KEYS = [
+    'raw_data', 'bar_data', 'dollar_bars', 'features', 'labels', 'sample_weights',
+    # ... 现有键 ...
+    'cusum_config', 'cusum_sampled_data', 'cusum_events', 'cusum_state'  # 新增
+]
+```
+
+---
+
+## 补充：废弃策略
+
+### 废弃函数处理
+
+以下函数标记为废弃，但保留 API 兼容：
+
+```python
+import warnings
+
+def plot_cusum_cumulative_sum(s_pos, s_neg, threshold, title="CUSUM 累积和曲线"):
+    """已废弃，请使用 plot_cusum_dual_layer"""
+    warnings.warn(
+        "plot_cusum_cumulative_sum is deprecated, use plot_cusum_dual_layer instead",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    # ... 保留原有实现 ...
+
+def plot_volatility_and_threshold(volatility, dynamic_threshold, title="波动率与动态阈值"):
+    """已废弃，不再需要"""
+    warnings.warn(
+        "plot_volatility_and_threshold is deprecated and will be removed in a future version",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    # ... 保留原有实现 ...
+```
+
+### 移除计划
+
+- 在下一个 major version（v2.0.0）移除废弃函数
+
+---
+
+## 补充：边缘情况处理
+
+### 可视化组件参数验证
+
+在 `plot_cusum_dual_layer` 开头添加验证：
+
+```python
+def plot_cusum_dual_layer(
+    price_df: pd.DataFrame,
+    event_indices: np.ndarray,
+    cusum_state: dict,
+    price_col: str = 'close',
+    title: str = "CUSUM 采样：价格与累积和联动"
+) -> go.Figure:
+    # 参数验证
+    if price_col not in price_df.columns:
+        raise ValueError(f"Column '{price_col}' not found in price_df")
+
+    if len(cusum_state['s_pos']) != len(cusum_state['time_index']):
+        raise ValueError("s_pos length mismatch with time_index")
+
+    # 允许状态数组长度小于等于 price_df（因前置数据丢弃）
+    if len(cusum_state['s_pos']) > len(price_df):
+        raise ValueError("State array exceeds price data length")
+```
+
+### 空事件数组处理
+
+```python
+# 如果没有事件，仍渲染双层图表，但上层不添加散点标记
+if len(event_indices) == 0:
+    # 仅渲染价格曲线 + 累积和曲线，无事件标记
+    pass
+```
+
+### 数组对齐
+
+状态数组的 `time_index` 是 `price_df` 的子集（因波动率计算丢弃前置数据）。绘图时使用 `time_index` 作为 X 轴：
+
+```python
+# 上层：使用完整的 price_df.index
+fig.add_trace(go.Scatter(x=price_df.index, y=price_df[price_col], ...))
+
+# 下层：使用 cusum_state['time_index']
+fig.add_trace(go.Scatter(
+    x=cusum_state['time_index'],
+    y=cusum_state['s_pos'],
+    ...
+))
+```
