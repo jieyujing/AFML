@@ -234,10 +234,13 @@ steps = [
     "CUSUM 采样",  # 新增
     "特征工程",
     "标签生成",
+    "特征分析",    # 特征分析作为工作流的一个步骤
     "模型训练",
     "回测评估"
 ]
 ```
+
+**注意**：步骤指示器仅显示核心线性工作流，"可视化中心"和"实验管理"不作为步骤显示。
 
 ### step_mapping 更新
 
@@ -254,6 +257,17 @@ step_mapping = {
     '6️⃣ 回测评估': 7,
     '🎨 可视化中心': 8
 }
+```
+
+### 数据状态面板更新
+
+在侧边栏数据状态区域添加 CUSUM 采样状态：
+
+```python
+# 在现有状态检查后添加
+has_cusum = st.session_state.get('cusum_sampled_data') is not None
+status_icon = "✅" if has_cusum else "❌"
+st.markdown(f"{status_icon} CUSUM 采样")
 ```
 
 ## 依赖关系
