@@ -26,34 +26,39 @@ PAGES: Dict[str, dict] = {
         "file": "pages/03_cusum_sampling.py",
         "description": "CUSUM 事件采样与可视化"
     },
+    "📈 Primary Model": {
+        "icon": "📈",
+        "file": "pages/04_primary_model.py",
+        "description": "双均线策略信号生成与优化"
+    },
     "2️⃣ 特征工程": {
         "icon": "🔧",
-        "file": "pages/04_feature_engineering.py",
+        "file": "pages/05_feature_engineering.py",
         "description": "构建和变换特征"
     },
     "3️⃣ 标签生成": {
         "icon": "🏷️",
-        "file": "pages/05_labeling.py",
+        "file": "pages/06_labeling.py",
         "description": "生成 TBM 标签和样本权重"
     },
     "4️⃣ 特征分析": {
         "icon": "📊",
-        "file": "pages/06_feature_analysis.py",
+        "file": "pages/07_feature_analysis.py",
         "description": "特征重要性和聚类分析"
     },
     "5️⃣ 模型训练": {
         "icon": "🤖",
-        "file": "pages/07_model_training.py",
+        "file": "pages/08_model_training.py",
         "description": "训练和评估模型"
     },
     "6️⃣ 回测评估": {
         "icon": "📈",
-        "file": "pages/08_backtest.py",
+        "file": "pages/09_backtest.py",
         "description": "回测策略和绩效评估"
     },
     "🎨 可视化中心": {
         "icon": "🎨",
-        "file": "pages/09_visualization.py",
+        "file": "pages/10_visualization.py",
         "description": "查看所有可视化结果"
     }
 }
@@ -104,6 +109,7 @@ def render_sidebar() -> str:
             "数据导入",
             "Dollar Bar",
             "CUSUM 采样",
+            "Primary Model",
             "特征工程",
             "标签生成",
             "特征分析",
@@ -137,6 +143,10 @@ def render_sidebar() -> str:
         has_cusum = st.session_state.get('cusum_sampled_data') is not None
         status_icon = "✅" if has_cusum else "❌"
         st.markdown(f"{status_icon} CUSUM 采样")
+
+        has_primary_signals = st.session_state.get('primary_model_signals') is not None
+        status_icon = "✅" if has_primary_signals else "❌"
+        st.markdown(f"{status_icon} Primary Model 信号")
 
         status_icon = "✅" if has_features else "❌"
         st.markdown(f"{status_icon} 特征")
@@ -183,12 +193,13 @@ def navigate_to(page: str):
         '1️⃣ 数据导入': 0,
         '💵 Dollar Bar': 1,
         '🔬 CUSUM 采样': 2,
-        '2️⃣ 特征工程': 3,
-        '3️⃣ 标签生成': 4,
-        '4️⃣ 特征分析': 5,
-        '5️⃣ 模型训练': 6,
-        '6️⃣ 回测评估': 7,
-        '🎨 可视化中心': 8
+        '📈 Primary Model': 3,
+        '2️⃣ 特征工程': 4,
+        '3️⃣ 标签生成': 5,
+        '4️⃣ 特征分析': 6,
+        '5️⃣ 模型训练': 7,
+        '6️⃣ 回测评估': 8,
+        '🎨 可视化中心': 9
     }
     st.session_state.current_step = step_mapping.get(page, 0)
 
