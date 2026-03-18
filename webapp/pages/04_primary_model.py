@@ -30,9 +30,18 @@ def main():
     # ========== Step 1: 数据源确认 ==========
     st.header("Step 1: 数据源确认")
 
+    # 确保 session 已初始化
+    sm.init_session()
+
     cusum_data = sm.get('cusum_sampled_data')
     if cusum_data is None:
         st.warning("⚠️ 请先在「CUSUM 采样」页面生成采样数据")
+        # 调试信息
+        with st.expander("🔍 调试信息"):
+            st.write("Session State 中的键:")
+            st.write(list(st.session_state.keys()))
+            if 'cusum_sampled_data' in st.session_state:
+                st.write("cusum_sampled_data 类型:", type(st.session_state.get('cusum_sampled_data')))
         st.stop()
 
     col1, col2, col3 = st.columns(3)
