@@ -143,7 +143,8 @@ def main():
                     step=max(short_step, long_step),
                     tp_ratio=tp_ratio,
                     sl_ratio=sl_ratio,
-                    time_barrier=time_barrier if time_barrier > 0 else None
+                    time_barrier=time_barrier if time_barrier > 0 else None,
+                    price_col='close'  # CUSUM 数据来自 Dollar Bars
                 )
 
                 # 创建优化器
@@ -225,7 +226,8 @@ def main():
             strategy = DualMAStrategy(
                 tp_ratio=config.get('tp_ratio', 2.0),
                 sl_ratio=config.get('sl_ratio', 1.0),
-                time_barrier=config.get('time_barrier') if config.get('time_barrier', 0) > 0 else None
+                time_barrier=config.get('time_barrier') if config.get('time_barrier', 0) > 0 else None,
+                price_col='close'  # CUSUM 数据来自 Dollar Bars
             )
             final_result = strategy.generate_signals(
                 cusum_data,

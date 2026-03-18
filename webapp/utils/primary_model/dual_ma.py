@@ -17,7 +17,8 @@ class DualMAStrategy(PrimaryModelBase):
         tp_ratio: float = 2.0,
         sl_ratio: float = 1.0,
         time_barrier: Optional[int] = None,
-        vol_window: int = 20
+        vol_window: int = 20,
+        price_col: str = 'price'
     ):
         """
         :param short_range: 短期均线周期范围 (min, max)
@@ -27,6 +28,7 @@ class DualMAStrategy(PrimaryModelBase):
         :param sl_ratio: 止损倍数（相对波动率）
         :param time_barrier: 时间屏障（事件数），None 表示不使用
         :param vol_window: 波动率计算窗口
+        :param price_col: 价格列名（默认 'price'，Dollar Bars 使用 'close'）
         """
         self.short_range = short_range
         self.long_range = long_range
@@ -35,6 +37,7 @@ class DualMAStrategy(PrimaryModelBase):
         self.sl_ratio = sl_ratio
         self.time_barrier = time_barrier
         self.vol_window = vol_window
+        self.price_col = price_col
 
     @property
     def name(self) -> str:
@@ -75,11 +78,11 @@ class DualMAStrategy(PrimaryModelBase):
         """
         生成双均线交叉信号
 
-        :param data: CUSUM采样数据，必须包含 'price' 列
+        :param data: CUSUM采样数据，必须包含价格列（默认 'price'）
         :param short_window: 短期均线周期
         :param long_window: 长期均线周期
         """
-        prices = data['price']
+        prices = data[self.price_col]
 
         # 计算均线
         ma_short = prices.rolling(window=short_window, min_periods=1).mean()
@@ -132,7 +135,7 @@ class DualMAStrategy(PrimaryModelBase):
         time_barrier: Optional[int]
     ) -> pd.DataFrame:
         """计算三重屏障法标签"""
-        prices = data['price'].values
+        prices = data[self.price_col].values
         volatility = data['volatility'].values
 
         results = []
