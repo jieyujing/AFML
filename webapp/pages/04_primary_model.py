@@ -35,6 +35,29 @@ def main():
 
     cusum_data = sm.get('cusum_sampled_data')
     if cusum_data is None:
+        # 尝试自动加载最新保存的 CUSUM 数据
+        from pathlib import Path
+        cusum_dir = Path("outputs/cusum_sampling")
+        if cusum_dir.exists():
+            saved_files = sorted(
+                list(cusum_dir.glob("cusum_sampled_*.csv")) +
+                list(cusum_dir.glob("cusum_sampled_*.parquet")),
+                key=lambda f: f.stat().st_mtime,
+                reverse=True
+            )
+            if saved_files:
+                latest_file = saved_files[0]
+                try:
+                    if latest_file.suffix == '.csv':
+                        cusum_data = pd.read_csv(latest_file, parse_dates=['timestamp'], index_col='timestamp')
+                    else:
+                        cusum_data = pd.read_parquet(latest_file)
+                    sm.update('cusum_sampled_data', cusum_data)
+                    st.success(f"✅ 已自动加载保存的数据：{latest_file.name} ({len(cusum_data)} 行)")
+                except Exception as e:
+                    st.warning(f"加载保存的数据失败：{e}")
+
+    if cusum_data is None:
         st.warning("⚠️ 请先在「CUSUM 采样」页面生成采样数据")
         # 调试信息
         with st.expander("🔍 调试信息"):
