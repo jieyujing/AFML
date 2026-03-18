@@ -151,7 +151,7 @@ st.markdown("### ⚙️ 参数配置")
 advanced_mode = st.checkbox("高级模式", value=False, key="cusum_advanced_mode")
 
 if advanced_mode:
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
         vol_span = st.number_input(
             "波动率窗口 (vol_span)",
@@ -162,18 +162,14 @@ if advanced_mode:
             "阈值乘数",
             min_value=0.5, max_value=5.0, value=2.0, step=0.1
         )
-    with col3:
-        use_frac_diff = st.checkbox("启用分数阶差分", value=True)
 else:
     vol_span = 50
     threshold_multiplier = 2.0
-    use_frac_diff = True
 
 # 保存配置
 cusum_config = {
     'vol_span': vol_span,
     'threshold_multiplier': threshold_multiplier,
-    'use_frac_diff': use_frac_diff,
     'freq': selected_freq
 }
 
@@ -193,7 +189,6 @@ if st.button("🔬 执行 CUSUM 采样", type="primary"):
             price_col='close',
             vol_span=vol_span,
             threshold_multiplier=threshold_multiplier,
-            use_frac_diff=use_frac_diff,
             return_state=True
         )
 
