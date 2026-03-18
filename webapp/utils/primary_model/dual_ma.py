@@ -111,6 +111,7 @@ class DualMAStrategy(PrimaryModelBase):
         # 计算 TBM 标签
         events_with_labels = self._compute_tbm_labels(
             events_df,
+            positions=position,
             tp_ratio=self.tp_ratio,
             sl_ratio=self.sl_ratio,
             time_barrier=self.time_barrier
@@ -125,6 +126,7 @@ class DualMAStrategy(PrimaryModelBase):
     def _compute_tbm_labels(
         self,
         data: pd.DataFrame,
+        positions: pd.Series,
         tp_ratio: float,
         sl_ratio: float,
         time_barrier: Optional[int]
@@ -139,33 +141,54 @@ class DualMAStrategy(PrimaryModelBase):
         for i in range(n - 1):
             entry_price = prices[i]
             entry_vol = volatility[i] if not np.isnan(volatility[i]) else 0.02
+            direction = positions.iloc[i]  # 1 for long, -1 for short
 
-            # 动态止盈止损
-            tp = entry_price * (1 + tp_ratio * entry_vol)
-            sl = entry_price * (1 - sl_ratio * entry_vol)
+            # Direction-aware TP/SL
+            if direction > 0:  # Long position
+                tp = entry_price * (1 + tp_ratio * entry_vol)  # Up = TP
+                sl = entry_price * (1 - sl_ratio * entry_vol)  # Down = SL
+            else:  # Short position
+                tp = entry_price * (1 - tp_ratio * entry_vol)  # Down = TP
+                sl = entry_price * (1 + sl_ratio * entry_vol)  # Up = SL
 
             label = 0
             exit_idx = n - 1
 
-            # 搜索退出点
             max_j = min(i + time_barrier, n) if time_barrier else n
             for j in range(i + 1, max_j):
-                if prices[j] >= tp:
-                    label = 1   # 止盈
-                    exit_idx = j
-                    break
-                elif prices[j] <= sl:
-                    label = -1  # 止损
-                    exit_idx = j
-                    break
+                if direction > 0:  # Long position
+                    if prices[j] >= tp:
+                        label = 1   # TP hit
+                        exit_idx = j
+                        break
+                    elif prices[j] <= sl:
+                        label = -1  # SL hit
+                        exit_idx = j
+                        break
+                else:  # Short position (direction < 0)
+                    if prices[j] <= tp:
+                        label = 1   # TP hit (price down)
+                        exit_idx = j
+                        break
+                    elif prices[j] >= sl:
+                        label = -1  # SL hit (price up)
+                        exit_idx = j
+                        break
             else:
-                # 时间屏障或数据末尾
+                # Time barrier or end of data
                 if time_barrier and i + time_barrier < n:
                     exit_idx = i + time_barrier
-                    label = 1 if prices[exit_idx] > entry_price else -1
+                    # Direction-aware label for time barrier
+                    if direction > 0:
+                        label = 1 if prices[exit_idx] > entry_price else -1
+                    else:
+                        label = 1 if prices[exit_idx] < entry_price else -1
                 else:
                     exit_idx = n - 1
-                    label = 1 if prices[exit_idx] > entry_price else -1
+                    if direction > 0:
+                        label = 1 if prices[exit_idx] > entry_price else -1
+                    else:
+                        label = 1 if prices[exit_idx] < entry_price else -1
 
             results.append({
                 'entry_idx': i,
@@ -173,8 +196,9 @@ class DualMAStrategy(PrimaryModelBase):
                 'entry_price': entry_price,
                 'exit_price': prices[exit_idx],
                 'volatility': entry_vol,
+                'direction': direction,
                 'label': label,
-                'returns': np.log(prices[exit_idx] / entry_price)
+                'returns': np.log(prices[exit_idx] / entry_price) * direction  # Direction-adjusted returns
             })
 
         df = pd.DataFrame(results)

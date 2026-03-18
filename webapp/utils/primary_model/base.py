@@ -28,13 +28,13 @@ class PrimaryModelBase(ABC):
     @abstractmethod
     def name(self) -> str:
         """策略名称"""
-        pass
+        ...
 
     @property
     @abstractmethod
     def param_grid(self) -> Dict[str, List]:
         """参数搜索空间"""
-        pass
+        ...
 
     @abstractmethod
     def generate_signals(
@@ -49,7 +49,7 @@ class PrimaryModelBase(ABC):
         :param params: 策略参数
         :returns: SignalResult
         """
-        pass
+        ...
 
     def evaluate(
         self,
