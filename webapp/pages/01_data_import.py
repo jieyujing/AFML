@@ -1,7 +1,6 @@
 """数据导入与 K 线构建页面"""
 import streamlit as st
 import pandas as pd
-import numpy as np
 from pathlib import Path
 import sys
 
@@ -196,13 +195,12 @@ elif step == "3. K 线构建":
         st.markdown("#### K 线类型")
         bar_type = st.selectbox(
             "选择 K 线类型",
-            ["time", "tick", "volume", "dollar", "cusum"],
+            ["time", "tick", "volume", "dollar"],
             format_func=lambda x: {
                 'time': '时间 K 线',
                 'tick': 'Tick K 线',
                 'volume': '成交量 K 线',
-                'dollar': '金额 K 线',
-                'cusum': 'CUSUM 过滤 K 线'
+                'dollar': '金额 K 线'
             }.get(x, x)
         )
 
@@ -307,117 +305,7 @@ elif step == "3. K 线构建":
                     st.success(f"成功构建 {len(bar_data)} 根 K 线")
                     st.dataframe(bar_data.head(10))
 
-        elif bar_type == 'cusum':
-            # === 简单/高级模式切换 ===
-            advanced_mode = st.checkbox("高级模式", value=False)
-
-            with st.expander("参数配置", expanded=advanced_mode):
-                if advanced_mode:
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        vol_span = st.number_input(
-                            "波动率窗口 (vol_span)",
-                            min_value=10, max_value=200, value=50, step=10
-                        )
-                    with col2:
-                        threshold_multiplier = st.number_input(
-                            "阈值乘数",
-                            min_value=0.5, max_value=5.0, value=2.0, step=0.1
-                        )
-                    with col3:
-                        use_frac_diff = st.checkbox("启用分数阶差分", value=True)
-
-                    # 固定阈值模式（不推荐，但保留）
-                    fixed_threshold = st.number_input(
-                        "CUSUM 阈值 (仅当使用固定阈值模式)",
-                        min_value=0.01, max_value=1.0, value=0.05, step=0.01
-                    )
-                else:
-                    # 简单模式：默认参数
-                    vol_span = 50
-                    threshold_multiplier = 2.0
-                    use_frac_diff = True
-                    fixed_threshold = 0.05
-
-            if st.button("构建 CUSUM K 线"):
-                try:
-                    from scripts.cusum_filtering import compute_dynamic_cusum_filter
-
-                    # 执行 CUSUM filter
-                    with st.spinner("正在执行 CUSUM 过滤..."):
-                        sampled_df, t_events = compute_dynamic_cusum_filter(
-                            prepared_data,
-                            price_col='close',
-                            vol_span=vol_span,
-                            threshold_multiplier=threshold_multiplier,
-                            use_frac_diff=use_frac_diff
-                        )
-
-                    # 保存到 Session
-                    SessionManager.update('bar_data', sampled_df)
-                    SessionManager.update('bar_config', {
-                        'type': bar_type,
-                        'vol_span': vol_span,
-                        'threshold_multiplier': threshold_multiplier,
-                        'use_frac_diff': use_frac_diff
-                    })
-                    SessionManager.update('filter_events', t_events)
-
-                    st.success(f"检测到 {len(t_events)} 个 CUSUM 事件")
-
-                    # === 新增：显示可视化 ===
-                    st.markdown("### 📊 CUSUM 采样可视化")
-
-                    from webapp.components.cusum_viz import (
-                        plot_price_with_events,
-                        render_sampling_rate_panel
-                    )
-
-                    # 计算统计指标
-                    original_rows = len(prepared_data)
-                    sampled_rows = len(sampled_df)
-                    time_range_days = (
-                        (prepared_data.index[-1] - prepared_data.index[0]).total_seconds() / 86400
-                        if len(prepared_data) > 1 else 1
-                    )
-
-                    # 采样率面板
-                    col1, col2 = st.columns([2, 1])
-                    with col1:
-                        metrics_md, gauge_fig = render_sampling_rate_panel(
-                            original_rows, sampled_rows, time_range_days
-                        )
-                        st.markdown(metrics_md)
-                    with col2:
-                        st.plotly_chart(gauge_fig, use_container_width=True)
-
-                    # 价格序列 + 事件标记
-                    # 将 t_events 转换为索引位置
-                    event_indices = np.array([
-                        prepared_data.index.get_loc(t)
-                        for t in t_events
-                        if t in prepared_data.index
-                    ])
-
-                    if len(event_indices) > 0:
-                        fig_price = plot_price_with_events(
-                            prepared_data,
-                            event_indices
-                        )
-                        st.plotly_chart(fig_price, use_container_width=True)
-
-                    # 显示采样数据预览
-                    with st.expander("采样数据预览"):
-                        st.dataframe(sampled_df.head(20))
-
-                except ImportError as e:
-                    st.warning(f"CUSUM Filter 导入失败：{e}")
-                except Exception as e:
-                    st.error(f"执行失败：{str(e)}")
-                    import traceback
-                    st.code(traceback.format_exc())
-
-# 下一步操作
+        # 下一步操作
 st.markdown("---")
 col1, col2, col3 = st.columns([1, 1, 1])
 

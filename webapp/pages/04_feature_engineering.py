@@ -213,14 +213,27 @@ if step == "1. 特征配置":
 
     # CUSUM 对齐选项
     with st.expander("CUSUM 事件对齐", expanded=False):
-        align_to_cusum = st.checkbox(
-            "对齐到 CUSUM 事件时间戳",
-            value=True,
-            help="如果启用，特征将与 CUSUM 采样的事件时间戳对齐",
-        )
-        cusum_path = st.text_input(
-            "CUSUM 文件路径", value="outputs/dollar_bars/cusum_sampled_bars.csv"
-        )
+        # 优先从 Session 获取 CUSUM 数据
+        cusum_sampled_data = SessionManager.get("cusum_sampled_data")
+
+        if cusum_sampled_data is not None:
+            st.success(f"✅ 已从 Session 加载 CUSUM 数据：{len(cusum_sampled_data)} 行")
+            align_to_cusum = st.checkbox(
+                "对齐到 CUSUM 事件时间戳",
+                value=True,
+                help="如果启用，特征将与 CUSUM 采样的事件时间戳对齐",
+            )
+            cusum_path = None  # 不需要路径，使用 Session 数据
+        else:
+            st.info("Session 中没有 CUSUM 数据，可以从文件加载")
+            align_to_cusum = st.checkbox(
+                "对齐到 CUSUM 事件时间戳",
+                value=False,
+                help="如果启用，特征将与 CUSUM 采样的事件时间戳对齐",
+            )
+            cusum_path = st.text_input(
+                "CUSUM 文件路径", value="outputs/cusum_sampling/cusum_sampled.csv"
+            )
 
     # 保存配置
     if st.button("保存特征配置"):
@@ -288,12 +301,19 @@ elif step == "2. 特征计算":
             status_text.text("准备数据...")
             progress_bar.progress(10)
 
+            # 获取 CUSUM 数据：优先 Session，fallback 到文件路径
+            cusum_sampled_data = SessionManager.get("cusum_sampled_data")
             cusum_path = feature_config.get("cusum", {}).get("path", "")
             align_enabled = feature_config.get("cusum", {}).get("align_enabled", False)
 
-            if align_enabled and cusum_path:
-                if not Path(cusum_path).exists():
-                    st.warning(f"CUSUM 文件不存在：{cusum_path}，将使用连续特征模式")
+            # 验证 CUSUM 数据可用性
+            if align_enabled:
+                if cusum_sampled_data is None and cusum_path:
+                    if not Path(cusum_path).exists():
+                        st.warning(f"CUSUM 文件不存在：{cusum_path}，将使用连续特征模式")
+                        align_enabled = False
+                elif cusum_sampled_data is None and not cusum_path:
+                    st.warning("Session 中没有 CUSUM 数据且未指定文件路径，将使用连续特征模式")
                     align_enabled = False
 
             status_text.text("计算特征 (可能需要几分钟)...")
@@ -302,7 +322,8 @@ elif step == "2. 特征计算":
             features_df, metadata = compute_all_features(
                 df=df,
                 config=feature_config,
-                cusum_path=cusum_path if align_enabled else None,
+                cusum_data=cusum_sampled_data if align_enabled else None,
+                cusum_path=cusum_path if align_enabled and cusum_sampled_data is None else None,
                 align_to_cusum=align_enabled,
             )
 

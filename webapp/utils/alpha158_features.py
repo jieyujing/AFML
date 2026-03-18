@@ -29,14 +29,12 @@ DEFAULT_EMA_WINDOWS = [5, 10]
 DEFAULT_RANK_WINDOW = 20
 DEFAULT_FFD_THRES = 1e-4
 DEFAULT_FFD_D_STEP = 0.05
-DEFAULT_FFD_MIN_CORR = 0.0  # Set to 0.9-0.95 for high memory retention
 
 
 def compute_ffd_base(
     close: pd.Series,
     thres: float = DEFAULT_FFD_THRES,
     d_step: float = DEFAULT_FFD_D_STEP,
-    min_corr: float = DEFAULT_FFD_MIN_CORR,
 ) -> Tuple[pd.Series, float]:
     """
     Compute FFD base series and return optimal d*.
@@ -48,8 +46,6 @@ def compute_ffd_base(
         close: Closing price series (can be raw or log-transformed)
         thres: FFD weight truncation threshold (default: 1e-4)
         d_step: Step size for d search (default: 0.05)
-        min_corr: Minimum correlation with original series (default: 0.0, disabled.
-                  Recommended: 0.9-0.95 for high memory retention)
 
     Returns:
         tuple: (ffd_log_price Series, optimal d value)
@@ -71,7 +67,7 @@ def compute_ffd_base(
     log_price = log_price.dropna()
 
     # Find optimal d* using ADF test
-    optimal_d = optimize_d(log_price, thres=thres, d_step=d_step, min_corr=min_corr)
+    optimal_d = optimize_d(log_price, thres=thres, d_step=d_step)
 
     # Apply FFD with optimal d
     log_price_named = pd.Series(

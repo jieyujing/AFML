@@ -31,11 +31,19 @@ st.title("🏷️ 标签生成 - 三重屏障法 (TBM)")
 features = SessionManager.get('features')
 bar_data = SessionManager.get('bar_data')
 
-if bar_data is None:
+# 优先使用特征工程后的数据（AFML 标准工作流）
+if features is not None:
+    # 特征工程已完成，使用特征数据生成标签
+    label_data_source = features
+    st.info(f"当前使用特征工程数据：{len(features)} 行 × {len(features.columns)} 列")
+elif bar_data is not None:
+    # 没有特征数据，使用原始 K 线数据
+    label_data_source = bar_data
+    st.info(f"⚠️ 未检测到特征数据，使用原始 K 线数据：{len(bar_data)} 根 K 线")
+    st.warning("建议：请先完成特征工程再生成标签（AFML 标准工作流）")
+else:
     st.warning("⚠️ 请先导入数据并构建 K 线")
     st.stop()
-
-st.info(f"当前数据：{len(bar_data)} 根 K 线")
 
 # 步骤选择
 step = st.radio(
@@ -139,16 +147,25 @@ elif step == "2. 生成标签":
                 status_text.text("准备数据...")
                 progress_bar.progress(10)
 
-                # 准备数据
-                df = bar_data.copy()
+                # 使用特征工程后的数据（AFML 标准工作流）
+                if features is not None:
+                    df = features.copy()
+                    st.info("✅ 使用特征工程数据生成标签")
+                else:
+                    df = bar_data.copy()
+                    st.warning("⚠️ 使用原始 K 线数据生成标签（非标准流程）")
 
-                # 计算波动率
+                # 计算波动率（如果特征数据中没有）
                 status_text.text("计算波动率...")
                 from afmlkit.feature.core.volatility import ewms
 
-                log_ret = np.log(df['close'] / df['close'].shift(1)).values.astype(np.float64)
-                volatility = ewms(log_ret, span=50)
-                df['volatility'] = volatility
+                if 'volatility' not in df.columns:
+                    log_ret = np.log(df['close'] / df['close'].shift(1)).values.astype(np.float64)
+                    volatility = ewms(log_ret, span=50)
+                    df['volatility'] = volatility
+                else:
+                    st.info("使用已有的 volatility 特征")
+
                 progress_bar.progress(30)
 
                 # 创建 TradesData
@@ -156,7 +173,11 @@ elif step == "2. 生成标签":
                 from afmlkit.bar.data_model import TradesData
 
                 if 'timestamp' in df.columns:
+                    df_index = df['timestamp']
                     df = df.set_index('timestamp')
+                    df.index = pd.to_datetime(df_index)
+                elif hasattr(df.index, 'to_pyindex'):
+                    df.index = pd.to_datetime(df.index)
 
                 ts = df.index.astype(np.int64).values
                 px = df['close'].values.astype(np.float64)
@@ -176,9 +197,15 @@ elif step == "2. 生成标签":
                 status_text.text("实例化 TBMLabel...")
                 from afmlkit.label.kit import TBMLabel
 
+                # 确定用于 TBM 的目标列（使用 volatility 特征）
+                target_col = 'volatility' if 'volatility' in df.columns else None
+                if target_col is None:
+                    st.error("错误：缺少 volatility 列，无法生成 TBM 标签")
+                    st.stop()
+
                 tbm = TBMLabel(
                     features=df,
-                    target_ret_col='volatility',
+                    target_ret_col=target_col,
                     min_ret=label_config.get('min_return', 0.0),
                     horizontal_barriers=(
                         label_config.get('profit_barrier', 1.0),

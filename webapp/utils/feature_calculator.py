@@ -139,9 +139,30 @@ def compute_fracdiff_features(
 
 
 def align_features_with_cusum(
-    features_df: pd.DataFrame, cusum_path: str, label_cols: List[str] = None
+    features_df: pd.DataFrame,
+    cusum_data: Optional[pd.DataFrame] = None,
+    cusum_path: Optional[str] = None,
+    label_cols: List[str] = None
 ) -> pd.DataFrame:
-    labels_df = pd.read_csv(cusum_path, index_col=0, parse_dates=True)
+    """将特征与 CUSUM 采样数据对齐
+
+    Args:
+        features_df: 特征 DataFrame
+        cusum_data: CUSUM 采样数据 DataFrame（优先使用）
+        cusum_path: CUSUM 采样数据文件路径（fallback）
+        label_cols: 需要保留的标签列
+
+    Returns:
+        对齐后的 DataFrame
+    """
+    # 优先使用 DataFrame 输入，fallback 到文件路径
+    if cusum_data is not None:
+        labels_df = cusum_data.copy()
+    elif cusum_path is not None:
+        labels_df = pd.read_csv(cusum_path, index_col=0, parse_dates=True)
+    else:
+        raise ValueError("必须提供 cusum_data 或 cusum_path")
+
     labels_df = labels_df.sort_index()
 
     if label_cols is None:
@@ -206,9 +227,22 @@ def purge_nan_rows(df: pd.DataFrame) -> pd.DataFrame:
 def compute_all_features(
     df: pd.DataFrame,
     config: Optional[Dict[str, Any]] = None,
+    cusum_data: Optional[pd.DataFrame] = None,
     cusum_path: Optional[str] = None,
     align_to_cusum: bool = False,
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """计算所有特征
+
+    Args:
+        df: 输入数据 DataFrame
+        config: 特征配置
+        cusum_data: CUSUM 采样数据 DataFrame（优先使用）
+        cusum_path: CUSUM 采样数据文件路径（fallback，向后兼容）
+        align_to_cusum: 是否对齐到 CUSUM 数据
+
+    Returns:
+        Tuple[特征 DataFrame, 元数据字典]
+    """
     config = config or {}
     metadata = {}
 
@@ -250,9 +284,12 @@ def compute_all_features(
         metadata["alpha158_columns"] = alpha158_df.columns.tolist()
         metadata["alpha158_optimal_d"] = alpha158_meta.get("optimal_d")
 
-    if align_to_cusum and cusum_path:
-        df = align_features_with_cusum(df, cusum_path)
-        metadata["aligned_to_cusum"] = True
+    if align_to_cusum:
+        if cusum_data is not None or cusum_path is not None:
+            df = align_features_with_cusum(df, cusum_data=cusum_data, cusum_path=cusum_path)
+            metadata["aligned_to_cusum"] = True
+        else:
+            metadata["aligned_to_cusum"] = False
     else:
         metadata["aligned_to_cusum"] = False
 
