@@ -55,7 +55,10 @@ class SessionManager:
         'current_step', 'is_processing', 'last_updated',
         'experiment_name', 'experiment_notes',
         'iid_results', 'iid_score_df', 'best_freq', 'generation_time',
-        'cusum_config', 'cusum_sampled_data', 'cusum_events', 'cusum_state'
+        'cusum_config', 'cusum_sampled_data', 'cusum_events', 'cusum_state',
+        # Primary Model 相关
+        'primary_model_config', 'primary_model_result',
+        'primary_model_signals', 'primary_model_labels'
     ]
 
     @staticmethod
@@ -67,7 +70,8 @@ class SessionManager:
                     st.session_state[key] = {}
                 elif key in ['bar_config', 'feature_config', 'label_config',
                             'model_config', 'backtest_config', 'model_results',
-                            'backtest_results', 'feature_metadata', 'cusum_config']:
+                            'backtest_results', 'feature_metadata', 'cusum_config',
+                            'primary_model_config']:
                     st.session_state[key] = {}
                 elif key == 'current_step':
                     st.session_state[key] = 0
@@ -127,7 +131,8 @@ class SessionManager:
                 st.session_state[key] = {}
             elif key in ['bar_config', 'feature_config', 'label_config',
                         'model_config', 'backtest_config', 'model_results',
-                        'backtest_results', 'feature_metadata', 'cusum_config']:
+                        'backtest_results', 'feature_metadata', 'cusum_config',
+                        'primary_model_config']:
                 st.session_state[key] = {}
             elif key == 'current_step':
                 st.session_state[key] = 0
