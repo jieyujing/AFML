@@ -138,87 +138,6 @@ def compute_fracdiff_features(
     return df, optimal_d
 
 
-def align_features_with_cusum(
-    features_df: pd.DataFrame,
-    cusum_data: Optional[pd.DataFrame] = None,
-    cusum_path: Optional[str] = None,
-    label_cols: List[str] = None
-) -> pd.DataFrame:
-    """将特征与 CUSUM 采样数据对齐
-
-    Args:
-        features_df: 特征 DataFrame
-        cusum_data: CUSUM 采样数据 DataFrame（优先使用）
-        cusum_path: CUSUM 采样数据文件路径（fallback）
-        label_cols: 需要保留的标签列
-
-    Returns:
-        对齐后的 DataFrame
-    """
-    # 优先使用 DataFrame 输入，fallback 到文件路径
-    if cusum_data is not None:
-        labels_df = cusum_data.copy()
-    elif cusum_path is not None:
-        labels_df = pd.read_csv(cusum_path, index_col=0, parse_dates=True)
-    else:
-        raise ValueError("必须提供 cusum_data 或 cusum_path")
-
-    labels_df = labels_df.sort_index()
-
-    if label_cols is None:
-        label_cols = ["bin", "t1", "avg_uniqueness", "return_attribution"]
-        label_cols = [c for c in label_cols if c in labels_df.columns]
-
-    # Try exact index intersection first
-    common_idx = features_df.index.intersection(labels_df.index)
-
-    # If no exact match, try date-based matching (truncate time component)
-    if len(common_idx) == 0:
-        # Create date-only index for matching
-        features_dates = features_df.index.normalize()
-        labels_dates = labels_df.index.normalize()
-
-        # Find matching dates
-        common_dates = features_dates.intersection(labels_dates)
-
-        if len(common_dates) > 0:
-            # Map back to original indices
-            features_mask = features_dates.isin(common_dates)
-            labels_mask = labels_dates.isin(common_dates)
-
-            features_filtered = features_df[features_mask]
-            labels_filtered = labels_df[labels_mask]
-
-            # Use merge_asof for time-based alignment
-            features_reset = features_filtered.reset_index()
-            labels_reset = labels_filtered.reset_index()
-
-            # Rename timestamp column for merge_asof
-            features_reset = features_reset.rename(columns={'index': 'timestamp'})
-            labels_reset = labels_reset.rename(columns={'index': 'timestamp'})
-
-            # Merge on closest timestamp (backward direction: use CUSUM labels for previous event)
-            aligned = pd.merge_asof(
-                features_reset.sort_values('timestamp'),
-                labels_reset.sort_values('timestamp'),
-                on='timestamp',
-                direction='nearest',
-                tolerance=pd.Timedelta('1D')
-            )
-
-            aligned = aligned.set_index('timestamp')
-            return aligned
-        else:
-            # No common dates at all - return empty DataFrame with warning
-            return features_df.iloc[:0].copy()
-
-    # Original exact match logic
-    aligned_features = features_df.loc[common_idx].copy()
-    aligned = aligned_features.join(labels_df[label_cols], how="inner")
-
-    return aligned
-
-
 def purge_nan_rows(df: pd.DataFrame) -> pd.DataFrame:
     """Drop rows with NaN values."""
     return df.dropna()
@@ -227,18 +146,12 @@ def purge_nan_rows(df: pd.DataFrame) -> pd.DataFrame:
 def compute_all_features(
     df: pd.DataFrame,
     config: Optional[Dict[str, Any]] = None,
-    cusum_data: Optional[pd.DataFrame] = None,
-    cusum_path: Optional[str] = None,
-    align_to_cusum: bool = False,
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """计算所有特征
 
     Args:
         df: 输入数据 DataFrame
         config: 特征配置
-        cusum_data: CUSUM 采样数据 DataFrame（优先使用）
-        cusum_path: CUSUM 采样数据文件路径（fallback，向后兼容）
-        align_to_cusum: 是否对齐到 CUSUM 数据
 
     Returns:
         Tuple[特征 DataFrame, 元数据字典]
@@ -283,15 +196,6 @@ def compute_all_features(
         metadata["alpha158_enabled"] = True
         metadata["alpha158_columns"] = alpha158_df.columns.tolist()
         metadata["alpha158_optimal_d"] = alpha158_meta.get("optimal_d")
-
-    if align_to_cusum:
-        if cusum_data is not None or cusum_path is not None:
-            df = align_features_with_cusum(df, cusum_data=cusum_data, cusum_path=cusum_path)
-            metadata["aligned_to_cusum"] = True
-        else:
-            metadata["aligned_to_cusum"] = False
-    else:
-        metadata["aligned_to_cusum"] = False
 
     n_before = len(df)
     df = purge_nan_rows(df)

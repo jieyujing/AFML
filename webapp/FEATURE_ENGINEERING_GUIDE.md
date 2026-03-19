@@ -71,16 +71,9 @@ alpha158:
 
 1. **数据准备**: 确保已生成 Dollar Bars 数据
 2. **特征配置**: 选择特征类别和参数
-3. **CUSUM 对齐**: 可选，将特征对齐到事件时间戳
-4. **特征计算**: 执行计算并查看摘要
-5. **特征预览**: 查看统计、相关性、分布
-6. **特征导出**: 导出为 CSV/Parquet/HDF5
-
-## CUSUM 对齐
-
-启用 CUSUM 对齐后，特征将与 `outputs/dollar_bars/cusum_sampled_bars.csv` 中的事件时间戳对齐。
-
-如果 CUSUM 文件不存在，系统将自动降级为连续特征模式。
+3. **特征计算**: 执行计算并查看摘要
+4. **特征预览**: 查看统计、相关性、分布
+5. **特征导出**: 导出为 CSV/Parquet/HDF5
 
 ## 配置示例
 
@@ -94,9 +87,6 @@ fractional_diff:
   enabled: true
   threshold: 0.0001
   d_step: 0.05
-cusum:
-  align_enabled: true
-  path: outputs/dollar_bars/cusum_sampled_bars.csv
 ```
 
 ## API 参考
@@ -107,8 +97,6 @@ cusum:
 def compute_all_features(
     df: pd.DataFrame,
     config: Optional[Dict[str, Any]] = None,
-    cusum_path: Optional[str] = None,
-    align_to_cusum: bool = False
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """
     计算所有特征的入口函数
@@ -116,8 +104,6 @@ def compute_all_features(
     Args:
         df: 输入 DataFrame (必须包含 close 列，可选 high/low/volume)
         config: 特征配置字典
-        cusum_path: CUSUM 采样文件路径（如果 align_to_cusum=True）
-        align_to_cusum: 是否对齐到 CUSUM 事件
 
     Returns:
         tuple: (特征矩阵 DataFrame, 元数据字典)
@@ -127,7 +113,6 @@ def compute_all_features(
 ### 元数据字段
 
 - `optimal_d`: FFD 最优参数 d
-- `aligned_to_cusum`: 是否对齐到 CUSUM 事件
 - `rows_before_clean`: 清理前的行数
 - `rows_after_clean`: 清理后的行数
 - `rows_dropped`: 丢弃的行数
