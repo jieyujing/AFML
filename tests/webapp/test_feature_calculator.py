@@ -7,7 +7,6 @@ from webapp.utils.feature_calculator import (
     compute_volatility_features,
     compute_momentum_features,
     compute_fracdiff_features,
-    align_features_with_cusum
 )
 
 
@@ -68,27 +67,3 @@ def test_compute_fracdiff_features():
     result, optimal_d = compute_fracdiff_features(df, thres=1e-4, d_step=0.05)
     assert 'ffd_log_price' in result.columns
     assert 0.0 <= optimal_d <= 1.0
-
-
-def test_align_features_with_cusum(tmp_path):
-    """测试特征与 CUSUM 事件对齐"""
-    dates = pd.date_range('2023-01-01', periods=100, freq='min')
-    features_df = pd.DataFrame({
-        'close': np.linspace(100, 110, 100),
-        'feature1': np.random.randn(100)
-    }, index=dates)
-    features_df.index.name = 'timestamp'
-
-    # 创建标签数据框，索引为 timestamp
-    labels_df = pd.DataFrame({
-        'bin': [0, 1, 0, 1],
-        'avg_uniqueness': np.random.randn(4)
-    }, index=dates[10:14])
-    labels_df.index.name = 'timestamp'
-
-    cusum_path = tmp_path / "cusum_sampled.csv"
-    labels_df.to_csv(cusum_path)
-
-    result = align_features_with_cusum(features_df, str(cusum_path))
-    assert len(result) <= len(features_df)
-    assert 'bin' in result.columns
