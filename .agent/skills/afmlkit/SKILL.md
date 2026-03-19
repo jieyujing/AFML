@@ -1,6 +1,6 @@
 ---
 name: afmlkit
-description: Local codebase analysis for afmlkit — 基于 Advances in Financial Machine Learning 方法论的高性能金融机器学习工具包，支持 K 线构建、特征工程、Trend Scan 主模型、三重屏障标签、Meta-Labeling、采样过滤、样本权重计算、特征聚类与重要性评估（Clustered MDA）、以及带 Purge/Embargo 的交叉验证。当需要使用或修改 afmlkit 代码库、构建 AFML 量化流程（事件驱动采样 → Trend Scan 主模型 → 三重屏障 Meta-Labeling → 样本权重 → 特征重要性分析 → 模型训练）、或理解核心类 API 时使用此 skill。
+description: Local codebase analysis for afmlkit — 基于 Advances in Financial Machine Learning 方法论的高性能金融机器学习工具包，支持 K 线构建、特征工程、Trend Scan 主模型、三重屏障标签、Meta-Labeling、采样过滤、样本权重计算、特征聚类与重要性评估（Clustered MDA）、以及带 Purge/Embargo 的交叉验证。当需要使用或修改 afmlkit 代码库、构建 AFML 量化流程（事件驱动采样 → Trend Scan 主模型 → 三重屏障 Meta-Labeling → 样本权重 → 特征重要性分析 → 模型训练）、或理解核心类 API 时使用此 skill。For methodology and validation framework, see afml skill.
 ---
 
 # AFMLKit
