@@ -26,11 +26,6 @@ pytest tests/bars/test_comp_ohlcv.py::test_comp_ohlcv -v
 
 # Lint 和格式化
 flake8 afmlkit/ && black afmlkit/
-
-# 启动 Web UI
-streamlit run webapp/app.py
-# 或
-python run_webapp.py
 ```
 
 ## Numba JIT 注意事项
@@ -70,21 +65,6 @@ afmlkit/
 ├── sampling/      # 采样过滤器（CUSUM filter）
 └── utils/         # 工具函数
 ```
-
-### Web UI (`webapp/`)
-
-基于 Streamlit 的交互式研究界面，遵循数据管道模式：
-
-```
-数据导入 → K 线构建 → 特征工程 → 标签生成 → 特征分析 → 模型训练 → 回测评估
-```
-
-关键文件：
-- `app.py` - 主入口
-- `session.py` - 会话状态管理（跨页面数据流）
-- `pages/` - 各功能页面
-- `components/` - 可复用 UI 组件
-- `utils/` - 工具函数
 
 ## 代码风格
 
