@@ -28,6 +28,7 @@ EWMA_SPAN = 20              # 动态阈值 EWMA 平滑周期
 
 # CUSUM Filter
 CUSUM_THRESHOLD_MULT = 2.0  # 阈值 = sigma * multiplier
+VOL_SPAN = 20               # 波动率 EWMA 平滑周期
 
 # Trend Scanning
 L_WINDOWS = [10, 20, 30, 50, 100]  # 候选窗口长度
@@ -36,6 +37,8 @@ L_WINDOWS = [10, 20, 30, 50, 100]  # 候选窗口长度
 STOP_LOSS_MULT = 1.5        # 止损 = volatility * STOP_LOSS_MULT
 TAKE_PROFIT_MULT = 1.5      # 止盈 = volatility * TAKE_PROFIT_MULT
 MAX_HOLD_BARS = 50          # 最大持仓 Bar 数
+MIN_CLOSE_TIME_SEC = 0.0    # 最小持仓时间（Bar 数据设为 0）
+MIN_RET = 0.0               # 最小收益率阈值（不过滤）
 ```
 
 ### Section 2: Data Loading
@@ -64,7 +67,7 @@ MAX_HOLD_BARS = 50          # 最大持仓 Bar 数
 
 **步骤**:
 1. 计算 Dollar Bars 的 log returns
-2. 计算滚动波动率（EWMA）
+2. 计算滚动波动率（EWMA，span=VOL_SPAN）
 3. 设置动态阈值 = volatility * CUSUM_THRESHOLD_MULT
 4. 应用 CUSUM filter 获取事件索引
 
@@ -92,11 +95,15 @@ MAX_HOLD_BARS = 50          # 最大持仓 Bar 数
 
 **步骤**:
 1. 计算每个事件点的波动率 target（用于动态设置止盈止损宽度）
-2. 准备参数：
+2. 计算平均 Bar 持续时间（秒）
+3. 准备参数：
    - `horizontal_barriers = (STOP_LOSS_MULT, TAKE_PROFIT_MULT)`
-   - `vertical_barrier = MAX_HOLD_BARS * bar_duration_seconds`
-3. 调用 `triple_barrier()` 获取标签
-4. 输出：labels, touch indices, returns
+   - `vertical_barrier = MAX_HOLD_BARS * avg_bar_duration_seconds`
+   - `min_close_time_sec = MIN_CLOSE_TIME_SEC`
+   - `min_ret = MIN_RET`
+   - `side = None`（用于 side prediction 模式）
+4. 调用 `triple_barrier()` 获取标签
+5. 输出：labels, touch indices, returns
 
 **验证**:
 - 打印标签分布 (+1/-1/0)
@@ -154,17 +161,57 @@ Notebook 最后输出汇总表格：
 
 ### Dollar Bar from 1min OHLCV
 
-由于原始数据是 1 分钟 K 线而非 Tick 数据，需要特殊处理：
+由于原始数据是 1 分钟 K 线而非 Tick 数据，需要特殊处理。使用 `TradesData` 类的正确方式：
 
 ```python
+from afmlkit.bar.data_model import TradesData
+
 # 将每根 1min K 线视为一个 "tick"
 # 成交额 = close * volume
-pseudo_ticks = pd.DataFrame({
-    'timestamp': df.index.astype(np.int64),
-    'price': df['close'].values,
-    'amount': df['volume'].values
-})
-trades_data = TradesData(pseudo_ticks)
+timestamps = df.index.astype(np.int64).values  # nanoseconds
+prices = df['close'].values
+volumes = df['volume'].values
+
+# 创建 TradesData 实例
+trades_data = TradesData(
+    ts=timestamps,
+    px=prices,
+    qty=volumes
+)
+```
+
+### Triple Barrier Method 调用
+
+`triple_barrier` 函数的完整签名和参数：
+
+```python
+from afmlkit.label.tbm import triple_barrier
+
+labels, touch_idxs, rets, max_rb_ratios = triple_barrier(
+    timestamps=dollar_bars.index.astype(np.int64).values,  # Bar 时间戳（纳秒）
+    close=dollar_bars['close'].values,                      # 收盘价序列
+    event_idxs=event_indices,                                # 事件在 close 数组中的位置索引
+    targets=volatility_targets,                              # 每个事件的波动率目标
+    horizontal_barriers=(STOP_LOSS_MULT, TAKE_PROFIT_MULT), # (止损倍数, 止盈倍数)
+    vertical_barrier=MAX_HOLD_BARS * avg_bar_duration_sec,  # 最大持仓时间（秒）
+    min_close_time_sec=MIN_CLOSE_TIME_SEC,                  # 最小持仓时间
+    side=None,                                               # None = side prediction 模式
+    min_ret=MIN_RET                                          # 最小收益率阈值
+)
+```
+
+### 计算平均 Bar 持续时间
+
+Dollar Bars 的持续时间不固定，需要从数据计算：
+
+```python
+# 方法 1：从实际 Bar 时间戳计算
+bar_timestamps = dollar_bars.index.astype(np.int64).values
+avg_bar_duration_sec = np.mean(np.diff(bar_timestamps)) / 1e9  # 纳秒转秒
+
+# 方法 2：基于交易日估算（备用）
+# 假设每天交易 6.5 小时，目标 50 根 Bar
+# avg_bar_duration_sec = 6.5 * 3600 / 50 ≈ 468 秒
 ```
 
 ### Volatility Estimation
@@ -173,7 +220,7 @@ trades_data = TradesData(pseudo_ticks)
 
 ```python
 returns = np.log(close).diff()
-volatility = returns.ewm(span=20).std()
+volatility = returns.ewm(span=VOL_SPAN).std()
 ```
 
 ### Annualization Factor
