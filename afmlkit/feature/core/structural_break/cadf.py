@@ -78,6 +78,8 @@ def cadf_test(
 
     if sadf_values is None:
         prices_arr = np.asarray(prices, dtype=np.float64)
+        if np.any(prices_arr <= 0):
+            raise ValueError("Price values must be positive (greater than 0)")
         log_prices = np.log(prices_arr)
         sadf_arr = _sadf_core(log_prices, min_window, max_window, max_lag, True)
     else:

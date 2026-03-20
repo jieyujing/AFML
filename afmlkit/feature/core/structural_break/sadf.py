@@ -84,6 +84,8 @@ def sadf_test(
     index = prices.index if is_pandas else None
 
     prices_arr = np.asarray(prices, dtype=np.float64)
+    if np.any(prices_arr <= 0):
+        raise ValueError("Price values must be positive (greater than 0)")
 
     if use_log:
         prices_arr = np.log(prices_arr)
