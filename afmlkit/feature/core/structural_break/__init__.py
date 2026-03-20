@@ -1,32 +1,44 @@
 """
-Structural break detection features for AFMLKit.
+Structural break features for AFMLKit.
 
-This module implements various structural break tests based on the
-Advances in Financial Machine Learning methodology:
+Detects regime changes, bubbles, and trend mutations in financial time series.
 
-- ADF (Augmented Dickey-Fuller) test
-- SADF (Supremum ADF) test for bubble detection
-- CUSUM structural break detection
+Features:
+- ADF: Augmented Dickey-Fuller base test
+- SADF: Supremum ADF for bubble detection
+- QADF: Quantile ADF for noise reduction
+- CADF: Conditional ADF for bubble strength quantification
+- SMT: Sub/Super-Martingale tests for trend detection
+- CUSUM: Chu-Stinchcombe-White CUSUM test
 
 Reference: AFML Chapter 17
 """
 
+# ADF base
 from afmlkit.feature.core.structural_break.adf import (
     adf_test,
     adf_test_rolling,
 )
+
+# SADF
 from afmlkit.feature.core.structural_break.sadf import (
     sadf_test,
     SADFTest,
 )
+
+# QADF
 from afmlkit.feature.core.structural_break.qadf import (
     qadf_test,
     QADFTest,
 )
+
+# CADF
 from afmlkit.feature.core.structural_break.cadf import (
     cadf_test,
     CADFTest,
 )
+
+# SMT (Sub/Super-Martingale)
 from afmlkit.feature.core.structural_break.smt import (
     sub_martingale_test,
     super_martingale_test,
@@ -36,28 +48,35 @@ from afmlkit.feature.core.structural_break.smt import (
     MartingaleTest,
 )
 
+# CUSUM
+from afmlkit.feature.core.structural_break.cusum import (
+    cusum_test_developing,
+    cusum_test_last,
+    cusum_test_rolling,
+)
+
 __all__ = [
-    # ADF test
+    # ADF
     'adf_test',
     'adf_test_rolling',
-    # SADF test
+    # SADF
     'sadf_test',
     'SADFTest',
-    # QADF test
+    # QADF
     'qadf_test',
     'QADFTest',
-    # CADF test
+    # CADF
     'cadf_test',
     'CADFTest',
-    # CUSUM
-    'cusum_test_developing',
-    'cusum_test_last',
-    'cusum_test_rolling',
-    # SMT (Sub/Super-Martingale tests)
+    # SMT
     'sub_martingale_test',
     'super_martingale_test',
     'martingale_test',
     'SubMartingaleTest',
     'SuperMartingaleTest',
     'MartingaleTest',
+    # CUSUM
+    'cusum_test_developing',
+    'cusum_test_last',
+    'cusum_test_rolling',
 ]
