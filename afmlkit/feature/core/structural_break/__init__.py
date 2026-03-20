@@ -19,10 +19,9 @@ from afmlkit.feature.core.structural_break.sadf import (
     sadf_test,
     SADFTest,
 )
-from afmlkit.feature.core.structural_break.cusum import (
-    cusum_test_developing,
-    cusum_test_last,
-    cusum_test_rolling,
+from afmlkit.feature.core.structural_break.qadf import (
+    qadf_test,
+    QADFTest,
 )
 
 __all__ = [
@@ -32,6 +31,9 @@ __all__ = [
     # SADF test
     'sadf_test',
     'SADFTest',
+    # QADF test
+    'qadf_test',
+    'QADFTest',
     # CUSUM
     'cusum_test_developing',
     'cusum_test_last',
