@@ -23,6 +23,10 @@ from afmlkit.feature.core.structural_break.qadf import (
     qadf_test,
     QADFTest,
 )
+from afmlkit.feature.core.structural_break.cadf import (
+    cadf_test,
+    CADFTest,
+)
 
 __all__ = [
     # ADF test
@@ -34,6 +38,9 @@ __all__ = [
     # QADF test
     'qadf_test',
     'QADFTest',
+    # CADF test
+    'cadf_test',
+    'CADFTest',
     # CUSUM
     'cusum_test_developing',
     'cusum_test_last',
