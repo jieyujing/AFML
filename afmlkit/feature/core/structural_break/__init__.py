@@ -27,6 +27,14 @@ from afmlkit.feature.core.structural_break.cadf import (
     cadf_test,
     CADFTest,
 )
+from afmlkit.feature.core.structural_break.smt import (
+    sub_martingale_test,
+    super_martingale_test,
+    martingale_test,
+    SubMartingaleTest,
+    SuperMartingaleTest,
+    MartingaleTest,
+)
 
 __all__ = [
     # ADF test
@@ -45,4 +53,11 @@ __all__ = [
     'cusum_test_developing',
     'cusum_test_last',
     'cusum_test_rolling',
+    # SMT (Sub/Super-Martingale tests)
+    'sub_martingale_test',
+    'super_martingale_test',
+    'martingale_test',
+    'SubMartingaleTest',
+    'SuperMartingaleTest',
+    'MartingaleTest',
 ]
