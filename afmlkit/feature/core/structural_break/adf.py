@@ -189,16 +189,18 @@ def _adf_regression_core(
 def adf_test(
     y: Union[pd.Series, NDArray[np.float64]],
     max_lag: int = 12,
-    trend: bool = True,
-    use_numba: bool = True
+    trend: bool = True
 ) -> Tuple[float, float, int]:
     """
     Single ADF test on a price series.
 
+    **Note**: Currently only implements basic DF test (lag=0). Full ADF with
+    automatic lag selection is a future enhancement. The max_lag parameter
+    is accepted for API consistency but is not used.
+
     :param y: Price series (raw prices, not returns)
-    :param max_lag: Maximum lag for augmented DF (default 12)
+    :param max_lag: Maximum lag for augmented DF (default 12, not currently used)
     :param trend: Include time trend in regression
-    :param use_numba: Use Numba-accelerated implementation
     :returns: (t_statistic, p_value, selected_lag)
     """
     if isinstance(y, pd.Series):
@@ -216,17 +218,18 @@ def adf_test_rolling(
     y: Union[pd.Series, NDArray[np.float64]],
     window: int,
     max_lag: int = 12,
-    trend: bool = True,
-    use_numba: bool = True
+    trend: bool = True
 ) -> NDArray[np.float64]:
     """
     Rolling ADF test statistic calculation.
 
+    **Note**: Currently only implements basic DF test (lag=0). The max_lag
+    parameter is accepted for API consistency but is not used.
+
     :param y: Price series
     :param window: Rolling window size
-    :param max_lag: Maximum lag for ADF
+    :param max_lag: Maximum lag for ADF (default 12, not currently used)
     :param trend: Include time trend
-    :param use_numba: Use Numba backend
     :returns: Array of t-statistics (NaN for first window-1 observations)
     """
     if isinstance(y, pd.Series):

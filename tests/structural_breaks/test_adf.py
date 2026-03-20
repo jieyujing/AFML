@@ -45,7 +45,7 @@ def test_adf_test_basic():
     np.random.seed(42)
     # Use random walk (unit root) as test case
     y = np.cumsum(np.random.randn(50)) + 100
-    t_stat, p_value, lag = adf_test(y, max_lag=4, trend=True, use_numba=True)
+    t_stat, p_value, lag = adf_test(y, max_lag=4, trend=True)
     assert isinstance(t_stat, float)
     assert isinstance(p_value, float)
     assert isinstance(lag, int)

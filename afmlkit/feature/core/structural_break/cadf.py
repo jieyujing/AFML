@@ -58,8 +58,7 @@ def cadf_test(
     max_window: int = 100,
     quantile_window: int = 20,
     quantile: float = 0.95,
-    max_lag: int = 0,
-    use_numba: bool = True
+    max_lag: int = 0
 ) -> Union[pd.Series, NDArray[np.float64]]:
     """
     CADF test - conditional expectation of ADF given threshold exceedance.
@@ -136,6 +135,8 @@ class CADFTest(MISOTransform):
             )
         else:
             prices = x[self.requires[0]].values
+            if np.any(prices <= 0):
+                raise ValueError("Price values must be positive (greater than 0)")
             result = cadf_test(
                 prices,
                 min_window=self.min_window,

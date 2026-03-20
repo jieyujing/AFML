@@ -80,16 +80,17 @@ def _super_martingale_core(
 def sub_martingale_test(
     prices: Union[pd.Series, NDArray[np.float64]],
     decay: float = 0.95,
-    window: Optional[int] = None,
-    use_numba: bool = True
+    window: Optional[int] = None
 ) -> Union[pd.Series, NDArray[np.float64]]:
     """
     Sub-martingale test for uptrend detection.
 
+    **Note**: The first element is always NaN because the first return cannot
+    be computed (no previous price point).
+
     :param prices: Price series
     :param decay: Exponential decay factor (default 0.95)
     :param window: Rolling window (None for expanding)
-    :param use_numba: Use Numba backend
     :returns: Sub-martingale statistics
     """
     is_pandas = isinstance(prices, pd.Series)
@@ -108,16 +109,17 @@ def sub_martingale_test(
 def super_martingale_test(
     prices: Union[pd.Series, NDArray[np.float64]],
     decay: float = 0.95,
-    window: Optional[int] = None,
-    use_numba: bool = True
+    window: Optional[int] = None
 ) -> Union[pd.Series, NDArray[np.float64]]:
     """
     Super-martingale test for downtrend detection.
 
+    **Note**: The first element is always NaN because the first return cannot
+    be computed (no previous price point).
+
     :param prices: Price series
     :param decay: Exponential decay factor (default 0.95)
     :param window: Rolling window (None for expanding)
-    :param use_numba: Use Numba backend
     :returns: Super-martingale statistics
     """
     is_pandas = isinstance(prices, pd.Series)
@@ -136,22 +138,27 @@ def super_martingale_test(
 def martingale_test(
     prices: Union[pd.Series, NDArray[np.float64]],
     decay: float = 0.95,
-    window: Optional[int] = None,
-    use_numba: bool = True
+    window: Optional[int] = None
 ) -> Tuple[Union[pd.Series, NDArray], Union[pd.Series, NDArray]]:
     """
     Combined sub and super-martingale tests.
 
+    **Note**: The first element of both results is always NaN because the
+    first return cannot be computed (no previous price point).
+
     :returns: Tuple of (sub_martingale, super_martingale)
     """
-    sub = sub_martingale_test(prices, decay, window, use_numba)
-    sup = super_martingale_test(prices, decay, window, use_numba)
+    sub = sub_martingale_test(prices, decay, window)
+    sup = super_martingale_test(prices, decay, window)
     return sub, sup
 
 
 class SubMartingaleTest(SISOTransform):
     """
     Sub-martingale Transform for uptrend detection.
+
+    **Note**: The first output value is always NaN because the first return
+    cannot be computed (no previous price point).
 
     :param decay: Decay factor (default 0.95)
     :param window: Window size (None for expanding)
@@ -165,6 +172,8 @@ class SubMartingaleTest(SISOTransform):
 
     def _pd(self, x: pd.DataFrame) -> pd.Series:
         prices = x[self.requires[0]].values
+        if np.any(prices <= 0):
+            raise ValueError("Price values must be positive (greater than 0)")
         window_size = self.window if self.window is not None else -1
         result = _sub_martingale_core(prices, self.decay, window_size)
         return pd.Series(result, index=x.index, name=self.output_name)
@@ -176,6 +185,9 @@ class SubMartingaleTest(SISOTransform):
 class SuperMartingaleTest(SISOTransform):
     """
     Super-martingale Transform for downtrend detection.
+
+    **Note**: The first output value is always NaN because the first return
+    cannot be computed (no previous price point).
 
     :param decay: Decay factor (default 0.95)
     :param window: Window size (None for expanding)
@@ -189,6 +201,8 @@ class SuperMartingaleTest(SISOTransform):
 
     def _pd(self, x: pd.DataFrame) -> pd.Series:
         prices = x[self.requires[0]].values
+        if np.any(prices <= 0):
+            raise ValueError("Price values must be positive (greater than 0)")
         window_size = self.window if self.window is not None else -1
         result = _super_martingale_core(prices, self.decay, window_size)
         return pd.Series(result, index=x.index, name=self.output_name)
@@ -203,6 +217,9 @@ class MartingaleTest(SIMOTransform):
 
     Produces two columns: ['{col}_sub_martingale', '{col}_super_martingale']
 
+    **Note**: The first output value of both series is always NaN because the
+    first return cannot be computed (no previous price point).
+
     :param decay: Decay factor (default 0.95)
     :param window: Window size (None for expanding)
     :param input_col: Price column (default 'close')
@@ -215,6 +232,8 @@ class MartingaleTest(SIMOTransform):
 
     def _pd(self, x: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
         prices = x[self.requires[0]].values
+        if np.any(prices <= 0):
+            raise ValueError("Price values must be positive (greater than 0)")
         window_size = self.window if self.window is not None else -1
 
         sub = _sub_martingale_core(prices, self.decay, window_size)

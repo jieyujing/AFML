@@ -41,8 +41,7 @@ def _rolling_quantile_core(
 def qadf_test(
     sadf_values: Union[pd.Series, NDArray[np.float64]],
     window: int = 20,
-    quantile: float = 0.95,
-    use_numba: bool = True
+    quantile: float = 0.95
 ) -> Union[pd.Series, NDArray[np.float64]]:
     """
     QADF test - rolling quantile of SADF values.
@@ -50,7 +49,6 @@ def qadf_test(
     :param sadf_values: SADF statistic series
     :param window: Rolling window for quantile (default 20)
     :param quantile: Quantile level (default 0.95)
-    :param use_numba: Use Numba backend (default True)
     :returns: QADF series
     """
     is_pandas = isinstance(sadf_values, pd.Series)
@@ -69,6 +67,19 @@ class QADFTest(MISOTransform):
     QADF Transform for FeatureKit pipeline.
 
     Computes rolling quantile of SADF values for smoother bubble detection.
+
+    **Important**: This transform requires a pre-computed SADF column. The input
+    DataFrame must contain a 'sadf' column (or the column specified via input_cols).
+
+    Typical pipeline: SADF -> QADF -> CADF
+
+    Example:
+        >>> # First compute SADF
+        >>> sadf = SADFTest(input_col='close')
+        >>> df['sadf'] = sadf.fit_transform(df)
+        >>> # Then compute QADF from SADF
+        >>> qadf = QADFTest(window=20, quantile=0.95)
+        >>> df['qadf'] = qadf.fit_transform(df)
 
     :param window: Rolling window for quantile (default 20)
     :param quantile: Quantile level (default 0.95)

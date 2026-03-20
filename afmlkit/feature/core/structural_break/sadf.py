@@ -67,8 +67,7 @@ def sadf_test(
     max_window: int = 100,
     max_lag: int = 0,
     trend: bool = True,
-    use_log: bool = True,
-    use_numba: bool = True
+    use_log: bool = True
 ) -> Union[pd.Series, NDArray[np.float64]]:
     """
     SADF test for bubble detection.
@@ -79,7 +78,6 @@ def sadf_test(
     :param max_lag: ADF lag order (default 0)
     :param trend: Include time trend (default True)
     :param use_log: Apply log transform to prices (default True, recommended)
-    :param use_numba: Use Numba backend (default True)
     :returns: SADF statistic series
     """
     is_pandas = isinstance(prices, pd.Series)
@@ -131,6 +129,8 @@ class SADFTest(SISOTransform):
 
     def _pd(self, x: pd.DataFrame) -> pd.Series:
         prices = x[self.requires[0]].values
+        if np.any(prices <= 0):
+            raise ValueError("Price values must be positive (greater than 0)")
         if self.use_log:
             prices = np.log(prices)
 
