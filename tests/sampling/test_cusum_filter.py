@@ -6,17 +6,19 @@ from afmlkit.sampling.filters import cusum_filter
 
 def test_cusum_filter_no_events():
     """
-    Test the cusum_filter function on a time series where no events are expected.
+    Test the cusum_filter function on a diff series where no events are expected.
+
+    Note: cusum_filter expects diff_time_series (e.g., returns), not raw prices.
     """
-    # Constant price series
-    prices = np.array([100, 100, 100, 100, 100], dtype=np.float64)
-    threshold = np.array([0.5], dtype=np.float64)  # High threshold to prevent events
+    # Zero returns series - no drift, should not trigger events
+    returns = np.array([0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float64)
+    threshold = np.array([0.5], dtype=np.float64)  # High threshold
 
     # Expected no events
     expected_event_indices = np.array([], dtype=np.int64)
 
     # Call the cusum_filter function
-    event_indices = cusum_filter(prices, threshold)
+    event_indices = cusum_filter(returns, threshold)
 
     # Check that no events are detected
     np.testing.assert_array_equal(event_indices, expected_event_indices)
