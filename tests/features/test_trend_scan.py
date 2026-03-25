@@ -1,9 +1,9 @@
 """
-Trend Scan Verification Suite
+Trend Scan Forward Labeling Verification Suite
 
-Tasks 4.1 & 4.2 from the add-trend-scan-primary-model change:
-  4.1  Verify Numba-accelerated output matches a pure-Pandas/Statsmodels baseline.
-  4.2  Verify no look-ahead bias is introduced (backward window only).
+Tasks 4.1 & 4.2 from the trend-scan-redesign change:
+  4.1  Verify Numba-accelerated output matches a pure-Pandas/Statsmodels baseline (forward scan).
+  4.2  Verify forward-looking causality (only future is evaluated).
 
 Run:
     uv run python tests/features/test_trend_scan.py          # standalone
@@ -44,13 +44,13 @@ def _trend_scan_baseline(
         best_L = 0
 
         for L in L_windows:
-            start = idx - L + 1
-            if start < 0:
+            start = idx
+            if start + L > len(prices):
                 continue
             if L < 3:
                 continue
 
-            y = prices[start: idx + 1]
+            y = prices[start: start + L]
             x = np.arange(len(y), dtype=np.float64)
 
             # scipy.stats.linregress returns (slope, intercept, r, p, stderr)
@@ -265,34 +265,34 @@ class TestTrendScanCorrectness:
 
         result = trend_scan_labels(price_series, t_events, L_windows=[10, 20])
 
-        assert result["t1"].dtype == np.int64
+        assert pd.api.types.is_datetime64_any_dtype(result["t1"])
         assert result["t_value"].dtype == np.float64
         assert result["side"].dtype == np.int8
 
 
 # ---------------------------------------------------------------------------
-# Task 4.2: No Look-Ahead Bias Verification
+# Task 4.2: Forward-Looking Verification
 # ---------------------------------------------------------------------------
 
-class TestNoLookaheadBias:
-    """Verify that Trend Scan uses only backward-looking data."""
+class TestForwardLookingLabels:
+    """Verify that Trend Scan uses only forward-looking data as a Labeling method."""
 
-    def test_backward_window_only(self):
+    def test_forward_window_only(self):
         """
-        Place a sharp signal AFTER the event. The trend scan should NOT
-        detect it because it only looks backward.
+        Place a sharp signal BEFORE the event. The trend scan should NOT
+        detect it because it only looks forward.
 
         prices:
-            [0..99]  = 100 (flat)
-            [100]    = event point
-            [101..199] = sharp uptrend (should be invisible to event at 100)
+            [0..99]    = sharp uptrend (should be invisible to event at 100)
+            [100]      = event point
+            [101..199] = 100 (flat)
         """
         from afmlkit.feature.core.trend_scan import _trend_scan_core
 
         n = 200
         prices = np.full(n, 100.0, dtype=np.float64)
-        # Place a strong uptrend AFTER position 100
-        for i in range(101, n):
+        # Place a strong uptrend BEFORE position 100
+        for i in range(101):
             prices[i] = 100.0 + 5.0 * (i - 100)
 
         events = np.array([100], dtype=np.int64)
@@ -302,32 +302,32 @@ class TestNoLookaheadBias:
             prices, events, windows
         )
 
-        # Event at 100 sees flat history [100-L+1 .. 100].
-        # It should NOT see the uptrend at 101+.
+        # Event at 100 sees flat history [100 .. 100+L-1].
+        # It should NOT see the uptrend at 0..100.
         # t-value should be ~0, side should be 0.
         assert abs(t_numba[0]) < 1e-6, (
-            f"Look-ahead detected! t_value={t_numba[0]} should be ~0 for flat history"
+            f"Backward bias detected! t_value={t_numba[0]} should be ~0 for flat future"
         )
         assert sides_numba[0] == 0, (
-            f"Look-ahead detected! side={sides_numba[0]} should be 0 for flat history"
+            f"Backward bias detected! side={sides_numba[0]} should be 0 for flat future"
         )
 
-    def test_backward_window_detects_past(self):
+    def test_forward_window_detects_future(self):
         """
-        Place a sharp signal BEFORE the event. The trend scan SHOULD detect it.
+        Place a sharp signal AFTER the event. The trend scan SHOULD detect it.
 
         prices:
-            [0..99]  = strong uptrend
-            [100]    = event point
-            [101..199] = flat (irrelevant)
+            [0..99]    = flat (irrelevant)
+            [100]      = event point
+            [101..199] = strong uptrend
         """
         from afmlkit.feature.core.trend_scan import _trend_scan_core
 
         n = 200
         prices = np.full(n, 100.0, dtype=np.float64)
-        # Place a strong uptrend BEFORE position 100
-        for i in range(101):
-            prices[i] = 50.0 + 1.0 * i
+        # Place a strong uptrend AFTER position 100
+        for i in range(101, 200):
+            prices[i] = 100.0 + 5.0 * (i - 100)
 
         events = np.array([100], dtype=np.int64)
         windows = np.array([10, 20, 50], dtype=np.int64)
@@ -336,8 +336,8 @@ class TestNoLookaheadBias:
             prices, events, windows
         )
 
-        # Event at 100 should detect the uptrend in the past
-        assert t_numba[0] > 0, f"Should detect past uptrend, got t={t_numba[0]}"
+        # Event at 100 should detect the uptrend in the future
+        assert t_numba[0] > 0, f"Should detect future uptrend, got t={t_numba[0]}"
         assert sides_numba[0] == 1, f"Should detect side=1, got {sides_numba[0]}"
 
     def test_window_boundaries_exact(self):
@@ -345,8 +345,8 @@ class TestNoLookaheadBias:
         Verify the exact data slice for a given window length.
 
         For event at index=20, window L=10:
-            The window should use prices[11:21] = prices[20-10+1 : 20+1]
-            That is indices 11,12,...,20 (exactly 10 points).
+            The window should use prices[20 : 30]
+            That is indices 20,21,...,29 (exactly 10 points).
         """
         from afmlkit.feature.core.trend_scan import _trend_scan_core
 
@@ -354,23 +354,22 @@ class TestNoLookaheadBias:
         # Mark specific positions to verify which are used
         prices = np.full(n, 100.0, dtype=np.float64)
 
-        # Create a distinctive uptrend in exactly [11..20]
-        for i in range(11, 21):
-            prices[i] = 100.0 + 2.0 * (i - 11)
+        # Create a distinctive uptrend in exactly [20..29]
+        for i in range(20, 30):
+            prices[i] = 100.0 + 2.0 * (i - 20)
 
         events = np.array([20], dtype=np.int64)
         windows = np.array([10], dtype=np.int64)
 
         t_numba, sides_numba, _ = _trend_scan_core(prices, events, windows)
 
-        # The window [11..20] has a clear uptrend → side=1, large positive t
+        # The window [20..29] has a clear uptrend → side=1, large positive t
         assert sides_numba[0] == 1, f"Expected side=1, got {sides_numba[0]}"
         assert t_numba[0] > 5.0, f"Expected strong t-value, got {t_numba[0]}"
 
     def test_future_contamination_multi_event(self):
         """
-        Multiple events: each event's result should be independent of future events.
-        Verify by checking that event_i's result only depends on data up to event_i.
+        Multiple events: verify forward scanning logic.
         """
         from afmlkit.feature.core.trend_scan import _trend_scan_core
 
@@ -385,19 +384,20 @@ class TestNoLookaheadBias:
         for i in range(101, 201):
             prices[i] = prices[100] - 0.3 * (i - 100)
 
-        events = np.array([80, 100, 180], dtype=np.int64)
+        # Events at the start of their respective future trends
+        events = np.array([0, 100, 250], dtype=np.int64)
         windows = np.array([10, 20, 50], dtype=np.int64)
 
         t_numba, sides_numba, _ = _trend_scan_core(prices, events, windows)
 
-        # Event at 80 (in uptrend) → side=1
-        assert sides_numba[0] == 1, f"Event@80 should be uptrend, got side={sides_numba[0]}"
+        # Event at 0 (sees future uptrend) → side=1
+        assert sides_numba[0] == 1, f"Event@0 sees future uptrend, got side={sides_numba[0]}"
 
-        # Event at 100 (end of uptrend) → side=1 (still looking back at uptrend)
-        assert sides_numba[1] == 1, f"Event@100 should be uptrend, got side={sides_numba[1]}"
+        # Event at 100 (sees future downtrend) → side=-1
+        assert sides_numba[1] == -1, f"Event@100 sees future downtrend, got side={sides_numba[1]}"
 
-        # Event at 180 (in downtrend) → side=-1
-        assert sides_numba[2] == -1, f"Event@180 should be downtrend, got side={sides_numba[2]}"
+        # Event at 250 (flat future [251..299]) → side=0
+        assert sides_numba[2] == 0, f"Event@250 sees flat future, got side={sides_numba[2]}"
 
 
 # ---------------------------------------------------------------------------
@@ -407,15 +407,16 @@ class TestNoLookaheadBias:
 class TestEdgeCases:
     """Edge case tests for robustness."""
 
-    def test_event_at_beginning(self):
-        """Event near the start of the series (limited history)."""
+    def test_event_near_end(self):
+        """Event near the end of the series (limited available future)."""
         from afmlkit.feature.core.trend_scan import _trend_scan_core
 
         prices = np.arange(20, dtype=np.float64) + 100.0
-        events = np.array([3], dtype=np.int64)
+        events = np.array([16], dtype=np.int64)
         windows = np.array([3, 5, 10], dtype=np.int64)
 
-        # Only L=3 should be viable (start=1 >= 0), L=5 needs start=-1
+        # Event at 16 has 4 points left [16, 17, 18, 19].
+        # Only L=3 should be viable, L=5 gives start+L = 16+5 = 21 > len(20)
         t_numba, sides_numba, wins_numba = _trend_scan_core(
             prices, events, windows
         )
@@ -496,20 +497,21 @@ if __name__ == "__main__":
     assert np.array_equal(wins_numba, wins_base), "FAIL: Window mismatch!"
     print("  All sides and windows match! ✓")
 
-    print("\n[Task 4.2] No look-ahead bias verification:")
-    # Test: future data should be invisible
+    print("\n[Task 4.2] Forward causality verification:")
+    # Test: past data should be invisible
     prices_bias_test = np.full(200, 100.0, dtype=np.float64)
-    for i in range(101, 200):
-        prices_bias_test[i] = 100.0 + 5.0 * (i - 100)
+    # Place strong downtrend BEFORE position 100
+    for i in range(100):
+        prices_bias_test[i] = 100.0 - 5.0 * i
 
     t_val, side_val, _ = _trend_scan_core(
         prices_bias_test,
         np.array([100], dtype=np.int64),
         np.array([10, 20, 50], dtype=np.int64),
     )
-    print(f"  Event@100 (flat past, uptrend future): t={t_val[0]:+.6f}, side={side_val[0]}")
-    assert abs(t_val[0]) < 1e-6, f"FAIL: Look-ahead bias detected! t={t_val[0]}"
-    print("  No look-ahead bias confirmed! ✓")
+    print(f"  Event@100 (downtrend past, flat future): t={t_val[0]:+.6f}, side={side_val[0]}")
+    assert abs(t_val[0]) < 1e-6, f"FAIL: Backward bias detected! t={t_val[0]}"
+    print("  Forward label causality confirmed! ✓")
 
     print("\n" + "=" * 70)
     print("All verifications passed! ✓")

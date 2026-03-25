@@ -1,15 +1,16 @@
 """
-Trend Scanning (t-value based) primary model for dynamic trend detection.
+Trend Scanning (t-value based) forward-looking labeling model.
 
 Implements the Trend Scan algorithm from Marcos López de Prado's
 *Machine Learning for Asset Managers* (MLAM). For each event timestamp,
-backward-scans through multiple window lengths, fitting OLS regressions
+forward-scans through multiple window lengths, fitting OLS regressions
 and selecting the window with the maximum absolute t-statistic.
+This is strictly a Labeling method and contains future information.
 
 This module is split into:
     - ``_trend_scan_core``: Numba ``@njit`` compiled kernel for raw array processing.
     - ``trend_scan_labels``: Python/Pandas frontend that handles index alignment
-      and returns a structured DataFrame.
+      and returns a structured DataFrame with future timestamp ``t1``.
 
 References
 ----------
@@ -41,7 +42,7 @@ def _trend_scan_core(
     Core Numba kernel for Trend Scanning.
 
     For each event located at ``prices[event_indices[i]]``, the function
-    backward-scans through every window length in *L_windows*, computes an
+    forward-scans through every window length in *L_windows*, computes an
     OLS regression slope t-statistic using closed-form mathematics (no
     external library calls), and selects the window whose slope has the
     maximum absolute t-value.
@@ -54,13 +55,12 @@ def _trend_scan_core(
         *before* calling this function.
     event_indices : 1-D int64 array
         Positional indices into *prices* where events occurred (e.g. from
-        CUSUM filter). Each index ``event_indices[i]`` marks the point *up
-        to which* the backward window is evaluated, guaranteeing no
-        look-ahead bias.
+        CUSUM filter). Each index ``event_indices[i]`` marks the point *from
+        which* the forward window is evaluated. (Contains future information).
     L_windows : 1-D int64 array
         Sorted array of candidate window lengths to scan (e.g.
-        ``[10, 20, 30, …, 100]``). Each element ``L`` means "use the most
-        recent ``L`` price observations ending at the event".
+        ``[10, 20, 30, …, 100]``). Each element ``L`` means "use the next
+        ``L`` price observations starting at the event".
 
     Returns
     -------
@@ -75,7 +75,7 @@ def _trend_scan_core(
     Notes
     -----
     *   The OLS model fitted in each window is ``y = a + b·x`` where
-        ``x = [0, 1, …, L-1]`` and ``y = prices[idx-L+1 : idx+1]``.
+        ``x = [0, 1, …, L-1]`` and ``y = prices[idx : idx+L]``.
     *   A closed-form expression for ``Sxx = n(n² − 1) / 12`` is used
         (valid for consecutive integer regressors) to avoid a second pass.
     *   Zero-variance guards (``ε = 1e-12``) protect against flat-price
@@ -99,10 +99,10 @@ def _trend_scan_core(
 
         for w in range(len(L_windows)):
             L = L_windows[w]
-            start = idx - L + 1
+            start = idx
 
-            # --- Guard: not enough history ---
-            if start < 0:
+            # --- Guard: not enough future history ---
+            if start + L > len(prices):
                 continue
 
             n = L  # number of data points in this window
@@ -205,7 +205,7 @@ def trend_scan_labels(
         Discrete event timestamps emitted by the CUSUM filter.  Events that
         fall outside *price_series* will be silently dropped.
     L_windows : list[int] | np.ndarray | None, optional
-        Candidate backward-looking window lengths.  Defaults to
+        Candidate forward-looking window lengths.  Defaults to
         ``[10, 20, 30, …, 100]`` if *None*.
 
     Returns
@@ -214,8 +214,8 @@ def trend_scan_labels(
         Indexed by the (aligned) subset of *t_events* with columns:
 
         ``t1``
-            The optimal window length (int64) that yielded the highest
-            absolute t-statistic.
+            The exact future timestamp (Datetime) that marks the end of the
+            optimal trend window.
         ``t_value``
             Signed t-statistic (float64) of the OLS slope in the optimal
             window.
@@ -285,9 +285,18 @@ def trend_scan_labels(
     )
 
     # ---- Format output DataFrame ----
+    t1_timestamps = []
+    for i in range(len(event_positions)):
+        L = best_windows[i]
+        if L == 0:
+            t1_timestamps.append(pd.NaT)
+        else:
+            t1_idx = event_positions[i] + L - 1
+            t1_timestamps.append(price_series.index[t1_idx])
+
     result = pd.DataFrame(
         {
-            "t1": best_windows,
+            "t1": t1_timestamps,
             "t_value": t_values,
             "side": sides.astype(np.int8),
         },
