@@ -156,6 +156,136 @@ def run_cusum_filter(fracdiff_series: pd.Series, threshold_series: pd.Series) ->
     return event_indices, s_pos, s_neg, n_events
 
 
+# ============================================================
+# 可视化模块
+# ============================================================
+
+def plot_fracdiff_comparison(
+    prices: pd.Series,
+    fracdiff_series: pd.Series,
+    optimal_d: float,
+    save_path: str
+):
+    """
+    绘制价格 vs FracDiff 对比图。
+
+    :param prices: 原始价格序列
+    :param fracdiff_series: FracDiff 序列
+    :param optimal_d: 最优 d 值
+    :param save_path: 保存路径
+    """
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
+
+    # 价格序列
+    ax1.plot(prices.index, prices.values, color='steelblue', linewidth=0.8)
+    ax1.set_title('Original Price Series', fontsize=12)
+    ax1.set_ylabel('Price')
+    ax1.grid(True, alpha=0.3)
+
+    # FracDiff 序列
+    ax2.plot(fracdiff_series.index, fracdiff_series.values, color='darkorange', linewidth=0.8)
+    ax2.set_title(f'FracDiff Series (d={optimal_d:.4f})', fontsize=12)
+    ax2.set_ylabel('FracDiff')
+    ax2.set_xlabel('Time')
+    ax2.grid(True, alpha=0.3)
+
+    # 添加零线
+    ax2.axhline(y=0, color='gray', linestyle='--', linewidth=0.5)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"✅ FracDiff 对比图已保存: {save_path}")
+
+
+def plot_cusum_state(
+    fracdiff_series: pd.Series,
+    s_pos: np.ndarray,
+    s_neg: np.ndarray,
+    threshold_series: pd.Series,
+    event_indices: np.ndarray,
+    save_path: str
+):
+    """
+    绘制 CUSUM 状态曲线图。
+
+    :param fracdiff_series: FracDiff 序列（用于获取 index）
+    :param s_pos: 正向累积数组
+    :param s_neg: 负向累积数组
+    :param threshold_series: 阈值序列
+    :param event_indices: 事件点索引
+    :param save_path: 保存路径
+    """
+    valid_idx = fracdiff_series.dropna().index
+
+    fig, ax = plt.subplots(figsize=(14, 6))
+
+    # CUSUM 状态曲线
+    ax.plot(valid_idx, s_pos, color='green', linewidth=0.8, label='S+ (positive)')
+    ax.plot(valid_idx, np.abs(s_neg), color='red', linewidth=0.8, label='S- (negative)')
+
+    # 阈值线（取平均阈值）
+    mean_threshold = threshold_series.mean()
+    ax.axhline(y=mean_threshold, color='gray', linestyle='--', linewidth=1.5, label=f'Threshold (mean={mean_threshold:.4f})')
+
+    # 事件点标记
+    event_timestamps = valid_idx[event_indices]
+    ax.scatter(event_timestamps, [mean_threshold] * len(event_indices),
+               color='black', s=20, marker='^', label=f'Events (n={len(event_indices)})', zorder=5)
+
+    ax.set_title('CUSUM Filter State Curves', fontsize=12)
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Cumulative Sum')
+    ax.legend(loc='upper right')
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"✅ CUSUM 状态图已保存: {save_path}")
+
+
+def plot_event_distribution(
+    bars: pd.DataFrame,
+    event_indices: np.ndarray,
+    fracdiff_series: pd.Series,
+    save_path: str
+):
+    """
+    绘制事件点分布图（价格序列上标记事件点）。
+
+    :param bars: Dollar Bars DataFrame
+    :param event_indices: 事件点索引（对应 fracdiff_series）
+    :param fracdiff_series: FracDiff 序列（用于映射索引）
+    :param save_path: 保存路径
+    """
+    valid_idx = fracdiff_series.dropna().index
+    event_timestamps = valid_idx[event_indices]
+
+    # 事件点对应的价格
+    event_prices = bars['close'].loc[event_timestamps]
+
+    fig, ax = plt.subplots(figsize=(14, 6))
+
+    # 价格序列
+    ax.plot(bars.index, bars['close'].values, color='steelblue', linewidth=0.8, label='Price')
+
+    # 事件点标记
+    ax.scatter(event_timestamps, event_prices.values,
+               color='red', s=30, marker='o', label=f'CUSUM Events (n={len(event_indices)})', zorder=5)
+
+    ax.set_title('CUSUM Event Distribution on Price Series', fontsize=12)
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Price')
+    ax.legend(loc='upper right')
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"✅ 事件分布图已保存: {save_path}")
+
+
 def main():
     """测试完整 FracDiff + CUSUM 流程"""
     bars_path = os.path.join(BARS_DIR, 'dollar_bars_target6.parquet')
