@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from strategies.IF9999.config import (
     DATA_PATH, CONTRACT_MULTIPLIER, TARGET_DAILY_BARS, EWMA_SPAN,
-    ACF_LAGS, BARS_DIR, FIGURES_DIR
+    ACF_LAGS, BARS_DIR, FIGURES_DIR, OUTPUT_DIR
 )
 
 from numba import njit
@@ -437,28 +437,56 @@ def plot_return_distribution(time_returns: pd.Series, dollar_returns: pd.Series,
     print(f"✅ 保存收益率分布图: {save_path}")
 
 
-if __name__ == "__main__":
-    # Step 1: 加载数据
-    df = load_if_data(DATA_PATH)
-    assert len(df) > 0, "数据为空"
-    assert 'dollar_volume' in df.columns, "缺少 dollar_volume 列"
+def main():
+    """
+    IF9999 Dollar Bars 构建与验证主流程。
+    """
+    print("=" * 60)
+    print("  IF9999 Dollar Bars 构建与验证")
+    print("=" * 60)
 
-    # 输出基本统计
-    daily_dollar_vol = df['dollar_volume'].groupby(df.index.date).sum()
-    print(f"日均美元交易量: {daily_dollar_vol.mean():,.0f}")
-    print(f"数据列: {df.columns.tolist()}")
+    # 确保输出目录存在
+    os.makedirs(BARS_DIR, exist_ok=True)
+    os.makedirs(FIGURES_DIR, exist_ok=True)
+
+    # Step 1: 加载数据
+    print("\n[Step 1] 加载 IF9999 1 分钟数据...")
+    df = load_if_data(DATA_PATH)
 
     # Step 2: 计算动态阈值
+    print("\n[Step 2] 计算动态阈值...")
     thresholds = compute_dynamic_thresholds(df, TARGET_DAILY_BARS, EWMA_SPAN)
-    assert len(thresholds) > 0, "阈值为空"
-    print(f"阈值范围: {thresholds.min():,.0f} ~ {thresholds.max():,.0f}")
 
     # Step 3: 构建 Dollar Bars
+    print("\n[Step 3] 构建 Dollar Bars...")
     bars = build_dollar_bars(df, thresholds)
-    assert len(bars) > 0, "Dollar Bars 为空"
-    assert 'close' in bars.columns, "缺少 close 列"
 
-    # 验证每日 Bar 数量
-    daily_counts = bars.groupby(bars.index.date).size()
-    print(f"平均每日 Bar 数: {daily_counts.mean():.1f} (目标: {TARGET_DAILY_BARS})")
-    print(f"Dollar Bars 列: {bars.columns.tolist()}")
+    # Step 4: 保存 Dollar Bars
+    bars_path = os.path.join(BARS_DIR, 'dollar_bars.parquet')
+    bars.to_parquet(bars_path)
+    print(f"✅ Dollar Bars 已保存: {bars_path}")
+
+    # Step 5: 三刀验证
+    print("\n[Step 5] 三刀验证...")
+    time_returns = compute_returns(df)
+    dollar_returns = compute_returns(bars)
+    validation_results = run_three_knife_validation(time_returns, dollar_returns)
+
+    # Step 6: 可视化
+    print("\n[Step 6] 生成可视化图表...")
+    plot_price_comparison(df, bars, os.path.join(FIGURES_DIR, 'price_comparison.png'))
+    plot_validation_metrics(time_returns, dollar_returns, validation_results,
+                           os.path.join(FIGURES_DIR, 'validation_metrics.png'))
+    plot_return_distribution(time_returns, dollar_returns,
+                            os.path.join(FIGURES_DIR, 'return_distribution.png'))
+
+    print("\n" + "=" * 60)
+    print("  流程完成")
+    print("=" * 60)
+    print(f"输出目录: {OUTPUT_DIR}")
+    print(f"  - Bars: {bars_path}")
+    print(f"  - Figures: {FIGURES_DIR}/")
+
+
+if __name__ == "__main__":
+    main()
