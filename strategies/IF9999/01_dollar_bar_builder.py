@@ -28,6 +28,9 @@ from strategies.IF9999.config import (
     ACF_LAGS, BARS_DIR, FIGURES_DIR
 )
 
+from numba import njit
+from numba.typed import List as NumbaList
+
 
 def load_if_data(data_path: str) -> pd.DataFrame:
     """
@@ -84,6 +87,110 @@ def compute_dynamic_thresholds(
     return thresholds
 
 
+@njit(nogil=True)
+def _dynamic_dollar_bar_indexer(
+    timestamps: np.ndarray,
+    prices: np.ndarray,
+    volumes: np.ndarray,
+    thresholds: np.ndarray,
+    contract_multiplier: float,
+) -> NumbaList:
+    """
+    动态阈值 Dollar Bar indexer（Numba 加速）。
+
+    :param timestamps: 时间戳数组（纳秒）
+    :param prices: 价格数组
+    :param volumes: 成交量数组
+    :param thresholds: 每个时间点对应的阈值数组
+    :param contract_multiplier: 合约乘数
+    :returns: Bar close 索引列表
+    """
+    n = len(prices)
+    indices = NumbaList()
+    indices.append(0)  # 第一个点作为起始
+
+    cum_dollar = 0.0
+    for i in range(n):
+        cum_dollar += prices[i] * volumes[i] * contract_multiplier
+        if cum_dollar >= thresholds[i]:
+            indices.append(i)
+            cum_dollar = cum_dollar - thresholds[i]
+
+    return indices
+
+
+def _build_ohlcv_from_indices(df: pd.DataFrame, close_indices: np.ndarray) -> pd.DataFrame:
+    """
+    从 close 索引构建 OHLCV DataFrame。
+
+    :param df: 原始 1 分钟数据
+    :param close_indices: Bar close 索引数组
+    :returns: Dollar Bars DataFrame
+    """
+    if len(close_indices) < 2:
+        return pd.DataFrame()
+
+    bars_data = []
+    for i in range(len(close_indices) - 1):
+        start_idx = close_indices[i]
+        end_idx = close_indices[i + 1]
+
+        segment = df.iloc[start_idx:end_idx + 1]
+
+        bar = {
+            'timestamp': df.index[end_idx],
+            'open': segment['open'].iloc[0],
+            'high': segment['high'].max(),
+            'low': segment['low'].min(),
+            'close': segment['close'].iloc[-1],
+            'volume': segment['volume'].sum(),
+            'dollar_volume': segment['dollar_volume'].sum(),
+            'n_ticks': len(segment),
+        }
+        bars_data.append(bar)
+
+    bars_df = pd.DataFrame(bars_data)
+    bars_df = bars_df.set_index('timestamp')
+    return bars_df
+
+
+def build_dollar_bars(df: pd.DataFrame, thresholds: pd.Series) -> pd.DataFrame:
+    """
+    从 1 分钟数据构建 Dollar Bars。
+
+    将每分钟视为一个 tick，使用动态阈值构建 Bars。
+
+    :param df: 1 分钟 OHLCV DataFrame
+    :param thresholds: 每日阈值 Series
+    :returns: Dollar Bars DataFrame
+    """
+    # 将阈值映射到每分钟
+    df = df.copy()
+    df['date'] = df.index.normalize()
+    threshold_map = thresholds.to_dict()
+    df['threshold'] = df['date'].map(lambda x: threshold_map.get(pd.Timestamp(x), thresholds.mean()))
+    df['threshold'] = df['threshold'].fillna(thresholds.mean())
+
+    # 准备数组
+    timestamps = df.index.astype(np.int64).values
+    prices = df['close'].values.astype(np.float64)
+    volumes = df['volume'].values.astype(np.float64)
+    threshold_arr = df['threshold'].values.astype(np.float64)
+
+    # 构建 Bar 索引（Numba 加速）
+    close_indices = _dynamic_dollar_bar_indexer(
+        timestamps, prices, volumes, threshold_arr, float(CONTRACT_MULTIPLIER)
+    )
+    close_indices = np.array(close_indices, dtype=np.int64)
+
+    # 从索引构建 OHLCV
+    bars = _build_ohlcv_from_indices(df, close_indices)
+
+    print(f"✅ Dollar Bars 构建完成: {len(bars)} bars")
+    print(f"   时间范围: {bars.index.min()} ~ {bars.index.max()}")
+    return bars
+
+
 if __name__ == "__main__":
     # Step 1: 加载数据
     df = load_if_data(DATA_PATH)
@@ -99,3 +206,13 @@ if __name__ == "__main__":
     thresholds = compute_dynamic_thresholds(df, TARGET_DAILY_BARS, EWMA_SPAN)
     assert len(thresholds) > 0, "阈值为空"
     print(f"阈值范围: {thresholds.min():,.0f} ~ {thresholds.max():,.0f}")
+
+    # Step 3: 构建 Dollar Bars
+    bars = build_dollar_bars(df, thresholds)
+    assert len(bars) > 0, "Dollar Bars 为空"
+    assert 'close' in bars.columns, "缺少 close 列"
+
+    # 验证每日 Bar 数量
+    daily_counts = bars.groupby(bars.index.date).size()
+    print(f"平均每日 Bar 数: {daily_counts.mean():.1f} (目标: {TARGET_DAILY_BARS})")
+    print(f"Dollar Bars 列: {bars.columns.tolist()}")
