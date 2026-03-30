@@ -27,12 +27,13 @@ Phase 3 实现 Trend Scanning 标签生成，作为 Primary Model 输出。CUSUM
 
 ```
 Phase 2 输出:
+  → output/bars/dollar_bars_target6.parquet (原始 Dollar Bars，含 close 价格)
   → output/features/fracdiff_series.parquet (FracDiff 平稳化序列)
-  → output/features/cusum_events.parquet (CUSUM 事件点 DatetimeIndex)
+  → output/features/cusum_events.parquet (CUSUM 事件点，含 timestamp, price, fracdiff)
 
 Phase 3 输入:
-  fracdiff_series.parquet (价格序列)
-  cusum_events.parquet (事件点)
+  dollar_bars['close'] (原始价格序列 — Trend Scanning 定义"价格趋势")
+  cusum_events['timestamp'] (事件点 DatetimeIndex)
 
 Phase 3 处理:
   trend_scan_labels(price_series, cusum_events, L_windows)
@@ -40,6 +41,8 @@ Phase 3 处理:
 Phase 3 输出:
   → output/features/trend_labels.parquet
 ```
+
+**Why use original price**: Trend Scanning 通过 OLS 检验定义"什么是价格趋势"。FracDiff 是特征变换，不改变趋势的本质定义。
 
 ## 输出格式
 
@@ -69,14 +72,15 @@ TREND_WINDOWS = [5, 10, 20, 30, 50]  # 短期趋势，适合期货
 `03_trend_scanning.py`:
 
 ```python
-# 1. 加载配置
-# 2. 读取 Phase 2 输出（fracdiff_series, cusum_events）
-# 3. 调用 trend_scan_labels()
-# 4. 保存 trend_labels.parquet
-# 5. 生成诊断可视化：
-#    - side 分布统计
+# 1. 加载配置（TREND_WINDOWS）
+# 2. 读取 Dollar Bars（原始价格 close）
+# 3. 读取 CUSUM 事件点（timestamp）
+# 4. 调用 trend_scan_labels(close_prices, cusum_timestamps, TREND_WINDOWS)
+# 5. 保存 trend_labels.parquet
+# 6. 生成诊断可视化：
+#    - side 分布统计（up/down/flat）
 #    - t_value 分布直方图
-#    - 事件时间序列示例（标注趋势窗口）
+#    - 价格序列示例（标注趋势窗口）
 ```
 
 ## 可视化输出
