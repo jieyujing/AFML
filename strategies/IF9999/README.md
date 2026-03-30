@@ -52,7 +52,7 @@ uv run python strategies/IF9999/01_dollar_bar_builder.py
 运行特征工程流程：
 
 ```bash
-uv run python strategies/IF9999/03_feature_engineering.py
+uv run python strategies/IF9999/02_feature_engineering.py
 ```
 
 ### FracDiff 参数
@@ -68,6 +68,7 @@ uv run python strategies/IF9999/03_feature_engineering.py
 | 参数 | 值 | 说明 |
 |------|-----|------|
 | CUSUM_WINDOW | 20 | 动态阈值滚动窗口 |
+| CUSUM_MULTIPLIER | 3 | 阈值乘数（控制事件率） |
 
 ### 输出文件
 
