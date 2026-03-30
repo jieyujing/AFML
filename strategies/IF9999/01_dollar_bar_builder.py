@@ -19,6 +19,7 @@ import matplotlib
 matplotlib.use('Agg')  # 非交互模式
 import matplotlib.pyplot as plt
 import seaborn as sns
+sns.set_theme(style="whitegrid", context="paper")
 from statsmodels.stats.diagnostic import acorr_ljungbox
 
 # 添加项目根目录到路径
@@ -312,6 +313,128 @@ def run_three_knife_validation(time_returns: pd.Series, dollar_returns: pd.Serie
     print(f"  Dollar Bars: {results['dollar_bars']['normality']['description']}")
 
     return results
+
+
+def plot_price_comparison(time_df: pd.DataFrame, dollar_bars: pd.DataFrame, save_path: str):
+    """
+    绘制 Time Bars vs Dollar Bars 价格走势对比图。
+
+    :param time_df: 1 分钟 OHLCV DataFrame
+    :param dollar_bars: Dollar Bars DataFrame
+    :param save_path: 保存路径
+    """
+    # 采样 Time Bars 以提高可视化效率（每小时取一个点）
+    time_sampled = time_df['close'].resample('H').last()
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+
+    # Time Bars
+    ax1.plot(time_sampled.index, time_sampled.values, color='steelblue', linewidth=0.8)
+    ax1.set_title('Time Bars (1-min, sampled hourly)', fontsize=12)
+    ax1.set_xlabel('Time')
+    ax1.set_ylabel('Price')
+    ax1.tick_params(axis='x', rotation=45)
+
+    # Dollar Bars
+    ax2.plot(dollar_bars.index, dollar_bars['close'].values, color='darkorange', linewidth=0.8)
+    ax2.set_title(f'Dollar Bars (target={TARGET_DAILY_BARS} bars/day)', fontsize=12)
+    ax2.set_xlabel('Time')
+    ax2.set_ylabel('Price')
+    ax2.tick_params(axis='x', rotation=45)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"✅ 保存价格对比图: {save_path}")
+
+
+def plot_validation_metrics(time_returns: pd.Series, dollar_returns: pd.Series,
+                             validation_results: dict, save_path: str):
+    """
+    绘制三刀验证指标对比图。
+
+    :param time_returns: Time Bars 收益率
+    :param dollar_returns: Dollar Bars 收益率
+    :param validation_results: 验证结果字典
+    :param save_path: 保存路径
+    """
+    fig = plt.figure(figsize=(12, 8))
+
+    # 子图 1: ACF 对比
+    ax1 = fig.add_subplot(2, 2, 1)
+    from statsmodels.graphics.tsaplots import plot_acf
+    plot_acf(time_returns.dropna(), lags=20, ax=ax1, title='Time Bars ACF', color='steelblue')
+    ax1.set_ylim(-0.15, 0.15)
+
+    ax2 = fig.add_subplot(2, 2, 2)
+    plot_acf(dollar_returns.dropna(), lags=20, ax=ax2, title='Dollar Bars ACF', color='darkorange')
+    ax2.set_ylim(-0.15, 0.15)
+
+    # 子图 3: JB 统计量对比
+    ax3 = fig.add_subplot(2, 2, 3)
+    jb_values = [
+        validation_results['time_bars']['normality']['JB_stat'],
+        validation_results['dollar_bars']['normality']['JB_stat']
+    ]
+    bars_jb = ax3.bar(['Time Bars', 'Dollar Bars'], jb_values, color=['steelblue', 'darkorange'])
+    ax3.set_title('Jarque-Bera Statistic (lower is better)')
+    ax3.set_ylabel('JB Statistic')
+    for bar, val in zip(bars_jb, jb_values):
+        ax3.text(bar.get_x() + bar.get_width()/2, bar.get_height(), f'{val:.1f}',
+                 ha='center', va='bottom', fontsize=10)
+
+    # 子图 4: VoV 对比
+    ax4 = fig.add_subplot(2, 2, 4)
+    vov_values = [
+        validation_results['time_bars']['identically_distributed']['VoV'],
+        validation_results['dollar_bars']['identically_distributed']['VoV']
+    ]
+    bars_vov = ax4.bar(['Time Bars', 'Dollar Bars'], vov_values, color=['steelblue', 'darkorange'])
+    ax4.set_title('Variance of Variances (VoV) (lower is better)')
+    ax4.set_ylabel('VoV')
+    for bar, val in zip(bars_vov, vov_values):
+        ax4.text(bar.get_x() + bar.get_width()/2, bar.get_height(), f'{val:.4f}',
+                 ha='center', va='bottom', fontsize=10)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"✅ 保存验证指标图: {save_path}")
+
+
+def plot_return_distribution(time_returns: pd.Series, dollar_returns: pd.Series, save_path: str):
+    """
+    绘制收益率分布直方图对比。
+
+    :param time_returns: Time Bars 收益率
+    :param dollar_returns: Dollar Bars 收益率
+    :param save_path: 保存路径
+    """
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Time Bars 分布
+    ax.hist(time_returns.dropna(), bins=50, density=True, alpha=0.6,
+            color='steelblue', label='Time Bars', edgecolor='white')
+
+    # Dollar Bars 分布
+    ax.hist(dollar_returns.dropna(), bins=50, density=True, alpha=0.6,
+            color='darkorange', label='Dollar Bars', edgecolor='white')
+
+    # 正态分布参考曲线
+    from scipy.stats import norm
+    x = np.linspace(dollar_returns.min(), dollar_returns.max(), 100)
+    mean, std = dollar_returns.mean(), dollar_returns.std()
+    ax.plot(x, norm.pdf(x, mean, std), 'k--', linewidth=1.5, label='Normal Reference')
+
+    ax.set_title('Return Distribution Comparison')
+    ax.set_xlabel('Log Returns')
+    ax.set_ylabel('Density')
+    ax.legend()
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"✅ 保存收益率分布图: {save_path}")
 
 
 if __name__ == "__main__":
