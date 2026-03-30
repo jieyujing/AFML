@@ -131,6 +131,113 @@ def save_outputs(trend_df: pd.DataFrame):
 
 
 # ============================================================
+# 可视化模块
+# ============================================================
+
+def plot_trend_distribution(trend_df: pd.DataFrame, save_path: str):
+    """
+    绘制 side 和 t_value 分布图。
+
+    :param trend_df: 标签 DataFrame
+    :param save_path: 保存路径
+    """
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+    # Side 分布
+    side_counts = trend_df['side'].value_counts().sort_index()
+
+    # 确保所有 side 值都有对应颜色
+    present_sides = side_counts.index.tolist()
+    bar_colors = []
+    bar_labels = []
+    for side in present_sides:
+        if side == -1:
+            bar_colors.append('#ff6b6b')
+            bar_labels.append('Down (-1)')
+        elif side == 0:
+            bar_colors.append('#999999')
+            bar_labels.append('Flat (0)')
+        else:
+            bar_colors.append('#4ecdc4')
+            bar_labels.append('Up (+1)')
+
+    ax1.bar(range(len(side_counts)), side_counts.values, color=bar_colors)
+    ax1.set_xticks(range(len(side_counts)))
+    ax1.set_xticklabels(bar_labels)
+    ax1.set_title('Trend Direction Distribution', fontsize=12)
+    ax1.set_ylabel('Count')
+
+    # t_value 分布（绝对值）
+    t_abs = trend_df['t_value'].abs()
+    ax2.hist(t_abs, bins=50, color='steelblue', edgecolor='white', alpha=0.7)
+    ax2.axvline(t_abs.mean(), color='red', linestyle='--', linewidth=1.5,
+                label=f'Mean |t|={t_abs.mean():.2f}')
+    ax2.axvline(t_abs.median(), color='orange', linestyle='--', linewidth=1.5,
+                label=f'Median |t|={t_abs.median():.2f}')
+    ax2.set_title('|t-value| Distribution (Sample Weight)', fontsize=12)
+    ax2.set_xlabel('|t-value|')
+    ax2.set_ylabel('Frequency')
+    ax2.legend()
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"✅ 趋势分布图已保存: {save_path}")
+
+
+def plot_trend_example(
+    prices: pd.Series,
+    trend_df: pd.DataFrame,
+    n_examples: int = 5,
+    save_path: str = None
+):
+    """
+    绘制趋势窗口示例图。
+
+    :param prices: 价格序列
+    :param trend_df: 标签 DataFrame
+    :param n_examples: 示例数量
+    :param save_path: 保存路径
+    """
+    # 选择 t_value 绝对值最大的几个事件作为示例
+    top_events = trend_df['t_value'].abs().nlargest(n_examples)
+
+    fig, axes = plt.subplots(n_examples, 1, figsize=(14, 3*n_examples), sharex=False)
+
+    for i, (event_ts, t_abs) in enumerate(top_events.items()):
+        ax = axes[i] if n_examples > 1 else axes
+
+        row = trend_df.loc[event_ts]
+        t1 = row['t1']
+        side = row['side']
+        t_value = row['t_value']
+
+        # 获取趋势窗口内的价格
+        if pd.notna(t1):
+            window_prices = prices.loc[event_ts:t1]
+            ax.plot(window_prices.index, window_prices.values,
+                    color='steelblue', linewidth=1.5)
+
+            # 标记起点和终点
+            ax.scatter([event_ts], [prices.loc[event_ts]],
+                       color='green', s=100, marker='o', label='Start', zorder=5)
+            ax.scatter([t1], [prices.loc[t1]],
+                       color='red', s=100, marker='x', label='End (t1)', zorder=5)
+
+            # 标注 side 和 t_value
+            direction = '↑ Up' if side == 1 else '↓ Down' if side == -1 else '— Flat'
+            ax.set_title(f'{i+1}. {direction} (t={t_value:.2f}) | {event_ts.strftime("%Y-%m-%d %H:%M")} → {t1.strftime("%H:%M")}',
+                        fontsize=10)
+            ax.legend(loc='upper right')
+            ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"✅ 趋势示例图已保存: {save_path}")
+
+
+# ============================================================
 # 主函数
 # ============================================================
 
@@ -165,15 +272,26 @@ def main():
     print("\n[Step 4] 保存输出文件...")
     save_outputs(trend_df)
 
-    # Step 5: 可视化（待实现）
+    # Step 5: 可视化
     print("\n[Step 5] 生成可视化图表...")
-    print("  (将在 Task 4 实现)")
+    plot_trend_distribution(
+        trend_df,
+        os.path.join(FIGURES_DIR, '03_trend_distribution.png')
+    )
+    plot_trend_example(
+        prices, trend_df, n_examples=5,
+        save_path=os.path.join(FIGURES_DIR, '03_trend_example.png')
+    )
 
     # 完成
     print("\n" + "=" * 70)
     print("  Phase 3 Trend Scanning 完成")
     print("=" * 70)
-    print(f"输出文件: {FEATURES_DIR}/trend_labels.parquet")
+    print(f"输出文件: {FEATURES_DIR}")
+    print(f"  - trend_labels.parquet")
+    print(f"图表目录: {FIGURES_DIR}")
+    print(f"  - 03_trend_distribution.png")
+    print(f"  - 03_trend_example.png")
 
 
 if __name__ == "__main__":
