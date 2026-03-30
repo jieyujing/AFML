@@ -16,6 +16,7 @@ import sys
 import numpy as np
 import pandas as pd
 from scipy import stats
+from statsmodels.tsa.stattools import adfuller
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -31,7 +32,6 @@ from strategies.IF9999.config import (
 )
 
 from afmlkit.feature.core.frac_diff import optimize_d, frac_diff_ffd
-from afmlkit.feature.core.structural_break.adf import adf_test
 from afmlkit.sampling.filters import cusum_filter_with_state
 
 sns.set_theme(style="whitegrid", context="paper")
@@ -81,11 +81,12 @@ def run_fracdiff_optimization(prices: pd.Series) -> tuple:
     fracdiff_series = frac_diff_ffd(prices, d=optimal_d, thres=FRACDIFF_THRES)
     print(f"  FracDiff 序列长度: {len(fracdiff_series)} (截断 {len(prices) - len(fracdiff_series)} 个)")
 
-    # ADF 验证
+    # ADF 验证（使用 statsmodels 避免 Numba 问题）
     valid_series = fracdiff_series.dropna()
     t_stat, p_value = None, None
     if len(valid_series) > 10:
-        t_stat, p_value, _ = adf_test(valid_series)
+        adf_result = adfuller(valid_series.values, regression='c')
+        t_stat, p_value = adf_result[0], adf_result[1]
         print(f"  ADF 检验: t={t_stat:.4f}, p={p_value:.4f}")
         if p_value < 0.05:
             print(f"  ✅ 序列平稳 (p < 0.05)")
@@ -216,7 +217,9 @@ def plot_cusum_state(
     :param event_indices: 事件点索引
     :param save_path: 保存路径
     """
-    valid_idx = fracdiff_series.dropna().index
+    # CUSUM Filter 使用 FracDiff 的变化量，索引需从变化量序列获取
+    fracdiff_diff = fracdiff_series.diff()
+    valid_idx = fracdiff_diff.dropna().index
 
     fig, ax = plt.subplots(figsize=(14, 6))
 
@@ -255,11 +258,13 @@ def plot_event_distribution(
     绘制事件点分布图（价格序列上标记事件点）。
 
     :param bars: Dollar Bars DataFrame
-    :param event_indices: 事件点索引（对应 fracdiff_series）
+    :param event_indices: 事件点索引（对应 fracdiff_diff）
     :param fracdiff_series: FracDiff 序列（用于映射索引）
     :param save_path: 保存路径
     """
-    valid_idx = fracdiff_series.dropna().index
+    # CUSUM Filter 使用 FracDiff 的变化量，索引需从变化量序列获取
+    fracdiff_diff = fracdiff_series.diff()
+    valid_idx = fracdiff_diff.dropna().index
     event_timestamps = valid_idx[event_indices]
 
     # 事件点对应的价格
@@ -286,26 +291,129 @@ def plot_event_distribution(
     print(f"✅ 事件分布图已保存: {save_path}")
 
 
-def main():
-    """测试完整 FracDiff + CUSUM 流程"""
-    bars_path = os.path.join(BARS_DIR, 'dollar_bars_target6.parquet')
+# ============================================================
+# 输出保存
+# ============================================================
 
-    # 加载数据
+def save_outputs(
+    bars: pd.DataFrame,
+    fracdiff_series: pd.Series,
+    optimal_d: float,
+    event_indices: np.ndarray,
+    adf_p_value: float  # ADF 检验 p 值
+):
+    """
+    保存 FracDiff 序列和 CUSUM 事件点。
+
+    :param bars: Dollar Bars DataFrame
+    :param fracdiff_series: FracDiff 序列（含 NaN）
+    :param optimal_d: 最优 d 值
+    :param event_indices: 事件点索引（对应 fracdiff_diff）
+    :param adf_p_value: ADF 检验 p 值
+    """
+    os.makedirs(FEATURES_DIR, exist_ok=True)
+
+    # 1. FracDiff 序列
+    fracdiff_df = pd.DataFrame({
+        'fracdiff': fracdiff_series,
+    })
+    fracdiff_path = os.path.join(FEATURES_DIR, 'fracdiff_series.parquet')
+    fracdiff_df.to_parquet(fracdiff_path)
+    print(f"\n✅ FracDiff 序列已保存: {fracdiff_path}")
+    print(f"   长度: {len(fracdiff_df)}")
+
+    # 保存参数信息
+    params_df = pd.DataFrame({
+        'optimal_d': [optimal_d],
+        'n_events': [len(event_indices)],
+        'adf_p_value': [adf_p_value]
+    })
+    params_path = os.path.join(FEATURES_DIR, 'fracdiff_params.parquet')
+    params_df.to_parquet(params_path)
+    print(f"✅ 参数信息已保存: {params_path}")
+
+    # 2. CUSUM 事件点（使用变化量序列的索引）
+    fracdiff_diff = fracdiff_series.diff()
+    valid_idx = fracdiff_diff.dropna().index
+    event_timestamps = valid_idx[event_indices]
+
+    events_df = pd.DataFrame({
+        'timestamp': event_timestamps,
+        'price': bars['close'].loc[event_timestamps].values,
+        'fracdiff': fracdiff_series.loc[event_timestamps].values,
+    })
+    events_path = os.path.join(FEATURES_DIR, 'cusum_events.parquet')
+    events_df.to_parquet(events_path)
+    print(f"✅ CUSUM 事件点已保存: {events_path}")
+    print(f"   事件数量: {len(events_df)}")
+
+
+def main():
+    """
+    IF9999 Phase 2 特征工程主流程。
+    """
+    print("=" * 70)
+    print("  IF9999 Phase 2 Feature Engineering")
+    print("=" * 70)
+
+    # 确保输出目录存在
+    os.makedirs(FEATURES_DIR, exist_ok=True)
+    os.makedirs(FIGURES_DIR, exist_ok=True)
+
+    # Step 1: 加载 Dollar Bars
+    print("\n[Step 1] 加载 Dollar Bars...")
+    bars_path = os.path.join(BARS_DIR, 'dollar_bars_target6.parquet')
     bars = load_dollar_bars(bars_path)
     prices = bars['close']
 
-    # FracDiff
+    # Step 2: FracDiff 优化
+    print("\n[Step 2] FracDiff 参数优化...")
     optimal_d, fracdiff_series, adf_result = run_fracdiff_optimization(prices)
 
-    # CUSUM 阈值
+    # Step 3: CUSUM 阈值
+    print("\n[Step 3] 计算 CUSUM 动态阈值...")
     threshold_series = compute_dynamic_cusum_threshold(fracdiff_series, CUSUM_WINDOW)
 
-    # CUSUM Filter
+    # Step 4: CUSUM Filter
+    print("\n[Step 4] 应用 CUSUM Filter...")
     event_indices, s_pos, s_neg, n_events = run_cusum_filter(fracdiff_series, threshold_series)
 
-    print(f"\n完整流程测试完成")
-    print(f"  optimal_d = {optimal_d:.4f}")
-    print(f"  n_events = {n_events}")
+    # Step 5: 可视化
+    print("\n[Step 5] 生成可视化图表...")
+    plot_fracdiff_comparison(
+        prices, fracdiff_series, optimal_d,
+        os.path.join(FIGURES_DIR, 'fracdiff_comparison.png')
+    )
+
+    plot_cusum_state(
+        fracdiff_series, s_pos, s_neg, threshold_series, event_indices,
+        os.path.join(FIGURES_DIR, 'cusum_state.png')
+    )
+
+    plot_event_distribution(
+        bars, event_indices, fracdiff_series,
+        os.path.join(FIGURES_DIR, 'event_distribution.png')
+    )
+
+    # Step 6: 保存输出
+    print("\n[Step 6] 保存输出文件...")
+    save_outputs(
+        bars, fracdiff_series, optimal_d, event_indices,
+        adf_result[1]  # ADF p-value
+    )
+
+    # 完成
+    print("\n" + "=" * 70)
+    print("  Phase 2 Feature Engineering 完成")
+    print("=" * 70)
+    print(f"输出目录: {FEATURES_DIR}")
+    print(f"  - fracdiff_series.parquet")
+    print(f"  - fracdiff_params.parquet")
+    print(f"  - cusum_events.parquet")
+    print(f"图表目录: {FIGURES_DIR}")
+    print(f"  - fracdiff_comparison.png")
+    print(f"  - cusum_state.png")
+    print(f"  - event_distribution.png")
 
 
 if __name__ == "__main__":
