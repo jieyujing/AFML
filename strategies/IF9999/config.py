@@ -13,7 +13,7 @@ DATA_PATH = "/Users/link/Documents/AFMLKIT/data/csv/IF9999.CCFX-2020-1-1-To-2026
 CONTRACT_MULTIPLIER = 300  # IF 每点 300 元人民币
 
 # Dollar Bars 参数
-TARGET_DAILY_BARS = 50     # 目标每天 50 个 Bars
+TARGET_DAILY_BARS = 4      # 目标每天 4 个 Bars（参数优化最优值）
 EWMA_SPAN = 20             # 动态阈值 EWMA 窗口
 
 # 验证参数
