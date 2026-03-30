@@ -89,7 +89,6 @@ def compute_dynamic_thresholds(
 
 @njit(nogil=True)
 def _dynamic_dollar_bar_indexer(
-    timestamps: np.ndarray,
     prices: np.ndarray,
     volumes: np.ndarray,
     thresholds: np.ndarray,
@@ -98,19 +97,21 @@ def _dynamic_dollar_bar_indexer(
     """
     动态阈值 Dollar Bar indexer（Numba 加速）。
 
-    :param timestamps: 时间戳数组（纳秒）
     :param prices: 价格数组
     :param volumes: 成交量数组
     :param thresholds: 每个时间点对应的阈值数组
     :param contract_multiplier: 合约乘数
     :returns: Bar close 索引列表
+
+    .. note::
+        首个元素的 dollar value 在循环外初始化，循环从索引 1 开始。
     """
     n = len(prices)
     indices = NumbaList()
     indices.append(0)  # 第一个点作为起始
 
-    cum_dollar = 0.0
-    for i in range(n):
+    cum_dollar = prices[0] * volumes[0] * contract_multiplier  # 初始化包含首元素
+    for i in range(1, n):  # 从索引 1 开始
         cum_dollar += prices[i] * volumes[i] * contract_multiplier
         if cum_dollar >= thresholds[i]:
             indices.append(i)
@@ -172,14 +173,13 @@ def build_dollar_bars(df: pd.DataFrame, thresholds: pd.Series) -> pd.DataFrame:
     df['threshold'] = df['threshold'].fillna(thresholds.mean())
 
     # 准备数组
-    timestamps = df.index.astype(np.int64).values
     prices = df['close'].values.astype(np.float64)
     volumes = df['volume'].values.astype(np.float64)
     threshold_arr = df['threshold'].values.astype(np.float64)
 
     # 构建 Bar 索引（Numba 加速）
     close_indices = _dynamic_dollar_bar_indexer(
-        timestamps, prices, volumes, threshold_arr, float(CONTRACT_MULTIPLIER)
+        prices, volumes, threshold_arr, float(CONTRACT_MULTIPLIER)
     )
     close_indices = np.array(close_indices, dtype=np.int64)
 
