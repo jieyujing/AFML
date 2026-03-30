@@ -19,6 +19,7 @@ import matplotlib
 matplotlib.use('Agg')  # 非交互模式
 import matplotlib.pyplot as plt
 import seaborn as sns
+from statsmodels.stats.diagnostic import acorr_ljungbox
 
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -189,6 +190,128 @@ def build_dollar_bars(df: pd.DataFrame, thresholds: pd.Series) -> pd.DataFrame:
     print(f"✅ Dollar Bars 构建完成: {len(bars)} bars")
     print(f"   时间范围: {bars.index.min()} ~ {bars.index.max()}")
     return bars
+
+
+def compute_returns(bars: pd.DataFrame, log: bool = True) -> pd.Series:
+    """
+    计算收益率序列。
+
+    :param bars: Bar DataFrame with close column
+    :param log: 是否使用对数收益率
+    :returns: 收益率 Series
+    """
+    if log:
+        returns = np.log(bars['close']).diff().dropna()
+    else:
+        returns = bars['close'].pct_change().dropna()
+    returns.name = 'returns'
+    return returns
+
+
+def validate_independence(returns: pd.Series, acf_lags: list = [1, 5, 10]) -> dict:
+    """
+    第一刀：独立性验证（序列相关性检验）。
+
+    :param returns: 收益率序列
+    :param acf_lags: 自相关检验滞后阶数
+    :returns: 验证结果字典
+    """
+    # AC1 计算
+    ac1 = np.corrcoef(returns[:-1], returns[1:])[0, 1]
+
+    # Ljung-Box 检验
+    lb_result = acorr_ljungbox(returns, lags=[10], return_df=True)
+    lb_pvalue = lb_result['lb_pvalue'].values[0]
+
+    result = {
+        'AC1': ac1,
+        'Ljung_Box_p': lb_pvalue,
+        'pass': abs(ac1) < 0.05 and lb_pvalue > 0.05,
+        'description': f"AC1={ac1:.4f} (目标≈0), LB p={lb_pvalue:.4f} (目标>0.05)"
+    }
+    return result
+
+
+def validate_identically_distributed(returns: pd.Series) -> dict:
+    """
+    第二刀：同分布验证（方差的方差检验）。
+
+    :param returns: 收益率序列
+    :returns: 验证结果字典
+    """
+    # 按月分组计算方差
+    monthly_vars = returns.groupby(returns.index.to_period('M')).var()
+    vov = monthly_vars.var()
+    mean_var = monthly_vars.mean()
+
+    result = {
+        'VoV': vov,
+        'mean_variance': mean_var,
+        'VoV_ratio': vov / mean_var if mean_var > 0 else np.nan,
+        'pass': vov < mean_var * 0.1,  # VoV < 均值的 10%
+        'description': f"VoV={vov:.6f}, mean_var={mean_var:.6f}, ratio={vov/mean_var:.4f} (目标→0)"
+    }
+    return result
+
+
+def validate_normality(returns: pd.Series) -> dict:
+    """
+    第三刀：正态性验证（Jarque-Bera 检验）。
+
+    :param returns: 收益率序列
+    :returns: 验证结果字典
+    """
+    jb_stat, jb_pvalue = stats.jarque_bera(returns)
+    skew = stats.skew(returns)
+    kurt = stats.kurtosis(returns)  # Fisher 定义（正态=0）
+
+    result = {
+        'JB_stat': jb_stat,
+        'JB_p': jb_pvalue,
+        'Skewness': skew,
+        'Kurtosis': kurt + 3,  # 转换为 Pearson 定义（正态=3）
+        'pass': jb_pvalue > 0.05 or (abs(skew) < 0.5 and abs(kurt) < 1),
+        'description': f"JB={jb_stat:.2f}, Skew={skew:.4f}, Kurt={kurt+3:.4f} (目标: Skew≈0, Kurt≈3)"
+    }
+    return result
+
+
+def run_three_knife_validation(time_returns: pd.Series, dollar_returns: pd.Series) -> dict:
+    """
+    对 Time Bars 和 Dollar Bars 进行三刀验证对比。
+
+    :param time_returns: Time Bars 收益率
+    :param dollar_returns: Dollar Bars 收益率
+    :returns: 完整验证结果字典
+    """
+    results = {
+        'time_bars': {
+            'independence': validate_independence(time_returns),
+            'identically_distributed': validate_identically_distributed(time_returns),
+            'normality': validate_normality(time_returns),
+        },
+        'dollar_bars': {
+            'independence': validate_independence(dollar_returns),
+            'identically_distributed': validate_identically_distributed(dollar_returns),
+            'normality': validate_normality(dollar_returns),
+        }
+    }
+
+    # 打印对比结果
+    print("\n" + "=" * 60)
+    print("  三刀验证结果对比")
+    print("=" * 60)
+    print(f"\n第一刀（独立性）:")
+    print(f"  Time Bars:  {results['time_bars']['independence']['description']}")
+    print(f"  Dollar Bars: {results['dollar_bars']['independence']['description']}")
+    print(f"\n第二刀（同分布）:")
+    print(f"  Time Bars:  {results['time_bars']['identically_distributed']['description']}")
+    print(f"  Dollar Bars: {results['dollar_bars']['identically_distributed']['description']}")
+    print(f"\n第三刀（正态性）:")
+    print(f"  Time Bars:  {results['time_bars']['normality']['description']}")
+    print(f"  Dollar Bars: {results['dollar_bars']['normality']['description']}")
+
+    return results
 
 
 if __name__ == "__main__":
