@@ -8,10 +8,17 @@
 4. 构建 Dollar Bars
 5. 三刀验证（独立性、同分布、正态性）
 6. 可视化输出
+7. 参数优化（可选）
+
+参数优化加权评分（AFML 优先级）:
+- 独立性 50%: AC1 25% + Ljung-Box p 25%
+- 同分布 30%: VoV ratio 30%
+- 正态性 20%: JB 10% + Skew 5% + Kurt 5%
 """
 
 import os
 import sys
+import re
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -21,6 +28,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 sns.set_theme(style="whitegrid", context="paper")
 from statsmodels.stats.diagnostic import acorr_ljungbox
+from statsmodels.graphics.tsaplots import plot_acf
 
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -60,7 +68,7 @@ def compute_dynamic_thresholds(
     df: pd.DataFrame, target_daily_bars: int, ewma_span: int
 ) -> pd.Series:
     """
-    计算动态 Dollar Bar 阈值。
+    计算动态 Dollar bar 阈值。
 
     阈值 = EWMA(日均美元交易量) / 目标每日 Bar 数
 
@@ -209,6 +217,10 @@ def compute_returns(bars: pd.DataFrame, log: bool = True) -> pd.Series:
     return returns
 
 
+# ============================================================
+# 三刀验证
+# ============================================================
+
 def validate_independence(returns: pd.Series, acf_lags: list = [1, 5, 10]) -> dict:
     """
     第一刀：独立性验证（序列相关性检验）。
@@ -315,6 +327,223 @@ def run_three_knife_validation(time_returns: pd.Series, dollar_returns: pd.Serie
     return results
 
 
+# ============================================================
+# 参数优化
+# ============================================================
+
+def compute_weighted_score(
+    ac1: float,
+    lb_p: float,
+    vov_ratio: float,
+    jb_stat: float,
+    skew: float,
+    kurt: float,
+) -> dict:
+    """
+    计算加权评分（AFML 优先级：独立性 > 同分布 > 正态性）。
+
+    权重分配：
+    - 第一刀（独立性）：50%
+        - AC1: 25%（目标 ≈ 0，归一化：min-max 到 0-1）
+        - Ljung-Box p: 25%（目标 > 0.05，归一化：1 - min(p, 0.05)/0.05）
+    - 第二刀（同分布）：30%
+        - VoV ratio: 30%（目标 → 0，归一化：min-max 到 0-1）
+    - 第三刀（正态性）：20%
+        - JB: 10%（目标最低，对数归一化）
+        - Skew: 5%（目标 ≈ 0，归一化：abs(skew)/2，上限 1）
+        - Kurt: 5%（目标 ≈ 3，归一化：abs(kurt-3)/50，上限 1）
+
+    :returns: 评分详情字典
+    """
+    # 第一刀：独立性（50%）
+    # AC1 归一化：假设合理范围 [0, 0.05]，越小越好
+    ac1_score = min(abs(ac1) / 0.05, 1.0)  # 0-1，越小越好
+    # Ljung-Box p 归一化：目标 > 0.05，越大越好
+    lb_score = 1.0 - min(lb_p, 0.05) / 0.05  # 0-1，越小越好
+
+    independence_score = 0.25 * ac1_score + 0.25 * lb_score  # 权重 50%
+
+    # 第二刀：同分布（30%）
+    # VoV ratio 归一化：假设合理范围 [0, 0.1]，越小越好
+    vov_score = min(vov_ratio / 0.1, 1.0) if not np.isnan(vov_ratio) else 1.0
+
+    identically_distributed_score = 0.30 * vov_score  # 权重 30%
+
+    # 第三刀：正态性（20%）
+    # JB 归一化：对数缩放，假设范围 [1e4, 1e9]
+    jb_score = min(np.log10(max(jb_stat, 1)) / 9, 1.0)  # log10(JB)/9，0-1
+    # Skew 归一化：假设合理范围 [0, 2]
+    skew_score = min(abs(skew) / 2, 1.0)
+    # Kurt 归一化：假设合理范围 [3, 50]，偏离 3 的程度
+    kurt_score = min(abs(kurt - 3) / 47, 1.0)
+
+    normality_score = 0.10 * jb_score + 0.05 * skew_score + 0.05 * kurt_score  # 权重 20%
+
+    # 综合评分（越低越好，范围 0-1）
+    total_score = independence_score + identically_distributed_score + normality_score
+
+    return {
+        'ac1_score': ac1_score,
+        'lb_score': lb_score,
+        'vov_score': vov_score,
+        'jb_score': jb_score,
+        'skew_score': skew_score,
+        'kurt_score': kurt_score,
+        'independence_score': independence_score,
+        'identically_distributed_score': identically_distributed_score,
+        'normality_score': normality_score,
+        'weighted_score': total_score,
+    }
+
+
+def evaluate_target_bars(df: pd.DataFrame, target_bars: int, ewma_span: int = 20) -> dict:
+    """
+    评估指定 TARGET_DAILY_BARS 参数的效果。
+
+    :param df: 1 分钟 OHLCV 数据
+    :param target_bars: 目标每日 Bar 数量
+    :param ewma_span: EWMA 窗口
+    :returns: 评估结果字典
+    """
+    # 构建 Dollar Bars
+    thresholds = compute_dynamic_thresholds(df, target_bars, ewma_span)
+    bars = build_dollar_bars(df, thresholds)
+    returns = compute_returns(bars)
+
+    # 计算验证指标
+    ac1 = np.corrcoef(returns[:-1], returns[1:])[0, 1]
+    lb_result = acorr_ljungbox(returns, lags=[10], return_df=True)
+    lb_p = lb_result['lb_pvalue'].values[0]
+
+    # VoV
+    monthly_vars = returns.groupby(returns.index.to_period('M')).var()
+    vov = monthly_vars.var()
+    mean_var = monthly_vars.mean()
+    vov_ratio = vov / mean_var if mean_var > 0 else np.nan
+
+    # JB 和分布统计
+    jb_stat, _ = stats.jarque_bera(returns)
+    skew = stats.skew(returns)
+    kurt = stats.kurtosis(returns) + 3
+
+    # 计算实际每日 Bar 数
+    daily_counts = bars.groupby(bars.index.date).size()
+    actual_bars_per_day = daily_counts.mean()
+
+    # 计算加权评分
+    scores = compute_weighted_score(ac1, lb_p, vov_ratio, jb_stat, skew, kurt)
+
+    return {
+        'target_bars': target_bars,
+        'n_bars': len(bars),
+        'actual_bars_per_day': actual_bars_per_day,
+        'AC1': ac1,
+        'Ljung_Box_p': lb_p,
+        'VoV_ratio': vov_ratio,
+        'JB_stat': jb_stat,
+        'Skewness': skew,
+        'Kurtosis': kurt,
+        # 加权评分详情
+        'independence': scores['independence_score'],
+        'identically_dist': scores['identically_distributed_score'],
+        'normality': scores['normality_score'],
+        'weighted_score': scores['weighted_score'],
+    }
+
+
+def run_parameter_optimization(df: pd.DataFrame, target_range: list) -> pd.DataFrame:
+    """
+    运行参数优化，对比不同 TARGET_DAILY_BARS 的效果。
+
+    :param df: 1 分钟 OHLCV 数据
+    :param target_range: 目标每日 Bar 数量范围
+    :returns: 对比结果 DataFrame
+    """
+    results = []
+
+    print("=" * 70)
+    print("  Dollar Bars 参数优化")
+    print("=" * 70)
+
+    for target in target_range:
+        print(f"\n  测试 TARGET_DAILY_BARS = {target}...")
+        result = evaluate_target_bars(df, target, EWMA_SPAN)
+        results.append(result)
+        print(f"    实际日均: {result['actual_bars_per_day']:.1f} bars")
+        print(f"    AC1: {result['AC1']:.4f}, JB: {result['JB_stat']:.2e}, 加权评分: {result['weighted_score']:.4f}")
+
+    results_df = pd.DataFrame(results)
+    return results_df
+
+
+def plot_parameter_comparison(results_df: pd.DataFrame, save_path: str):
+    """
+    绘制参数对比图。
+
+    :param results_df: 对比结果 DataFrame
+    :param save_path: 保存路径
+    """
+    fig, axes = plt.subplots(2, 3, figsize=(14, 8))
+
+    x = results_df['target_bars']
+
+    # 1. AC1（越接近 0 越好）
+    ax = axes[0, 0]
+    ax.bar(x.astype(str), np.abs(results_df['AC1']), color='steelblue')
+    ax.set_title('AC1 (lower is better)', fontsize=11)
+    ax.set_xlabel('Target Bars/Day')
+    ax.set_ylabel('|AC1|')
+
+    # 2. Ljung-Box p-value（越大越好）
+    ax = axes[0, 1]
+    ax.bar(x.astype(str), results_df['Ljung_Box_p'], color='darkorange')
+    ax.axhline(y=0.05, color='red', linestyle='--', label='p=0.05')
+    ax.set_title('Ljung-Box p-value (higher is better)', fontsize=11)
+    ax.set_xlabel('Target Bars/Day')
+    ax.set_ylabel('p-value')
+    ax.legend()
+
+    # 3. JB 统计量（越低越好）
+    ax = axes[0, 2]
+    ax.bar(x.astype(str), results_df['JB_stat'] / 1e6, color='forestgreen')
+    ax.set_title('JB Statistic (lower is better, in millions)', fontsize=11)
+    ax.set_xlabel('Target Bars/Day')
+    ax.set_ylabel('JB (×10⁶)')
+
+    # 4. 偏度（越接近 0 越好）
+    ax = axes[1, 0]
+    ax.bar(x.astype(str), np.abs(results_df['Skewness']), color='purple')
+    ax.set_title('Skewness (closer to 0 is better)', fontsize=11)
+    ax.set_xlabel('Target Bars/Day')
+    ax.set_ylabel('|Skewness|')
+
+    # 5. 峰度（越接近 3 越好）
+    ax = axes[1, 1]
+    ax.bar(x.astype(str), np.abs(results_df['Kurtosis'] - 3), color='coral')
+    ax.set_title('Kurtosis Distance from 3 (lower is better)', fontsize=11)
+    ax.set_xlabel('Target Bars/Day')
+    ax.set_ylabel('|Kurtosis - 3|')
+
+    # 6. 加权综合评分（按 AFML 优先级）
+    ax = axes[1, 2]
+    bars = ax.bar(x.astype(str), results_df['weighted_score'], color='teal')
+    # 标记最优
+    min_idx = results_df['weighted_score'].idxmin()
+    bars[min_idx].set_color('gold')
+    ax.set_title('Weighted Score (lower is better)\n独立50%+同分布30%+正态20%', fontsize=10)
+    ax.set_xlabel('Target Bars/Day')
+    ax.set_ylabel('Score')
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"\n✅ 参数对比图已保存: {save_path}")
+
+
+# ============================================================
+# 可视化
+# ============================================================
+
 def plot_price_comparison(time_df: pd.DataFrame, dollar_bars: pd.DataFrame, save_path: str):
     """
     绘制 Time Bars vs Dollar Bars 价格走势对比图。
@@ -349,7 +578,7 @@ def plot_price_comparison(time_df: pd.DataFrame, dollar_bars: pd.DataFrame, save
 
 
 def plot_validation_metrics(time_returns: pd.Series, dollar_returns: pd.Series,
-                             validation_results: dict, save_path: str):
+                            validation_results: dict, save_path: str):
     """
     绘制三刀验证指标对比图。
 
@@ -362,7 +591,6 @@ def plot_validation_metrics(time_returns: pd.Series, dollar_returns: pd.Series,
 
     # 子图 1: ACF 对比
     ax1 = fig.add_subplot(2, 2, 1)
-    from statsmodels.graphics.tsaplots import plot_acf
     plot_acf(time_returns.dropna(), lags=20, ax=ax1, title='Time Bars ACF', color='steelblue')
     ax1.set_ylim(-0.15, 0.15)
 
@@ -437,9 +665,32 @@ def plot_return_distribution(time_returns: pd.Series, dollar_returns: pd.Series,
     print(f"✅ 保存收益率分布图: {save_path}")
 
 
-def main():
+def update_config_target_bars(best_target: int):
+    """
+    更新 config.py 中的 TARGET_DAILY_BARS 参数。
+
+    :param best_target: 最优参数值
+    """
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.py')
+    with open(config_path, 'r') as f:
+        config_content = f.read()
+
+    # 替换 TARGET_DAILY_BARS 的值
+    new_config = re.sub(
+        r'TARGET_DAILY_BARS = \d+',
+        f'TARGET_DAILY_BARS = {best_target}',
+        config_content
+    )
+    with open(config_path, 'w') as f:
+        f.write(new_config)
+    print(f"  ✅ 已更新 config.py: TARGET_DAILY_BARS = {best_target}")
+
+
+def main(run_optimization: bool = True):
     """
     IF9999 Dollar Bars 构建与验证主流程。
+
+    :param run_optimization: 是否运行参数优化
     """
     print("=" * 60)
     print("  IF9999 Dollar Bars 构建与验证")
@@ -453,32 +704,66 @@ def main():
     print("\n[Step 1] 加载 IF9999 1 分钟数据...")
     df = load_if_data(DATA_PATH)
 
-    # Step 2: 计算动态阈值
-    print("\n[Step 2] 计算动态阈值...")
-    thresholds = compute_dynamic_thresholds(df, TARGET_DAILY_BARS, EWMA_SPAN)
+    # Step 2: 参数优化（可选）
+    if run_optimization:
+        print("\n[Step 2] 参数优化...")
+        target_range = [4, 6, 8, 10, 12, 15, 20, 25, 30]
+        results_df = run_parameter_optimization(df, target_range)
 
-    # Step 3: 构建 Dollar Bars
-    print("\n[Step 3] 构建 Dollar Bars...")
+        # 打印结果表格
+        print("\n" + "=" * 70)
+        print("  参数优化结果")
+        print("=" * 70)
+        print(results_df[['target_bars', 'actual_bars_per_day', 'AC1', 'Ljung_Box_p',
+                          'JB_stat', 'Skewness', 'Kurtosis', 'weighted_score']].to_string(index=False))
+
+        # 找出最优参数
+        best_row = results_df.loc[results_df['weighted_score'].idxmin()]
+        best_target = int(best_row['target_bars'])
+
+        print("\n" + "-" * 70)
+        print(f"  最优参数: TARGET_DAILY_BARS = {best_target}")
+        print(f"  加权综合评分: {best_row['weighted_score']:.4f}")
+        print("-" * 70)
+
+        # 更新 config
+        update_config_target_bars(best_target)
+
+        # 保存参数优化结果
+        results_df.to_csv(os.path.join(FIGURES_DIR, '01_parameter_optimization.csv'), index=False)
+        plot_parameter_comparison(results_df, os.path.join(FIGURES_DIR, '01_parameter_optimization.png'))
+
+        # 使用最优参数构建 Dollar Bars
+        target_daily_bars = best_target
+    else:
+        target_daily_bars = TARGET_DAILY_BARS
+
+    # Step 3: 计算动态阈值
+    print("\n[Step 3] 计算动态阈值...")
+    thresholds = compute_dynamic_thresholds(df, target_daily_bars, EWMA_SPAN)
+
+    # Step 4: 构建 Dollar Bars
+    print("\n[Step 4] 构建 Dollar Bars...")
     bars = build_dollar_bars(df, thresholds)
 
-    # Step 4: 保存 Dollar Bars
-    bars_path = os.path.join(BARS_DIR, 'dollar_bars.parquet')
+    # Step 5: 保存 Dollar Bars
+    bars_path = os.path.join(BARS_DIR, f'dollar_bars_target{target_daily_bars}.parquet')
     bars.to_parquet(bars_path)
     print(f"✅ Dollar Bars 已保存: {bars_path}")
 
-    # Step 5: 三刀验证
+    # Step 6: 三刀验证
     print("\n[Step 5] 三刀验证...")
     time_returns = compute_returns(df)
     dollar_returns = compute_returns(bars)
     validation_results = run_three_knife_validation(time_returns, dollar_returns)
 
-    # Step 6: 可视化
+    # Step 7: 可视化
     print("\n[Step 6] 生成可视化图表...")
-    plot_price_comparison(df, bars, os.path.join(FIGURES_DIR, 'price_comparison.png'))
+    plot_price_comparison(df, bars, os.path.join(FIGURES_DIR, '01_price_comparison.png'))
     plot_validation_metrics(time_returns, dollar_returns, validation_results,
-                           os.path.join(FIGURES_DIR, 'validation_metrics.png'))
+                            os.path.join(FIGURES_DIR, '01_validation_metrics.png'))
     plot_return_distribution(time_returns, dollar_returns,
-                            os.path.join(FIGURES_DIR, 'return_distribution.png'))
+                             os.path.join(FIGURES_DIR, '01_return_distribution.png'))
 
     print("\n" + "=" * 60)
     print("  流程完成")
@@ -489,4 +774,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(run_optimization=True)
