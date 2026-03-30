@@ -80,39 +80,36 @@ def compute_pnl(
     :param trend_df: Trend Labels DataFrame (t1, t_value, side)
     :returns: DataFrame with columns [pnl, t_value, side, window_length, entry_price, exit_price]
     """
+    # 验证输入类型
+    if not isinstance(prices, pd.Series):
+        raise TypeError(f"prices must be Series, got {type(prices)}")
+
     results = []
 
-    for event_ts, row in trend_df.iterrows():
-        t1 = row['t1']
-        side = row['side']
-        t_value = row['t_value']
+    for row in trend_df.itertuples():
+        event_ts = row.Index
+        t1 = row.t1
+        side = row.side
+        t_value = row.t_value
 
-        # 入场价格（事件点 close）
-        try:
-            entry_price = prices.loc[event_ts]
-        except KeyError:
-            # 事件点可能在 bars 中不存在（边界情况）
+        # 检查 t1 有效
+        if pd.isna(t1):
             continue
 
-        # 出场价格（t1 时间点 close）
+        # 使用 asof 找最近的价格 (简洁、类型安全)
         try:
-            exit_price = prices.loc[t1]
-        except KeyError:
-            # t1 可能超出 bars 范围，取最近的
-            if t1 > prices.index.max():
-                exit_price = prices.iloc[-1]
-            else:
-                # 找 t1 之前最近的 bar
-                valid_idx = prices.index[prices.index <= t1]
-                if len(valid_idx) == 0:
-                    continue
-                exit_price = prices.loc[valid_idx[-1]]
+            entry_price = prices.asof(event_ts)
+            exit_price = prices.asof(t1)
+        except Exception:
+            continue
 
         # 点数收益 = side * (exit - entry)
         pnl = side * (exit_price - entry_price)
 
-        # 窗口长度（bars 数量）
-        window_bars = len(prices.loc[event_ts:t1]) - 1  # 排除起点
+        # 计算窗口长度 (使用实际索引位置)
+        entry_idx = prices.index.get_indexer([event_ts], method='ffill')[0]
+        exit_idx = prices.index.get_indexer([t1], method='ffill')[0]
+        window_bars = max(0, exit_idx - entry_idx)
 
         results.append({
             'timestamp': event_ts,
