@@ -301,8 +301,8 @@ def main():
     df = load_if_data(DATA_PATH)
     print(f"  数据量: {len(df)} 行")
 
-    # 定义测试范围
-    target_range = [20, 30, 40, 50, 60, 80, 100]
+    # 定义测试范围（从更小的值开始）
+    target_range = [4, 6, 8, 10, 12, 15, 20, 25, 30]
 
     print("\n[Step 2] 运行参数优化...")
     results_df = run_parameter_optimization(df, target_range)
