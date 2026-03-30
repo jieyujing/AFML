@@ -35,6 +35,14 @@ FRACDIFF_MAX_D = 1.0       # d 最大值
 
 # CUSUM Filter 参数
 CUSUM_WINDOW = 20          # 动态阈值滚动窗口
+CUSUM_MULTIPLIER = 3       # 阈值乘数（控制事件率：越大事件越少）
 
 # Phase 2 输出路径
 FEATURES_DIR = os.path.join(OUTPUT_DIR, "features")
+
+# ============================================================
+# Phase 3: Trend Scanning 参数
+# ============================================================
+
+# Trend Scanning 窗口范围（Bars 数量）
+TREND_WINDOWS = [5, 10, 20, 30, 50]  # 短期趋势，适合期货
