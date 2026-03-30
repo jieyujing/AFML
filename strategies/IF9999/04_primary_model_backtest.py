@@ -190,7 +190,10 @@ def print_overall_stats(stats: dict):
     print("=" * 70)
     print(f"总信号数: {stats['n_total']}")
     print(f"盈利信号: {stats['n_win']} ({stats['win_rate']*100:.1f}%)")
-    print(f"亏损信号: {stats['n_loss']} ({stats['n_loss']/stats['n_total']*100:.1f}%)")
+    if stats['n_total'] > 0:
+        print(f"亏损信号: {stats['n_loss']} ({stats['n_loss']/stats['n_total']*100:.1f}%)")
+    else:
+        print(f"亏损信号: {stats['n_loss']} (N/A)")
     print(f"持平信号: {stats['n_flat']}")
     print("-" * 70)
     print(f"胜率: {stats['win_rate']*100:.1f}%")
@@ -216,6 +219,13 @@ def compute_quantile_stats(pnl_df: pd.DataFrame) -> tuple:
     :param pnl_df: 收益 DataFrame
     :returns: (quantile_stats DataFrame, top10_thresh, mid_thresh)
     """
+    # 处理空 DataFrame
+    if len(pnl_df) == 0:
+        return pd.DataFrame(), 0.0, 0.0
+
+    # 避免修改原始 DataFrame
+    pnl_df = pnl_df.copy()
+
     t_abs = pnl_df['t_value'].abs()
 
     # 分位数边界
