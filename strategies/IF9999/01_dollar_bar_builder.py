@@ -51,8 +51,41 @@ def load_if_data(data_path: str) -> pd.DataFrame:
     return df
 
 
+def compute_dynamic_thresholds(
+    df: pd.DataFrame, target_daily_bars: int, ewma_span: int
+) -> pd.Series:
+    """
+    计算动态 Dollar Bar 阈值。
+
+    阈值 = EWMA(日均美元交易量) / 目标每日 Bar 数
+
+    :param df: OHLCV DataFrame with dollar_volume column
+    :param target_daily_bars: 目标每日 Bar 数量
+    :param ewma_span: EWMA 平滑窗口
+    :returns: Series of daily thresholds indexed by date
+    """
+    # 计算每日总美元交易量
+    daily_dollar = df['dollar_volume'].groupby(df.index.date).sum()
+    daily_dollar.index = pd.to_datetime(daily_dollar.index)
+    daily_dollar.name = 'daily_dollar'
+
+    # 处理零值（非交易日）
+    daily_dollar = daily_dollar.replace(0, np.nan).ffill()
+
+    # EWMA 平滑
+    daily_ewma = daily_dollar.ewm(span=ewma_span, min_periods=1).mean()
+
+    # 计算阈值
+    thresholds = daily_ewma / target_daily_bars
+    thresholds.name = 'threshold'
+
+    print(f"✅ 阈值计算完成: EWMA span={ewma_span}, target={target_daily_bars} bars/day")
+    print(f"   平均阈值: {thresholds.mean():,.0f} 元/bar")
+    return thresholds
+
+
 if __name__ == "__main__":
-    # 测试数据加载
+    # Step 1: 加载数据
     df = load_if_data(DATA_PATH)
     assert len(df) > 0, "数据为空"
     assert 'dollar_volume' in df.columns, "缺少 dollar_volume 列"
@@ -61,3 +94,8 @@ if __name__ == "__main__":
     daily_dollar_vol = df['dollar_volume'].groupby(df.index.date).sum()
     print(f"日均美元交易量: {daily_dollar_vol.mean():,.0f}")
     print(f"数据列: {df.columns.tolist()}")
+
+    # Step 2: 计算动态阈值
+    thresholds = compute_dynamic_thresholds(df, TARGET_DAILY_BARS, EWMA_SPAN)
+    assert len(thresholds) > 0, "阈值为空"
+    print(f"阈值范围: {thresholds.min():,.0f} ~ {thresholds.max():,.0f}")
