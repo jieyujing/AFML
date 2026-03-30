@@ -7,12 +7,12 @@
 ```
 IF9999/
 ├── 01_dollar_bar_builder.py    # Dollar Bars 构建与验证
-├── 02_parameter_optimization.py # Dollar Bars 参数优化
-├── 03_feature_engineering.py   # Phase 2: FracDiff + CUSUM
+├── 02_feature_engineering.py   # Phase 2: FracDiff + CUSUM
+├── 03_trend_scanning.py        # Phase 3: Trend Scanning 标签
 ├── config.py                   # 配置参数
 ├── output/
 │   ├── bars/                   # 生成的 Bar 数据
-│   ├── features/               # Phase 2 特征输出
+│   ├── features/               # 特征和标签输出
 │   └── figures/                # 可视化图表
 └── README.md
 ```
@@ -77,9 +77,43 @@ uv run python strategies/IF9999/03_feature_engineering.py
 | `fracdiff_params.parquet` | 最优 d 值和统计信息 |
 | `cusum_events.parquet` | CUSUM 事件点索引 |
 
+## Phase 3: Trend Scanning 标签生成
+
+运行 Trend Scanning 生成 Primary Model 输出：
+
+```bash
+uv run python strategies/IF9999/03_trend_scanning.py
+```
+
+### Trend Scanning 参数
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| TREND_WINDOWS | [5, 10, 20, 30, 50] | 窗口长度范围（Bars） |
+
+### 输出文件
+
+| 文件 | 说明 |
+|------|------|
+| `trend_labels.parquet` | Trend Scanning 标签（t1, t_value, side） |
+
+### 标签格式
+
+| 列 | 类型 | 说明 |
+|----|------|------|
+| `t1` | Datetime | 趋势窗口结束时间 |
+| `t_value` | float64 | OLS 斜率 t 统计量（样本权重） |
+| `side` | int8 | +1（上涨）/ -1（下跌）/ 0（无趋势） |
+
+### 可视化
+
+| 文件 | 说明 |
+|------|------|
+| `03_trend_distribution.png` | side 和 t_value 分布 |
+| `03_trend_example.png` | 趋势窗口示例（高 |t_value| 事件） |
+
 ## 后续阶段
 
-- Phase 3: 标签生成（Trend Scanning）← 下一步
 - Phase 4: Meta-Labeling 模型训练
 
 ## 参考
