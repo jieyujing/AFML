@@ -94,8 +94,70 @@ def run_fracdiff_optimization(prices: pd.Series) -> tuple:
 
     return optimal_d, fracdiff_series, (t_stat, p_value)
 
+
+# ============================================================
+# CUSUM Filter 模块
+# ============================================================
+
+def compute_dynamic_cusum_threshold(fracdiff_series: pd.Series, window: int) -> pd.Series:
+    """
+    计算动态 CUSUM 阈值。
+
+    基于滚动波动率，与 Dollar Bars 动态阈值风格一致。
+
+    :param fracdiff_series: FracDiff 序列
+    :param window: 滚动窗口
+    :returns: 阈值序列
+    """
+    # 滚动标准差
+    threshold_series = fracdiff_series.rolling(window).std()
+
+    # 前 window 个点用全局 std 填充
+    global_std = fracdiff_series.std()
+    threshold_series = threshold_series.fillna(global_std)
+
+    print(f"\n[CUSUM] 动态阈值计算完成")
+    print(f"  窗口: {window}")
+    print(f"  平均阈值: {threshold_series.mean():.6f}")
+    print(f"  阈值范围: {threshold_series.min():.6f} ~ {threshold_series.max():.6f}")
+
+    return threshold_series
+
+
+def run_cusum_filter(fracdiff_series: pd.Series, threshold_series: pd.Series) -> tuple:
+    """
+    应用 CUSUM Filter 采样事件点。
+
+    使用 FracDiff 序列的变化量作为 CUSUM 输入，
+    因为 CUSUM Filter 期望输入是差值序列（如收益率），
+    而 FracDiff 输出是价格量级的值。
+
+    :param fracdiff_series: FracDiff 序列
+    :param threshold_series: 阈值序列
+    :returns: (event_indices, s_pos, s_neg, n_events)
+    """
+    # 计算 FracDiff 的变化量（类似收益率）
+    fracdiff_diff = fracdiff_series.diff()
+    valid_idx = fracdiff_diff.dropna().index
+
+    # 准备输入数组
+    diff_arr = fracdiff_diff.dropna().values.astype(np.float64)
+    threshold_arr = threshold_series.loc[valid_idx].values.astype(np.float64)
+
+    # 应用 CUSUM Filter
+    event_indices, s_pos, s_neg, thr = cusum_filter_with_state(diff_arr, threshold_arr)
+
+    n_events = len(event_indices)
+    print(f"\n[CUSUM] Filter 应用完成")
+    print(f"  输入: FracDiff 变化量序列")
+    print(f"  事件点数量: {n_events}")
+    print(f"  事件率: {n_events / len(diff_arr) * 100:.2f}%")
+
+    return event_indices, s_pos, s_neg, n_events
+
+
 def main():
-    """测试 FracDiff 模块"""
+    """测试完整 FracDiff + CUSUM 流程"""
     bars_path = os.path.join(BARS_DIR, 'dollar_bars_target6.parquet')
 
     # 加载数据
@@ -105,7 +167,15 @@ def main():
     # FracDiff
     optimal_d, fracdiff_series, adf_result = run_fracdiff_optimization(prices)
 
-    print(f"\n测试完成: optimal_d={optimal_d:.4f}")
+    # CUSUM 阈值
+    threshold_series = compute_dynamic_cusum_threshold(fracdiff_series, CUSUM_WINDOW)
+
+    # CUSUM Filter
+    event_indices, s_pos, s_neg, n_events = run_cusum_filter(fracdiff_series, threshold_series)
+
+    print(f"\n完整流程测试完成")
+    print(f"  optimal_d = {optimal_d:.4f}")
+    print(f"  n_events = {n_events}")
 
 
 if __name__ == "__main__":
