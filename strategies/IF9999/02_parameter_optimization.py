@@ -165,6 +165,71 @@ def compute_kurtosis(returns: pd.Series) -> float:
 # 参数优化主流程
 # ============================================================
 
+def compute_weighted_score(
+    ac1: float,
+    lb_p: float,
+    vov_ratio: float,
+    jb_stat: float,
+    skew: float,
+    kurt: float,
+) -> dict:
+    """
+    计算加权评分（AFML 优先级：独立性 > 同分布 > 正态性）。
+
+    权重分配：
+    - 第一刀（独立性）：50%
+        - AC1: 25%（目标 ≈ 0，归一化：min-max 到 0-1）
+        - Ljung-Box p: 25%（目标 > 0.05，归一化：1 - min(p, 0.05)/0.05）
+    - 第二刀（同分布）：30%
+        - VoV ratio: 30%（目标 → 0，归一化：min-max 到 0-1）
+    - 第三刀（正态性）：20%
+        - JB: 10%（目标最低，对数归一化）
+        - Skew: 5%（目标 ≈ 0，归一化：abs(skew)/2，上限 1）
+        - Kurt: 5%（目标 ≈ 3，归一化：abs(kurt-3)/50，上限 1）
+
+    :returns: 评分详情字典
+    """
+    # 第一刀：独立性（50%）
+    # AC1 归一化：假设合理范围 [0, 0.05]，越小越好
+    ac1_score = min(abs(ac1) / 0.05, 1.0)  # 0-1，越小越好
+    # Ljung-Box p 归一化：目标 > 0.05，越大越好
+    lb_score = 1.0 - min(lb_p, 0.05) / 0.05  # 0-1，越小越好
+
+    independence_score = 0.25 * ac1_score + 0.25 * lb_score  # 权重 50%
+
+    # 第二刀：同分布（30%）
+    # VoV ratio 归一化：假设合理范围 [0, 0.1]，越小越好
+    vov_score = min(vov_ratio / 0.1, 1.0) if not np.isnan(vov_ratio) else 1.0
+
+    identically_distributed_score = 0.30 * vov_score  # 权重 30%
+
+    # 第三刀：正态性（20%）
+    # JB 归一化：对数缩放，假设范围 [1e4, 1e9]
+    jb_score = min(np.log10(max(jb_stat, 1)) / 9, 1.0)  # log10(JB)/9，0-1
+    # Skew 归一化：假设合理范围 [0, 2]
+    skew_score = min(abs(skew) / 2, 1.0)
+    # Kurt 归一化：假设合理范围 [3, 50]，偏离 3 的程度
+    kurt_score = min(abs(kurt - 3) / 47, 1.0)
+
+    normality_score = 0.10 * jb_score + 0.05 * skew_score + 0.05 * kurt_score  # 权重 20%
+
+    # 综合评分（越低越好，范围 0-1）
+    total_score = independence_score + identically_distributed_score + normality_score
+
+    return {
+        'ac1_score': ac1_score,
+        'lb_score': lb_score,
+        'vov_score': vov_score,
+        'jb_score': jb_score,
+        'skew_score': skew_score,
+        'kurt_score': kurt_score,
+        'independence_score': independence_score,
+        'identically_distributed_score': identically_distributed_score,
+        'normality_score': normality_score,
+        'weighted_score': total_score,
+    }
+
+
 def evaluate_target_bars(df: pd.DataFrame, target_bars: int, ewma_span: int = 20) -> dict:
     """
     评估指定 TARGET_DAILY_BARS 参数的效果。
@@ -191,6 +256,9 @@ def evaluate_target_bars(df: pd.DataFrame, target_bars: int, ewma_span: int = 20
     daily_counts = bars.groupby(bars.index.date).size()
     actual_bars_per_day = daily_counts.mean()
 
+    # 计算加权评分
+    scores = compute_weighted_score(ac1, lb_p, vov_ratio, jb_stat, skew, kurt)
+
     return {
         'target_bars': target_bars,
         'n_bars': len(bars),
@@ -201,8 +269,11 @@ def evaluate_target_bars(df: pd.DataFrame, target_bars: int, ewma_span: int = 20
         'JB_stat': jb_stat,
         'Skewness': skew,
         'Kurtosis': kurt,
-        # 综合评分（越低越好）
-        'score': abs(ac1) + jb_stat / 1e8 + abs(skew) + abs(kurt - 3),
+        # 加权评分详情
+        'independence': scores['independence_score'],
+        'identically_dist': scores['identically_distributed_score'],
+        'normality': scores['normality_score'],
+        'weighted_score': scores['weighted_score'],
     }
 
 
@@ -225,7 +296,7 @@ def run_parameter_optimization(df: pd.DataFrame, target_range: list) -> pd.DataF
         result = evaluate_target_bars(df, target, EWMA_SPAN)
         results.append(result)
         print(f"    实际日均: {result['actual_bars_per_day']:.1f} bars")
-        print(f"    AC1: {result['AC1']:.4f}, JB: {result['JB_stat']:.2e}")
+        print(f"    AC1: {result['AC1']:.4f}, JB: {result['JB_stat']:.2e}, 加权评分: {result['weighted_score']:.4f}")
 
     results_df = pd.DataFrame(results)
     return results_df
@@ -279,13 +350,13 @@ def plot_parameter_comparison(results_df: pd.DataFrame, save_path: str):
     ax.set_xlabel('Target Bars/Day')
     ax.set_ylabel('|Kurtosis - 3|')
 
-    # 6. 综合评分
+    # 6. 加权综合评分（按 AFML 优先级）
     ax = axes[1, 2]
-    bars = ax.bar(x.astype(str), results_df['score'], color='teal')
+    bars = ax.bar(x.astype(str), results_df['weighted_score'], color='teal')
     # 标记最优
-    min_idx = results_df['score'].idxmin()
+    min_idx = results_df['weighted_score'].idxmin()
     bars[min_idx].set_color('gold')
-    ax.set_title('Composite Score (lower is better)', fontsize=11)
+    ax.set_title('Weighted Score (lower is better)\n独立50%+同分布30%+正态20%', fontsize=10)
     ax.set_xlabel('Target Bars/Day')
     ax.set_ylabel('Score')
 
@@ -312,17 +383,55 @@ def main():
     print("  参数优化结果")
     print("=" * 70)
     print(results_df[['target_bars', 'actual_bars_per_day', 'AC1', 'Ljung_Box_p',
-                       'JB_stat', 'Skewness', 'Kurtosis', 'score']].to_string(index=False))
+                       'JB_stat', 'Skewness', 'Kurtosis', 'weighted_score']].to_string(index=False))
+
+    # 打印各维度评分
+    print("\n" + "=" * 70)
+    print("  加权评分详情（AFML 优先级）")
+    print("=" * 70)
+    print(results_df[['target_bars', 'independence', 'identically_dist', 'normality', 'weighted_score']].to_string(index=False))
 
     # 找出最优参数
-    best_row = results_df.loc[results_df['score'].idxmin()]
+    best_row = results_df.loc[results_df['weighted_score'].idxmin()]
+    best_target = int(best_row['target_bars'])
+
     print("\n" + "-" * 70)
-    print(f"  最优参数: TARGET_DAILY_BARS = {int(best_row['target_bars'])}")
+    print(f"  最优参数: TARGET_DAILY_BARS = {best_target}")
     print(f"  实际日均: {best_row['actual_bars_per_day']:.1f} bars")
-    print(f"  AC1: {best_row['AC1']:.4f}")
-    print(f"  JB: {best_row['JB_stat']:.2e}")
-    print(f"  综合评分: {best_row['score']:.4f}")
+    print(f"  独立性评分: {best_row['independence']:.4f} (权重 50%)")
+    print(f"  同分布评分: {best_row['identically_dist']:.4f} (权重 30%)")
+    print(f"  正态性评分: {best_row['normality']:.4f} (权重 20%)")
+    print(f"  加权综合评分: {best_row['weighted_score']:.4f}")
     print("-" * 70)
+
+    # 保存最优参数的 Dollar Bars
+    print("\n[Step 3] 保存最优参数的 Dollar Bars...")
+    from strategies.IF9999.config import BARS_DIR
+
+    thresholds = compute_dynamic_thresholds(df, best_target, EWMA_SPAN)
+    best_bars = build_dollar_bars(df, thresholds)
+
+    bars_path = os.path.join(BARS_DIR, f'dollar_bars_target{best_target}.parquet')
+    best_bars.to_parquet(bars_path)
+    print(f"  ✅ 已保存: {bars_path}")
+    print(f"     Bar 数量: {len(best_bars)}")
+    print(f"     时间范围: {best_bars.index.min()} ~ {best_bars.index.max()}")
+
+    # 更新 config.py 中的默认参数
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.py')
+    with open(config_path, 'r') as f:
+        config_content = f.read()
+
+    # 替换 TARGET_DAILY_BARS 的值
+    import re
+    new_config = re.sub(
+        r'TARGET_DAILY_BARS = \d+',
+        f'TARGET_DAILY_BARS = {best_target}',
+        config_content
+    )
+    with open(config_path, 'w') as f:
+        f.write(new_config)
+    print(f"  ✅ 已更新 config.py: TARGET_DAILY_BARS = {best_target}")
 
     # 保存结果
     os.makedirs(FIGURES_DIR, exist_ok=True)
