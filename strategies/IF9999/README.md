@@ -28,7 +28,7 @@ uv run python strategies/IF9999/01_dollar_bar_builder.py
 
 | 参数 | 值 | 说明 |
 |------|-----|------|
-| TARGET_DAILY_BARS | 50 | 目标每日 Bar 数量 |
+| TARGET_DAILY_BARS | 6 | 目标每日 Bar 数量（参数优化最优值） |
 | EWMA_SPAN | 20 | 动态阈值 EWMA 窗口 |
 | CONTRACT_MULTIPLIER | 300 | IF 合约乘数（每点300元） |
 
