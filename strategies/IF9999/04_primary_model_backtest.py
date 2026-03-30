@@ -301,6 +301,134 @@ def print_quantile_stats(quantile_stats: pd.DataFrame, top_thresh: float, mid_th
 
 
 # ============================================================
+# 可视化模块
+# ============================================================
+
+def plot_pnl_distribution(pnl_df: pd.DataFrame, save_path: str):
+    """
+    绘制收益分布直方图。
+
+    :param pnl_df: 收益 DataFrame
+    :param save_path: 保存路径
+    """
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # 分离正负收益
+    wins = pnl_df[pnl_df['pnl'] > 0]['pnl']
+    losses = pnl_df[pnl_df['pnl'] < 0]['pnl']
+
+    # 绘制直方图（分色）
+    bins = np.linspace(pnl_df['pnl'].min(), pnl_df['pnl'].max(), 50)
+
+    if len(losses) > 0:
+        ax.hist(losses, bins=bins, color='#ff6b6b', alpha=0.7, label=f'Loss ({len(losses)})')
+    if len(wins) > 0:
+        ax.hist(wins, bins=bins, color='#4ecdc4', alpha=0.7, label=f'Win ({len(wins)})')
+
+    # 标注
+    ax.axvline(0, color='gray', linestyle='--', linewidth=1)
+    ax.axvline(pnl_df['pnl'].mean(), color='blue', linestyle='-', linewidth=2,
+                label=f'Mean: {pnl_df["pnl"].mean():.1f}点')
+
+    ax.set_title('PnL Distribution (Primary Model)', fontsize=12)
+    ax.set_xlabel('PnL (points)')
+    ax.set_ylabel('Count')
+    ax.legend(loc='upper right')
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"✅ 收益分布图已保存: {save_path}")
+
+
+def plot_cumulative_pnl(pnl_df: pd.DataFrame, save_path: str):
+    """
+    绘制累积收益曲线。
+
+    :param pnl_df: 收益 DataFrame
+    :param save_path: 保存路径
+    """
+    fig, ax = plt.subplots(figsize=(14, 6))
+
+    # 按时间排序计算累积收益
+    cumulative = pnl_df['pnl'].cumsum()
+
+    ax.plot(pnl_df.index, cumulative.values, color='steelblue', linewidth=1.5)
+
+    # 标注关键点
+    ax.axhline(0, color='gray', linestyle='--', linewidth=1)
+    final_cum = cumulative.iloc[-1]
+
+    ax.scatter([pnl_df.index[-1]], [final_cum], color='red', s=100, zorder=5)
+    ax.annotate(f'Final: {final_cum:.1f}点',
+                xy=(pnl_df.index[-1], final_cum),
+                xytext=(10, 10), textcoords='offset points')
+
+    ax.set_title('Cumulative PnL (Primary Model)', fontsize=12)
+    ax.set_xlabel('Time')
+    ax.set_ylabel('Cumulative PnL (points)')
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"✅ 累积收益图已保存: {save_path}")
+
+
+def plot_tvalue_vs_pnl(
+    pnl_df: pd.DataFrame,
+    top_thresh: float,
+    mid_thresh: float,
+    save_path: str
+):
+    """
+    绘制 |t_value| vs PnL 散点图。
+
+    :param pnl_df: 收益 DataFrame
+    :param top_thresh: Top 10% 阈值
+    :param mid_thresh: 50% 阈值
+    :param save_path: 保存路径
+    """
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    t_abs = pnl_df['t_value'].abs()
+
+    # 分组绘制
+    top_mask = t_abs > top_thresh
+    mid_mask = (t_abs > mid_thresh) & (t_abs <= top_thresh)
+    bottom_mask = t_abs <= mid_thresh
+
+    # 散点图（不同颜色）
+    ax.scatter(t_abs[bottom_mask], pnl_df.loc[bottom_mask, 'pnl'],
+               c='#999999', alpha=0.5, s=30, label='Bottom 50%')
+    ax.scatter(t_abs[mid_mask], pnl_df.loc[mid_mask, 'pnl'],
+               c='#ffa500', alpha=0.5, s=30, label='10%-50%')
+    ax.scatter(t_abs[top_mask], pnl_df.loc[top_mask, 'pnl'],
+               c='#4ecdc4', alpha=0.7, s=40, label='Top 10%')
+
+    # 分位数边界线
+    ax.axvline(mid_thresh, color='gray', linestyle='--', linewidth=1.5,
+                label=f'50% threshold: {mid_thresh:.2f}')
+    ax.axvline(top_thresh, color='green', linestyle='--', linewidth=1.5,
+                label=f'90% threshold: {top_thresh:.2f}')
+
+    # 零收益线
+    ax.axhline(0, color='red', linestyle='-', linewidth=1, alpha=0.5)
+
+    ax.set_title('|t-value| vs PnL (Confidence Analysis)', fontsize=12)
+    ax.set_xlabel('|t-value|')
+    ax.set_ylabel('PnL (points)')
+    ax.legend(loc='upper right')
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"✅ t_value vs PnL 图已保存: {save_path}")
+
+
+# ============================================================
 # Main
 # ============================================================
 
@@ -336,14 +464,28 @@ def main():
     quantile_stats, top_thresh, mid_thresh = compute_quantile_stats(pnl_df)
     print_quantile_stats(quantile_stats, top_thresh, mid_thresh)
 
-    # Step 5: 可视化（待实现）
+    # Step 5: 可视化
     print("\n[Step 5] 生成可视化图表...")
-    print("  (将在 Task 4 实现)")
+    plot_pnl_distribution(
+        pnl_df,
+        os.path.join(FIGURES_DIR, '04_pnl_distribution.png')
+    )
+    plot_cumulative_pnl(
+        pnl_df,
+        os.path.join(FIGURES_DIR, '04_cumulative_pnl.png')
+    )
+    plot_tvalue_vs_pnl(
+        pnl_df, top_thresh, mid_thresh,
+        os.path.join(FIGURES_DIR, '04_tvalue_vs_pnl.png')
+    )
 
     print("\n" + "=" * 70)
     print("  Phase 3.5 Primary Model Backtest 完成")
     print("=" * 70)
-    print(f"输出目录: {FIGURES_DIR}")
+    print(f"图表目录: {FIGURES_DIR}")
+    print(f"  - 04_pnl_distribution.png")
+    print(f"  - 04_cumulative_pnl.png")
+    print(f"  - 04_tvalue_vs_pnl.png")
 
 
 if __name__ == "__main__":
