@@ -132,6 +132,165 @@ def compute_pnl(
 
 
 # ============================================================
+# 统计分析
+# ============================================================
+
+def compute_overall_stats(pnl_df: pd.DataFrame) -> dict:
+    """
+    计算整体统计指标。
+
+    :param pnl_df: 收益 DataFrame
+    :returns: 统计指标字典
+    """
+    n_total = len(pnl_df)
+    n_win = int((pnl_df['pnl'] > 0).sum())
+    n_loss = int((pnl_df['pnl'] < 0).sum())
+    n_flat = int((pnl_df['pnl'] == 0).sum())
+
+    win_rate = n_win / n_total if n_total > 0 else 0
+    avg_pnl = pnl_df['pnl'].mean()
+    total_pnl = pnl_df['pnl'].sum()
+
+    # 盈亏比
+    wins = pnl_df[pnl_df['pnl'] > 0]['pnl']
+    losses = pnl_df[pnl_df['pnl'] < 0]['pnl']
+    avg_win = wins.mean() if len(wins) > 0 else 0
+    avg_loss = losses.mean() if len(losses) > 0 else 0
+    profit_loss_ratio = abs(avg_win / avg_loss) if avg_loss != 0 else 0
+
+    max_win = pnl_df['pnl'].max()
+    max_loss = pnl_df['pnl'].min()
+
+    stats = {
+        'n_total': n_total,
+        'n_win': n_win,
+        'n_loss': n_loss,
+        'n_flat': n_flat,
+        'win_rate': win_rate,
+        'avg_pnl': avg_pnl,
+        'total_pnl': total_pnl,
+        'avg_win': avg_win,
+        'avg_loss': avg_loss,
+        'profit_loss_ratio': profit_loss_ratio,
+        'max_win': max_win,
+        'max_loss': max_loss
+    }
+
+    return stats
+
+
+def print_overall_stats(stats: dict):
+    """
+    打印整体统计报告。
+
+    :param stats: 统计指标字典
+    """
+    print("\n" + "=" * 70)
+    print("  Primary Model Backtest - 整体统计")
+    print("=" * 70)
+    print(f"总信号数: {stats['n_total']}")
+    print(f"盈利信号: {stats['n_win']} ({stats['win_rate']*100:.1f}%)")
+    print(f"亏损信号: {stats['n_loss']} ({stats['n_loss']/stats['n_total']*100:.1f}%)")
+    print(f"持平信号: {stats['n_flat']}")
+    print("-" * 70)
+    print(f"胜率: {stats['win_rate']*100:.1f}%")
+    print(f"平均收益: {stats['avg_pnl']:.2f} 点")
+    print(f"总收益: {stats['total_pnl']:.2f} 点")
+    print(f"盈亏比: {stats['profit_loss_ratio']:.2f}")
+    print(f"平均盈利: {stats['avg_win']:.2f} 点")
+    print(f"平均亏损: {stats['avg_loss']:.2f} 点")
+    print(f"最大盈利: {stats['max_win']:.2f} 点")
+    print(f"最大亏损: {stats['max_loss']:.2f} 点")
+    print("=" * 70)
+
+
+def compute_quantile_stats(pnl_df: pd.DataFrame) -> tuple:
+    """
+    计算 t_value 分位数分析。
+
+    分为三组:
+      - Top 10%: 高置信度信号
+      - 10%-50%: 中等置信度
+      - Bottom 50%: 低置信度
+
+    :param pnl_df: 收益 DataFrame
+    :returns: (quantile_stats DataFrame, top10_thresh, mid_thresh)
+    """
+    t_abs = pnl_df['t_value'].abs()
+
+    # 分位数边界
+    top10_thresh = t_abs.quantile(0.90)
+    mid_thresh = t_abs.quantile(0.50)
+
+    # 分组
+    pnl_df['t_group'] = pd.cut(
+        t_abs,
+        bins=[0, mid_thresh, top10_thresh, t_abs.max() + 1],
+        labels=['Bottom 50%', '10%-50%', 'Top 10%']
+    )
+
+    # 计算每组统计
+    groups = ['Top 10%', '10%-50%', 'Bottom 50%']
+    results = []
+
+    for group in groups:
+        group_df = pnl_df[pnl_df['t_group'] == group]
+        if len(group_df) == 0:
+            continue
+
+        n = len(group_df)
+        n_win = int((group_df['pnl'] > 0).sum())
+        win_rate = n_win / n
+
+        avg_pnl = group_df['pnl'].mean()
+        total_pnl = group_df['pnl'].sum()
+
+        wins = group_df[group_df['pnl'] > 0]['pnl']
+        losses = group_df[group_df['pnl'] < 0]['pnl']
+        avg_win = wins.mean() if len(wins) > 0 else 0
+        avg_loss = losses.mean() if len(losses) > 0 else 0
+        pl_ratio = abs(avg_win / avg_loss) if avg_loss != 0 else 0
+
+        results.append({
+            'group': group,
+            'n': n,
+            'win_rate': win_rate,
+            'avg_pnl': avg_pnl,
+            'total_pnl': total_pnl,
+            'avg_win': avg_win,
+            'avg_loss': avg_loss,
+            'pl_ratio': pl_ratio
+        })
+
+    quantile_stats = pd.DataFrame(results)
+    return quantile_stats, top10_thresh, mid_thresh
+
+
+def print_quantile_stats(quantile_stats: pd.DataFrame, top_thresh: float, mid_thresh: float):
+    """
+    打印分位数统计报告。
+
+    :param quantile_stats: 分位数统计 DataFrame
+    :param top_thresh: Top 10% 阈值
+    :param mid_thresh: 50% 阈值
+    """
+    print("\n" + "=" * 70)
+    print("  t_value 分位数分析")
+    print("=" * 70)
+    print(f"Top 10% 阈值: |t| > {top_thresh:.2f}")
+    print(f"50% 阈值: |t| > {mid_thresh:.2f}")
+    print("-" * 70)
+    print(f"{'分组':<12} {'数量':>6} {'胜率':>8} {'平均收益':>10} {'盈亏比':>8}")
+    print("-" * 70)
+
+    for _, row in quantile_stats.iterrows():
+        print(f"{row['group']:<12} {row['n']:>6} {row['win_rate']*100:>7.1f}% {row['avg_pnl']:>9.2f}点 {row['pl_ratio']:>8.2f}")
+
+    print("=" * 70)
+    print("\n验证假设: Top 10% |t_value| 应有更高胜率和盈亏比")
+
+
+# ============================================================
 # Main
 # ============================================================
 
@@ -157,10 +316,24 @@ def main():
     print("\n[Step 2] 计算收益...")
     pnl_df = compute_pnl(prices, trend_df)
 
-    # Step 3-5: 待实现
-    print("\n[Step 3-5] 统计分析和可视化待实现...")
+    # Step 3: 整体统计
+    print("\n[Step 3] 整体统计分析...")
+    stats = compute_overall_stats(pnl_df)
+    print_overall_stats(stats)
 
-    print("\n完成！")
+    # Step 4: 分位数分析
+    print("\n[Step 4] t_value 分位数分析...")
+    quantile_stats, top_thresh, mid_thresh = compute_quantile_stats(pnl_df)
+    print_quantile_stats(quantile_stats, top_thresh, mid_thresh)
+
+    # Step 5: 可视化（待实现）
+    print("\n[Step 5] 生成可视化图表...")
+    print("  (将在 Task 4 实现)")
+
+    print("\n" + "=" * 70)
+    print("  Phase 3.5 Primary Model Backtest 完成")
+    print("=" * 70)
+    print(f"输出目录: {FIGURES_DIR}")
 
 
 if __name__ == "__main__":
