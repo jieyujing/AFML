@@ -23,3 +23,18 @@ ACF_LAGS = [1, 5, 10]      # 自相关检验滞后阶数
 OUTPUT_DIR = os.path.join(PROJECT_ROOT, "output")
 BARS_DIR = os.path.join(OUTPUT_DIR, "bars")
 FIGURES_DIR = os.path.join(OUTPUT_DIR, "figures")
+
+# ============================================================
+# Phase 2: Feature Engineering 参数
+# ============================================================
+
+# FracDiff 参数
+FRACDIFF_THRES = 1e-4      # FFD 权重截断阈值
+FRACDIFF_D_STEP = 0.05     # d 搜索步长
+FRACDIFF_MAX_D = 1.0       # d 最大值
+
+# CUSUM Filter 参数
+CUSUM_WINDOW = 20          # 动态阈值滚动窗口
+
+# Phase 2 输出路径
+FEATURES_DIR = os.path.join(OUTPUT_DIR, "features")
