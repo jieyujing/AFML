@@ -6,14 +6,15 @@
 
 ```
 IF9999/
-├── 01_dollar_bar_builder.py    # Dollar Bars 构建与验证
-├── 02_feature_engineering.py   # Phase 2: FracDiff + CUSUM
-├── 03_trend_scanning.py        # Phase 3: Trend Scanning 标签
-├── config.py                   # 配置参数
+├── 01_dollar_bar_builder.py     # Dollar Bars 构建与验证
+├── 02_feature_engineering.py    # Phase 2: FracDiff + CUSUM
+├── 03_trend_scanning.py         # Phase 3: Trend Scanning 标签
+├── 04_primary_model_backtest.py # Phase 3.5: Primary Model 回测
+├── config.py                    # 配置参数
 ├── output/
-│   ├── bars/                   # 生成的 Bar 数据
-│   ├── features/               # 特征和标签输出
-│   └── figures/                # 可视化图表
+│   ├── bars/                    # 生成的 Bar 数据
+│   ├── features/                # 特征和标签输出
+│   └── figures/                 # 可视化图表
 └── README.md
 ```
 
@@ -112,6 +113,49 @@ uv run python strategies/IF9999/03_trend_scanning.py
 |------|------|
 | `03_trend_distribution.png` | side 和 t_value 分布 |
 | `03_trend_example.png` | 趋势窗口示例（高 |t_value| 事件） |
+
+## Phase 3.5: Primary Model 回测验证
+
+运行 Primary Model 回测验证信号有效性：
+
+```bash
+uv run python strategies/IF9999/04_primary_model_backtest.py
+```
+
+### 回测方法
+
+| 项目 | 说明 |
+|------|------|
+| 收益计算 | 点数收益 = side × (close_t1 - close_entry) |
+| 持仓周期 | 使用 t1 作为平仓时间（Trend Scanning 最优窗口） |
+| 分析维度 | 整体统计 + t_value 分位数分析 |
+
+### 统计指标
+
+| 指标 | 说明 |
+|------|------|
+| 胜率 | 盈利信号比例 |
+| 平均收益 | 所有信号平均点数收益 |
+| 盈亏比 | 平均盈利 / 平均亏损 |
+| 总收益 | 所有信号累计点数 |
+
+### t_value 分位数分析
+
+验证假设：高 |t_value| 信号应有更好的表现。
+
+| 分组 | 阈值 |
+|------|------|
+| Top 10% | |t_value| > 90% 分位数 |
+| 10%-50% | |t_value| > 50% 分位数 |
+| Bottom 50% | |t_value| ≤ 50% 分位数 |
+
+### 可视化输出
+
+| 文件 | 说明 |
+|------|------|
+| `04_pnl_distribution.png` | 收益分布直方图 |
+| `04_cumulative_pnl.png` | 累积收益曲线 |
+| `04_tvalue_vs_pnl.png` | |t_value| vs 收益散点图 |
 
 ## 后续阶段
 
