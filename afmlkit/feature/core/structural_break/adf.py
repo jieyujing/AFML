@@ -12,6 +12,24 @@ import pandas as pd
 
 # MacKinnon approximate critical values for p-value interpolation
 # Format: sample_size -> (1%, 5%, 10%)
+
+
+def schwert_maxlag(n: int) -> int:
+    """
+    Calculate optimal maxlag using Schwert formula.
+
+    Formula: int(12 * (n/100)**(1/4))
+
+    Reference: Schwert, G.W. (1989). "Tests for Unit Roots: A Monte Carlo Investigation"
+
+    :param n: Sample size
+    :returns: Maximum lag for ADF test
+    """
+    if n < 10:
+        return 1
+    return int(12.0 * (n / 100.0) ** 0.25)
+
+
 _MACKINNON_WITH_TREND = {
     25: (-4.38, -3.60, -3.24),
     50: (-4.15, -3.50, -3.18),

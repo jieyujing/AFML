@@ -5,6 +5,7 @@ from afmlkit.feature.core.structural_break.adf import (
     _adf_regression_core,
     adf_test,
     adf_test_rolling,
+    schwert_maxlag,
 )
 
 
@@ -62,3 +63,15 @@ def test_adf_test_rolling():
     assert len(t_stats) == len(y)
     assert np.all(np.isnan(t_stats[:window-1]))
     assert np.all(np.isfinite(t_stats[window:]))
+
+
+def test_schwert_maxlag():
+    """Test Schwert formula for maxlag calculation."""
+    # Known values from Schwert formula: int(12 * (n/100)**(1/4))
+    assert schwert_maxlag(100) == 12      # 12 * 1.0 = 12
+    assert schwert_maxlag(25) == 8        # 12 * 0.7071 = 8.49 -> int = 8
+    assert schwert_maxlag(1000) == 21     # 12 * 1.7783 = 21.34 -> int = 21
+    assert schwert_maxlag(50) == 10       # 12 * 0.8409 = 10.09 -> int = 10
+
+    # Edge case: minimum maxlag
+    assert schwert_maxlag(10) >= 1
