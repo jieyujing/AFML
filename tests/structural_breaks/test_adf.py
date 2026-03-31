@@ -155,3 +155,27 @@ def test_adf_regression_with_lag_basic():
     t_stat2, p_value2, rss2, n_params2, n_obs2, success2 = _adf_regression_with_lag(y, lag=2, trend=False)
     assert success2 == True
     assert n_params2 == n_params + 2  # 2 more lag terms
+
+
+def test_select_lag_by_aic():
+    """Test AIC-based lag selection."""
+    from afmlkit.feature.core.structural_break.adf import _select_lag_by_aic
+
+    np.random.seed(42)
+    # Generate series with some serial correlation
+    n = 100
+    y = np.zeros(n, dtype=np.float64)
+    y[0] = 100.0
+    # AR(1) process with coefficient 0.5
+    for i in range(1, n):
+        y[i] = 0.5 * y[i-1] + 50.0 + np.random.randn() * 2.0
+
+    best_lag, t_stat, p_value, best_aic = _select_lag_by_aic(y, max_lag=5, trend=False)
+
+    assert 0 <= best_lag <= 5
+    assert not np.isnan(t_stat)
+    assert not np.isnan(best_aic)
+
+    # The chosen lag should have the lowest AIC among all tested
+    # We can verify by checking that AIC decreases or stays similar
+    # as we increase lag from 0 to optimal

@@ -186,6 +186,44 @@ def _adf_regression_with_lag(
     return t_stat, p_value, rss, n_params, n_obs, True
 
 
+def _select_lag_by_aic(
+    y: NDArray[np.float64],
+    max_lag: int,
+    trend: bool
+) -> Tuple[int, float, float, float]:
+    """
+    Select optimal lag using AIC criterion.
+
+    Python layer iterates through lags, calls Numba core,
+    and returns the lag with minimum AIC.
+
+    :param y: Price series
+    :param max_lag: Maximum lag to test
+    :param trend: Include time trend
+    :returns: (best_lag, t_stat, p_value, best_aic)
+    """
+    best_lag = 0
+    best_aic = np.inf
+    best_t_stat = np.nan
+    best_p_value = np.nan
+
+    for lag in range(max_lag + 1):
+        t_stat, p_value, rss, n_params, n_obs, success = _adf_regression_with_lag(y, lag, trend)
+
+        if not success or np.isnan(t_stat):
+            continue
+
+        aic = _compute_aic(n_obs, n_params, rss)
+
+        if aic < best_aic:
+            best_aic = aic
+            best_lag = lag
+            best_t_stat = t_stat
+            best_p_value = p_value
+
+    return best_lag, best_t_stat, best_p_value, best_aic
+
+
 _MACKINNON_WITH_TREND = {
     25: (-4.38, -3.60, -3.24),
     50: (-4.15, -3.50, -3.18),
