@@ -248,3 +248,35 @@ def test_adf_test_small_sample_returns_nan():
     assert np.isnan(t_stat)
     assert np.isnan(p_value)
     assert lag == 0
+
+
+def test_adf_vs_statsmodels_comparison():
+    """Compare AFMLKit ADF results with statsmodels."""
+    from statsmodels.tsa.stattools import adfuller
+    from afmlkit.feature.core.structural_break.adf import adf_test_full
+
+    np.random.seed(42)
+
+    # Test 1: Random walk (unit root)
+    y1 = np.cumsum(np.random.randn(100)) + 100
+
+    sm_result1 = adfuller(y1, autolag='AIC', regression='ct')
+    ak_result1 = adf_test_full(y1, trend=True)
+
+    # Allow 10% relative tolerance for t-stat (different implementations)
+    assert np.isclose(ak_result1[0], sm_result1[0], rtol=0.10)
+    # Lag selection should be similar (may differ slightly due to implementation)
+    assert abs(ak_result1[2] - sm_result1[2]) <= 2
+
+    # Test 2: Mean-reverting series (stationary)
+    y2 = np.zeros(100, dtype=np.float64)
+    y2[0] = 100.0
+    for i in range(1, 100):
+        y2[i] = 0.3 * y2[i-1] + 70.0 + np.random.randn() * 1.0
+
+    sm_result2 = adfuller(y2, autolag='AIC', regression='c')
+    ak_result2 = adf_test_full(y2, trend=False)
+
+    # Stationary series: t-stat should be significantly negative
+    assert ak_result2[0] < sm_result2[4]['5%']  # Reject unit root at 5%
+    assert np.isclose(ak_result2[0], sm_result2[0], rtol=0.10)
