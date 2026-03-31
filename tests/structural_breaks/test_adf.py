@@ -75,3 +75,22 @@ def test_schwert_maxlag():
 
     # Edge case: minimum maxlag
     assert schwert_maxlag(10) >= 1
+
+
+def test_compute_aic():
+    """Test AIC calculation."""
+    from afmlkit.feature.core.structural_break.adf import _compute_aic
+
+    # AIC = n * log(rss/n) + 2 * k
+    # Case 1: n=100, k=3, rss=10
+    # AIC = 100 * log(10/100) + 2*3 = 100 * (-2.3026) + 6 = -223.26
+    n_obs = 100
+    n_params = 3
+    rss = 10.0
+    aic = _compute_aic(n_obs, n_params, rss)
+    expected = 100.0 * np.log(10.0 / 100.0) + 2.0 * 3.0
+    assert np.isclose(aic, expected, rtol=0.01)
+
+    # Case 2: Perfect fit (rss very small)
+    aic2 = _compute_aic(50, 2, 1e-10)
+    assert aic2 < 0  # Small RSS -> negative AIC

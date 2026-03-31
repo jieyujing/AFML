@@ -30,6 +30,23 @@ def schwert_maxlag(n: int) -> int:
     return int(12.0 * (n / 100.0) ** 0.25)
 
 
+@njit(nogil=True)
+def _compute_aic(n_obs: int, n_params: int, rss: float) -> float:
+    """
+    Calculate Akaike Information Criterion (AIC).
+
+    AIC = n * log(rss/n) + 2 * k
+
+    :param n_obs: Number of observations
+    :param n_params: Number of parameters (including constant)
+    :param rss: Residual sum of squares
+    :returns: AIC value (lower is better)
+    """
+    if n_obs <= 0 or rss <= 0:
+        return np.inf
+    return float(n_obs) * np.log(rss / float(n_obs)) + 2.0 * float(n_params)
+
+
 _MACKINNON_WITH_TREND = {
     25: (-4.38, -3.60, -3.24),
     50: (-4.15, -3.50, -3.18),
