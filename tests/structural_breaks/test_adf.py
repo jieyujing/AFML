@@ -130,3 +130,28 @@ def test_build_adf_design_matrix_with_lag():
     assert X.shape[0] == 5  # observations after lag adjustment
     assert X.shape[1] == 5  # constant + trend + y_lag + 2 lagged diffs
     assert gamma_idx == 2   # gamma (y_{t-1}) is at index 2
+
+
+def test_adf_regression_with_lag_basic():
+    """Test ADF regression with lagged terms."""
+    from afmlkit.feature.core.structural_break.adf import _adf_regression_with_lag
+
+    np.random.seed(42)
+    # Generate mean-reverting series
+    n = 50
+    y = np.zeros(n, dtype=np.float64)
+    y[0] = 100.0
+    for i in range(1, n):
+        y[i] = 0.8 * 100.0 + 0.2 * y[i-1] + np.random.randn() * 0.5
+
+    # Test with lag=0 (basic DF)
+    t_stat, p_value, rss, n_params, n_obs, success = _adf_regression_with_lag(y, lag=0, trend=False)
+    assert success == True
+    assert n_obs > 0
+    assert n_params >= 2
+    assert not np.isnan(t_stat)
+
+    # Test with lag=2
+    t_stat2, p_value2, rss2, n_params2, n_obs2, success2 = _adf_regression_with_lag(y, lag=2, trend=False)
+    assert success2 == True
+    assert n_params2 == n_params + 2  # 2 more lag terms

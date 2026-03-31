@@ -123,6 +123,69 @@ def _build_adf_design_matrix(
     return X, dy_target, gamma_idx
 
 
+@njit(nogil=True)
+def _adf_regression_with_lag(
+    y: NDArray[np.float64],
+    lag: int,
+    trend: bool
+) -> Tuple[float, float, float, int, int, bool]:
+    """
+    ADF regression with lagged difference terms.
+
+    :param y: Price series
+    :param lag: Number of lagged differences
+    :param trend: Include time trend
+    :returns: (t_statistic, p_value, rss, n_params, n_obs, success)
+              - success: True if calculation succeeded (non-singular matrix)
+    """
+    # Build design matrix
+    X, dy, gamma_idx = _build_adf_design_matrix(y, lag, trend)
+
+    n_obs = X.shape[0]
+    if n_obs < 5:
+        return np.nan, np.nan, np.nan, 0, 0, False
+
+    n_params = X.shape[1]
+
+    # Check for collinearity
+    XtX = X.T @ X
+    det_XtX = np.linalg.det(XtX)
+    if np.abs(det_XtX) < 1e-15:
+        return np.nan, np.nan, np.nan, n_params, n_obs, False
+
+    # OLS estimation
+    beta, residuals = _ols_coefficients(X, dy)
+
+    # Get gamma coefficient (unit root test)
+    gamma_hat = beta[gamma_idx]
+
+    # Compute t-statistic
+    rss = np.sum(residuals ** 2)
+    df = n_obs - n_params
+    sigma_sq = rss / df if df > 0 else rss
+
+    try:
+        XtX_inv = np.linalg.inv(XtX)
+    except:
+        return np.nan, np.nan, np.nan, n_params, n_obs, False
+
+    var_gamma = sigma_sq * XtX_inv[gamma_idx, gamma_idx]
+
+    if var_gamma <= 0 or np.isnan(var_gamma) or np.isinf(var_gamma):
+        return np.nan, np.nan, np.nan, n_params, n_obs, False
+
+    se_gamma = np.sqrt(var_gamma)
+    t_stat = gamma_hat / se_gamma
+
+    if np.isnan(t_stat) or np.isinf(t_stat):
+        return np.nan, np.nan, np.nan, n_params, n_obs, False
+
+    # Approximate p-value
+    p_value = _approx_p_value(t_stat, n_obs, trend)
+
+    return t_stat, p_value, rss, n_params, n_obs, True
+
+
 _MACKINNON_WITH_TREND = {
     25: (-4.38, -3.60, -3.24),
     50: (-4.15, -3.50, -3.18),
