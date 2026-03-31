@@ -94,3 +94,39 @@ def test_compute_aic():
     # Case 2: Perfect fit (rss very small)
     aic2 = _compute_aic(50, 2, 1e-10)
     assert aic2 < 0  # Small RSS -> negative AIC
+
+
+def test_build_adf_design_matrix_no_lag():
+    """Test design matrix construction with lag=0."""
+    from afmlkit.feature.core.structural_break.adf import _build_adf_design_matrix
+
+    # Simple price series
+    y = np.array([100.0, 101.0, 102.0, 103.0, 104.0, 105.0], dtype=np.float64)
+
+    # lag=0, trend=False: X = [constant, y_{t-1}], dy = diff(y)
+    X, dy, gamma_idx = _build_adf_design_matrix(y, lag=0, trend=False)
+
+    # Expected:
+    # dy = [1.0, 1.0, 1.0, 1.0, 1.0] (diff of y)
+    # y_lag = [100, 101, 102, 103, 104]
+    # X[:, 0] = 1 (constant)
+    # X[:, 1] = y_lag
+    assert X.shape[0] == 5  # n - 1 observations
+    assert X.shape[1] == 2  # constant + y_lag
+    assert gamma_idx == 1   # gamma is at index 1
+    assert np.allclose(dy, np.diff(y))
+
+
+def test_build_adf_design_matrix_with_lag():
+    """Test design matrix construction with lag=2."""
+    from afmlkit.feature.core.structural_break.adf import _build_adf_design_matrix
+
+    y = np.array([100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0, 107.0], dtype=np.float64)
+
+    # lag=2, trend=True: X = [constant, trend, y_{t-1}, dy_{t-1}, dy_{t-2}]
+    X, dy, gamma_idx = _build_adf_design_matrix(y, lag=2, trend=True)
+
+    # n_obs = len(y) - 1 - lag = 8 - 1 - 2 = 5
+    assert X.shape[0] == 5  # observations after lag adjustment
+    assert X.shape[1] == 5  # constant + trend + y_lag + 2 lagged diffs
+    assert gamma_idx == 2   # gamma (y_{t-1}) is at index 2

@@ -47,6 +47,82 @@ def _compute_aic(n_obs: int, n_params: int, rss: float) -> float:
     return float(n_obs) * np.log(rss / float(n_obs)) + 2.0 * float(n_params)
 
 
+@njit(nogil=True)
+def _build_adf_design_matrix(
+    y: NDArray[np.float64],
+    lag: int,
+    trend: bool
+) -> Tuple[NDArray[np.float64], NDArray[np.float64], int]:
+    """
+    Build design matrix for ADF regression with lagged differences.
+
+    Model: dy_t = alpha + beta*t + gamma*y_{t-1} + sum(delta_i * dy_{t-i}) + epsilon
+
+    :param y: Price series
+    :param lag: Number of lagged difference terms (0 for basic DF)
+    :param trend: Include time trend term
+    :returns: (X, dy, gamma_idx)
+              - X: Design matrix (n_obs, n_features)
+              - dy: Target vector (first difference)
+              - gamma_idx: Index of gamma coefficient (y_{t-1}) in beta
+    """
+    n = len(y)
+
+    # Compute first difference
+    dy = np.diff(y)  # length n-1
+
+    # Number of usable observations after accounting for lag
+    n_obs = n - 1 - lag
+    if n_obs <= 0:
+        # Return empty arrays if insufficient data
+        return np.empty((0, 0), dtype=np.float64), np.empty(0, dtype=np.float64), 0
+
+    # Number of features: constant + (trend) + y_lag + lag terms
+    n_features = 1 + (1 if trend else 0) + 1 + lag
+
+    # Build design matrix
+    X = np.ones((n_obs, n_features), dtype=np.float64)
+
+    col_idx = 0
+
+    # Column 0: constant (already set to 1)
+    col_idx = 1
+
+    # Column 1 (if trend): time trend
+    if trend:
+        for t in range(n_obs):
+            X[t, col_idx] = float(t)
+        col_idx += 1
+
+    # Column: y_{t-1} (lagged level)
+    gamma_idx = col_idx
+    # y_lag starts at index lag+1 (need y[lag] to be the first y_{t-1})
+    # For observation t = lag+1 (first usable), y_{t-1} = y[lag]
+    y_lag_start = lag  # First index of y_lag for first observation
+    for i in range(n_obs):
+        X[i, col_idx] = y[y_lag_start + i]
+    col_idx += 1
+
+    # Columns: lagged differences dy_{t-1}, dy_{t-2}, ..., dy_{t-lag}
+    # dy array has indices 0 to n-2 (dy[0] = y[1] - y[0])
+    # For observation at time t = lag+1+obs_idx:
+    #   dy_{t-1} = dy[t-1-1] = dy[t-2] = dy[lag-1+obs_idx]
+    #   dy_{t-2} = dy[t-2-1] = dy[t-3] = dy[lag-2+obs_idx]
+    for lag_i in range(lag):
+        for i in range(n_obs):
+            # dy_{t-lag_i-1} for observation i
+            # t = lag + 1 + i, so dy_{t-lag_i-1} = dy[lag - lag_i + i]
+            X[i, col_idx + lag_i] = dy[lag - lag_i - 1 + i]
+
+    # Target vector: dy for usable observations
+    # First usable dy is at index lag (dy[lag] = y[lag+1] - y[lag])
+    dy_target = np.empty(n_obs, dtype=np.float64)
+    for i in range(n_obs):
+        dy_target[i] = dy[lag + i]
+
+    return X, dy_target, gamma_idx
+
+
 _MACKINNON_WITH_TREND = {
     25: (-4.38, -3.60, -3.24),
     50: (-4.15, -3.50, -3.18),
