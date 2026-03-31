@@ -179,3 +179,41 @@ def test_select_lag_by_aic():
     # The chosen lag should have the lowest AIC among all tested
     # We can verify by checking that AIC decreases or stays similar
     # as we increase lag from 0 to optimal
+
+
+def test_adf_test_full_returns_tuple():
+    """Test adf_test_full returns 6-element tuple."""
+    from afmlkit.feature.core.structural_break.adf import adf_test_full
+
+    np.random.seed(42)
+    y = np.cumsum(np.random.randn(100)) + 100
+
+    result = adf_test_full(y, max_lag=None, trend=True)
+
+    assert len(result) == 6
+    adf_stat, pvalue, used_lag, nobs, critical_values, icbest = result
+
+    assert isinstance(adf_stat, float)
+    assert isinstance(pvalue, float)
+    assert isinstance(used_lag, int)
+    assert isinstance(nobs, int)
+    assert isinstance(critical_values, dict)
+    assert isinstance(icbest, float)
+
+    # Critical values should have 1%, 5%, 10%
+    assert '1%' in critical_values
+    assert '5%' in critical_values
+    assert '10%' in critical_values
+
+
+def test_adf_test_full_small_sample():
+    """Test adf_test_full handles small sample."""
+    from afmlkit.feature.core.structural_break.adf import adf_test_full
+
+    y = np.array([100.0, 101.0, 102.0], dtype=np.float64)  # n=3 < 10
+
+    result = adf_test_full(y)
+    adf_stat, pvalue, used_lag, nobs, critical_values, icbest = result
+
+    assert np.isnan(adf_stat)
+    assert used_lag == 0

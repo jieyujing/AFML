@@ -6,8 +6,12 @@ Provides foundation for SADF, QADF, CADF tests.
 import numpy as np
 from numba import njit
 from numpy.typing import NDArray
-from typing import Tuple, Union
+from typing import Tuple, Union, Optional
 import pandas as pd
+
+from afmlkit.utils.log import get_logger
+
+logger = get_logger(__name__)
 
 
 # MacKinnon approximate critical values for p-value interpolation
@@ -222,6 +226,42 @@ def _select_lag_by_aic(
             best_p_value = p_value
 
     return best_lag, best_t_stat, best_p_value, best_aic
+
+
+def _get_critical_values(n_obs: int, trend: bool) -> dict:
+    """
+    Get critical values from MacKinnon table with interpolation.
+
+    :param n_obs: Number of observations
+    :param trend: Whether trend was included
+    :returns: dict with '1%', '5%', '10%' critical values
+    """
+    if trend:
+        table = _MACKINNON_WITH_TREND
+    else:
+        table = _MACKINNON_NO_TREND
+
+    # Interpolate based on sample size
+    sizes = [25, 50, 100, 250, 500, 1000]
+
+    if n_obs < 25:
+        return {'1%': table[25][0], '5%': table[25][1], '10%': table[25][2]}
+    elif n_obs >= 1000:
+        return {'1%': table[1000][0], '5%': table[1000][1], '10%': table[1000][2]}
+    else:
+        # Linear interpolation
+        for i in range(len(sizes) - 1):
+            if sizes[i] <= n_obs < sizes[i + 1]:
+                n1, n2 = sizes[i], sizes[i + 1]
+                w = (n_obs - n1) / (n2 - n1)
+                cv1 = table[n1]
+                cv2 = table[n2]
+                return {
+                    '1%': cv1[0] * (1 - w) + cv2[0] * w,
+                    '5%': cv1[1] * (1 - w) + cv2[1] * w,
+                    '10%': cv1[2] * (1 - w) + cv2[2] * w,
+                }
+        return {'1%': table[1000][0], '5%': table[1000][1], '10%': table[1000][2]}
 
 
 _MACKINNON_WITH_TREND = {
@@ -457,3 +497,59 @@ def adf_test_rolling(
         result[i - 1] = t_stat
 
     return result
+
+
+def adf_test_full(
+    y: Union[pd.Series, NDArray[np.float64]],
+    max_lag: Optional[int] = None,
+    trend: bool = True
+) -> Tuple[float, float, int, int, dict, float]:
+    """
+    ADF test with full results (statsmodels-compatible format).
+
+    :param y: Price series (raw prices, not returns)
+    :param max_lag: None for automatic selection (Schwert + AIC), int for fixed lag
+    :param trend: Include time trend in regression
+    :returns: (adf_stat, pvalue, used_lag, nobs, critical_values, icbest)
+              - adf_stat: t-statistic for gamma coefficient
+              - pvalue: approximate p-value
+              - used_lag: lag used in test
+              - nobs: number of observations used
+              - critical_values: dict {'1%': ..., '5%': ..., '10%': ...}
+              - icbest: best AIC value
+    """
+    if isinstance(y, pd.Series):
+        y = y.values
+    y = np.asarray(y, dtype=np.float64)
+
+    n = len(y)
+
+    # Check sample size
+    if n < 10:
+        logger.warning(f"ADF: 样本量过小 ({n}), 返回 NaN")
+        return (np.nan, np.nan, 0, n, _get_critical_values(n, trend), np.nan)
+
+    # Calculate Schwert maxlag if not provided
+    if max_lag is None:
+        max_lag = schwert_maxlag(n)
+
+    # Truncate maxlag if too large
+    if max_lag > n // 2:
+        logger.warning(f"ADF: 滞后截断 ({max_lag} -> {n//2})")
+        max_lag = n // 2
+
+    # AIC lag selection
+    best_lag, t_stat, p_value, best_aic = _select_lag_by_aic(y, max_lag, trend)
+
+    if np.isnan(t_stat):
+        logger.warning("ADF: 设计矩阵奇异或计算失败")
+        return (np.nan, np.nan, best_lag, n, _get_critical_values(n, trend), np.nan)
+
+    # Get actual n_obs from the regression
+    _, _, _, _, n_obs, _ = _adf_regression_with_lag(y, best_lag, trend)
+
+    logger.debug(f"ADF: 选择滞后={best_lag}, AIC={best_aic:.2f}")
+
+    critical_values = _get_critical_values(n_obs, trend)
+
+    return (t_stat, p_value, best_lag, n_obs, critical_values, best_aic)
