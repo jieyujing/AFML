@@ -440,30 +440,52 @@ def _adf_regression_core(
 
 def adf_test(
     y: Union[pd.Series, NDArray[np.float64]],
-    max_lag: int = 12,
+    max_lag: Optional[int] = None,
     trend: bool = True
 ) -> Tuple[float, float, int]:
     """
-    Single ADF test on a price series.
-
-    **Note**: Currently only implements basic DF test (lag=0). Full ADF with
-    automatic lag selection is a future enhancement. The max_lag parameter
-    is accepted for API consistency but is not used.
+    ADF test with automatic lag selection.
 
     :param y: Price series (raw prices, not returns)
-    :param max_lag: Maximum lag for augmented DF (default 12, not currently used)
+    :param max_lag: None for automatic selection (Schwert + AIC), int for fixed lag
     :param trend: Include time trend in regression
     :returns: (t_statistic, p_value, selected_lag)
     """
-    if isinstance(y, pd.Series):
-        y = y.values
-    y = np.asarray(y, dtype=np.float64)
+    try:
+        if isinstance(y, pd.Series):
+            y = y.values
+        y = np.asarray(y, dtype=np.float64)
 
-    selected_lag = 0
+        n = len(y)
 
-    t_stat, p_value = _adf_regression_core(y, max_lag=selected_lag, trend=trend)
+        # Check sample size
+        if n < 10:
+            logger.warning(f"ADF: 样本量过小 ({n})，返回 NaN")
+            return (np.nan, np.nan, 0)
 
-    return float(t_stat), float(p_value), int(selected_lag)
+        # Calculate Schwert maxlag if not provided
+        if max_lag is None:
+            max_lag = schwert_maxlag(n)
+
+        # Truncate maxlag if too large
+        if max_lag > n // 2:
+            logger.warning(f"ADF: 滞后截断 ({max_lag} -> {n//2})")
+            max_lag = n // 2
+
+        # If max_lag is specified as int > 0, still use AIC within that range
+        # This matches statsmodels behavior: autolag with maxlag constraint
+        best_lag, t_stat, p_value, best_aic = _select_lag_by_aic(y, max_lag, trend)
+
+        if np.isnan(t_stat):
+            logger.warning("ADF: 设计矩阵奇异或计算失败")
+            return (np.nan, np.nan, best_lag)
+
+        logger.debug(f"ADF: 选择滞后={best_lag}, AIC={best_aic:.2f}")
+        return (t_stat, p_value, best_lag)
+
+    except Exception as e:
+        logger.error(f"ADF: 未捕获错误 - {e}")
+        return (np.nan, np.nan, 0)
 
 
 def adf_test_rolling(

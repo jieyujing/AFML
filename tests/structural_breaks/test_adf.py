@@ -217,3 +217,34 @@ def test_adf_test_full_small_sample():
 
     assert np.isnan(adf_stat)
     assert used_lag == 0
+
+
+def test_adf_test_auto_lag():
+    """Test adf_test with automatic lag selection."""
+    np.random.seed(42)
+    y = np.cumsum(np.random.randn(100)) + 100
+
+    # Auto lag (max_lag=None)
+    t_stat_auto, p_value_auto, lag_auto = adf_test(y, max_lag=None, trend=True)
+
+    # Fixed lag (max_lag=0)
+    t_stat_fixed, p_value_fixed, lag_fixed = adf_test(y, max_lag=0, trend=True)
+
+    assert isinstance(lag_auto, int)
+    assert isinstance(lag_fixed, int)
+    assert lag_fixed == 0
+    # Auto lag may differ from 0
+    assert lag_auto >= 0
+    # Results should be finite
+    assert np.isfinite(t_stat_auto)
+    assert np.isfinite(t_stat_fixed)
+
+
+def test_adf_test_small_sample_returns_nan():
+    """Test adf_test returns NaN for small sample."""
+    y = np.array([100.0, 101.0, 102.0], dtype=np.float64)
+
+    t_stat, p_value, lag = adf_test(y)
+    assert np.isnan(t_stat)
+    assert np.isnan(p_value)
+    assert lag == 0
