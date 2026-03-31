@@ -264,6 +264,9 @@ def _get_critical_values(n_obs: int, trend: bool) -> dict:
         return {'1%': table[1000][0], '5%': table[1000][1], '10%': table[1000][2]}
 
 
+# MacKinnon approximate critical values for p-value interpolation
+# Format: sample_size -> (1%, 5%, 10%)
+# Python dict versions for public API
 _MACKINNON_WITH_TREND = {
     25: (-4.38, -3.60, -3.24),
     50: (-4.15, -3.50, -3.18),
@@ -281,6 +284,30 @@ _MACKINNON_NO_TREND = {
     500: (-3.44, -2.87, -2.57),
     1000: (-3.43, -2.86, -2.57),
 }
+
+# Numba-compatible numpy array versions
+# Rows: [25, 50, 100, 250, 500, 1000] sample sizes
+# Columns: [1%, 5%, 10%] critical values
+_MACKINNON_WITH_TREND_ARR = np.array([
+    [-4.38, -3.60, -3.24],  # n=25
+    [-4.15, -3.50, -3.18],  # n=50
+    [-4.04, -3.45, -3.15],  # n=100
+    [-3.99, -3.43, -3.13],  # n=250
+    [-3.98, -3.42, -3.13],  # n=500
+    [-3.96, -3.41, -3.12],  # n=1000
+], dtype=np.float64)
+
+_MACKINNON_NO_TREND_ARR = np.array([
+    [-3.75, -3.00, -2.63],  # n=25
+    [-3.58, -2.93, -2.60],  # n=50
+    [-3.51, -2.89, -2.58],  # n=100
+    [-3.46, -2.88, -2.57],  # n=250
+    [-3.44, -2.87, -2.57],  # n=500
+    [-3.43, -2.86, -2.57],  # n=1000
+], dtype=np.float64)
+
+# Sample sizes for index lookup
+_MACKINNON_SIZES = np.array([25, 50, 100, 250, 500, 1000], dtype=np.int64)
 
 
 @njit(nogil=True)
@@ -314,40 +341,41 @@ def _approx_p_value(t_stat: float, n: int, trend: bool) -> float:
     Approximate p-value using MacKinnon critical values.
 
     Linear interpolation between critical value tables.
+    Uses numpy arrays for Numba compatibility.
     """
-    # Select appropriate table
+    # Select appropriate table (numpy array version)
     if trend:
-        table = _MACKINNON_WITH_TREND
+        table = _MACKINNON_WITH_TREND_ARR
     else:
-        table = _MACKINNON_NO_TREND
+        table = _MACKINNON_NO_TREND_ARR
 
-    # Find appropriate sample size bracket
-    sizes = np.array([25, 50, 100, 250, 500, 1000], dtype=np.int64)
+    # Sample sizes for index lookup
+    sizes = _MACKINNON_SIZES
 
-    # Determine which bracket n falls into
+    # Determine which bracket n falls into and get critical values
     if n < 25:
-        crit_vals = table[25]
+        # Use first row (n=25)
+        c1, c5, c10 = table[0, 0], table[0, 1], table[0, 2]
     elif n >= 1000:
-        crit_vals = table[1000]
+        # Use last row (n=1000)
+        c1, c5, c10 = table[5, 0], table[5, 1], table[5, 2]
     else:
-        # Find bracket
+        # Find bracket and interpolate
         for i in range(len(sizes) - 1):
             if sizes[i] <= n < sizes[i + 1]:
                 # Linear interpolation
                 n1, n2 = sizes[i], sizes[i + 1]
                 w = float(n - n1) / float(n2 - n1)
-                cv1 = np.array(table[int(n1)], dtype=np.float64)
-                cv2 = np.array(table[int(n2)], dtype=np.float64)
-                crit_vals_arr = cv1 * (1 - w) + cv2 * w
-                # Convert back to tuple
-                crit_vals = (float(crit_vals_arr[0]), float(crit_vals_arr[1]), float(crit_vals_arr[2]))
+                # Get critical values from rows i and i+1
+                c1 = table[i, 0] * (1 - w) + table[i + 1, 0] * w
+                c5 = table[i, 1] * (1 - w) + table[i + 1, 1] * w
+                c10 = table[i, 2] * (1 - w) + table[i + 1, 2] * w
                 break
         else:
-            crit_vals = table[1000]
+            # Fallback to last row
+            c1, c5, c10 = table[5, 0], table[5, 1], table[5, 2]
 
     # Map t-statistic to approximate p-value
-    c1, c5, c10 = crit_vals
-
     if t_stat < c1:
         return 0.01
     elif t_stat < c5:
