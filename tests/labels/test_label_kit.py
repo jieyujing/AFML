@@ -20,7 +20,7 @@ def test_tbm_label_and_weights():
     feats = pd.DataFrame({"ret": [0.01, 0.02]}, index=idx)
 
     tbm = TBMLabel(feats, target_ret_col="ret", min_ret=0.0,
-                   horizontal_barriers=(-1.0, 1.0), vertical_barrier=pd.Timedelta(seconds=1))
+                   profit_loss_barriers=(1.0, 1.0), vertical_barrier=pd.Timedelta(seconds=1))
     f_df, out = tbm.compute_labels(trades)
     assert not out.empty
     assert tbm.event_count == len(out)
@@ -34,3 +34,23 @@ def test_tbm_label_and_weights():
                                                 labels=out["bin"])
     assert "weights" in final.columns
     assert len(final) == len(out)
+
+
+def test_tbm_label_deprecated_horizontal_barriers():
+    """Test backward compatibility with deprecated horizontal_barriers parameter."""
+    trades = sample_trades()
+    idx = pd.to_datetime([1, 2], unit="s")
+    feats = pd.DataFrame({"ret": [0.01, 0.02]}, index=idx)
+
+    import warnings
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        tbm = TBMLabel(feats, target_ret_col="ret", min_ret=0.0,
+                       horizontal_barriers=(1.0, 2.0), vertical_barrier=pd.Timedelta(seconds=1))
+        # Should have raised DeprecationWarning
+        assert len(w) == 1
+        assert issubclass(w[0].category, DeprecationWarning)
+        assert "horizontal_barriers is deprecated" in str(w[0].message)
+
+    f_df, out = tbm.compute_labels(trades)
+    assert not out.empty

@@ -596,3 +596,154 @@ def test_triple_barrier_array_shapes():
 
 if __name__ == "__main__":
     pytest.main([__file__])
+
+
+# ---------- Take-Profit and Stop-Loss Semantic Tests ----------
+
+def test_triple_barrier_long_take_profit():
+    """Test take-profit for long position (side=1): TP is upper barrier."""
+    timestamps = np.arange(10, dtype=np.int64) * int(1e9)
+    close = np.array([100, 102, 104, 106, 108, 110, 112, 114, 116, 118], dtype=np.float64)
+    event_idxs = np.array([0], dtype=np.int64)
+    targets = np.array([0.05], dtype=np.float64)  # 5% target
+
+    # Long position: tp_mult=2, sl_mult=1
+    # Take-profit = 0.05 * 2 = 0.10 (upper), Stop-loss = -0.05 * 1 = -0.05 (lower)
+    labels, touch_idxs, rets, max_rb_ratios = triple_barrier(
+        timestamps, close, event_idxs, targets, (2.0, 1.0), 8.0, 0.0, None, 0.0
+    )
+
+    # With upward trend and side=1 (default), should hit take-profit (upper barrier)
+    assert labels[0] == 1
+    assert max_rb_ratios[0] == 1.0
+
+
+def test_triple_barrier_long_stop_loss():
+    """Test stop-loss for long position (side=1): SL is lower barrier."""
+    timestamps = np.arange(10, dtype=np.int64) * int(1e9)
+    close = np.array([100, 98, 96, 94, 92, 90, 88, 86, 84, 82], dtype=np.float64)  # Downward trend
+    event_idxs = np.array([0], dtype=np.int64)
+    targets = np.array([0.05], dtype=np.float64)
+
+    # Long position: tp_mult=2, sl_mult=1
+    # Take-profit = 0.10 (upper), Stop-loss = -0.05 (lower)
+    labels, touch_idxs, rets, max_rb_ratios = triple_barrier(
+        timestamps, close, event_idxs, targets, (2.0, 1.0), 8.0, 0.0, None, 0.0
+    )
+
+    # With downward trend and side=1 (default), should hit stop-loss (lower barrier)
+    assert labels[0] == -1
+    assert max_rb_ratios[0] == 1.0
+
+
+def test_triple_barrier_short_take_profit():
+    """Test take-profit for short position (side=-1): TP is lower barrier."""
+    timestamps = np.arange(10, dtype=np.int64) * int(1e9)
+    close = np.array([100, 98, 96, 94, 92, 90, 88, 86, 84, 82], dtype=np.float64)  # Downward trend
+    event_idxs = np.array([0], dtype=np.int64)
+    targets = np.array([0.05], dtype=np.float64)
+    side = np.array([-1], dtype=np.int8)  # Short position
+
+    # Short position: tp_mult=2, sl_mult=1
+    # Take-profit = -0.05 * 2 = -0.10 (lower), Stop-loss = 0.05 * 1 = 0.05 (upper)
+    labels, touch_idxs, rets, max_rb_ratios = triple_barrier(
+        timestamps, close, event_idxs, targets, (2.0, 1.0), 8.0, 0.0, side, 0.0
+    )
+
+    # With downward trend and side=-1, price drops => ret = (log_close - base) * (-1)
+    # When price drops, ret becomes positive (profit for short)
+    # Should hit take-profit (which is lower barrier for short)
+    # Meta-labeling mode with min_ret=0.0
+    assert labels[0] == 1  # Profitable short
+    assert rets[0] > 0  # Positive return for short when price drops
+
+
+def test_triple_barrier_short_stop_loss():
+    """Test stop-loss for short position (side=-1): SL is upper barrier."""
+    timestamps = np.arange(10, dtype=np.int64) * int(1e9)
+    close = np.array([100, 102, 104, 106, 108, 110, 112, 114, 116, 118], dtype=np.float64)  # Upward trend
+    event_idxs = np.array([0], dtype=np.int64)
+    targets = np.array([0.05], dtype=np.float64)
+    side = np.array([-1], dtype=np.int8)  # Short position
+
+    # Short position: tp_mult=2, sl_mult=1
+    # Take-profit = -0.10 (lower), Stop-loss = 0.05 (upper)
+    labels, touch_idxs, rets, max_rb_ratios = triple_barrier(
+        timestamps, close, event_idxs, targets, (2.0, 1.0), 8.0, 0.0, side, 0.0
+    )
+
+    # With upward trend and side=-1, price rises => ret = (log_close - base) * (-1) becomes negative
+    # Should hit stop-loss (which is upper barrier for short)
+    assert labels[0] == 0  # Meta-label: unprofitable short (ret < min_ret=0)
+    assert rets[0] < 0  # Negative return for short when price rises
+
+
+def test_triple_barrier_asymmetric_tp_sl_long():
+    """Test asymmetric TP/SL for long position."""
+    timestamps = np.arange(20, dtype=np.int64) * int(1e9)
+    close = np.linspace(100, 115, 20)  # Moderate upward trend (~15%)
+    event_idxs = np.array([0], dtype=np.int64)
+    targets = np.array([0.1], dtype=np.float64)  # 10% target
+
+    # Tight TP (0.5), loose SL (3.0)
+    # TP = 0.05, SL = -0.30
+    labels, touch_idxs, rets, max_rb_ratios = triple_barrier(
+        timestamps, close, event_idxs, targets, (0.5, 3.0), 18.0, 0.0, None, 0.0
+    )
+
+    # Should hit TP easily with moderate upward trend
+    assert labels[0] == 1
+
+
+def test_triple_barrier_asymmetric_tp_sl_short():
+    """Test asymmetric TP/SL for short position."""
+    timestamps = np.arange(20, dtype=np.int64) * int(1e9)
+    close = np.linspace(100, 85, 20)  # Moderate downward trend (~15%)
+    event_idxs = np.array([0], dtype=np.int64)
+    targets = np.array([0.1], dtype=np.float64)
+    side = np.array([-1], dtype=np.int8)
+
+    # Tight TP (0.5), loose SL (3.0)
+    # For short: TP = -0.05 (lower), SL = 0.30 (upper)
+    labels, touch_idxs, rets, max_rb_ratios = triple_barrier(
+        timestamps, close, event_idxs, targets, (0.5, 3.0), 18.0, 0.0, side, 0.0
+    )
+
+    # Should hit TP easily with moderate downward trend
+    assert labels[0] == 1  # Profitable short
+
+
+def test_triple_barrier_only_take_profit():
+    """Test with only take-profit enabled (no stop-loss)."""
+    timestamps = np.arange(10, dtype=np.int64) * int(1e9)
+    close = np.array([100, 105, 110, 115, 120, 125, 130, 135, 140, 145], dtype=np.float64)
+    event_idxs = np.array([0], dtype=np.int64)
+    targets = np.array([0.05], dtype=np.float64)
+
+    # Only TP enabled, SL disabled (np.inf)
+    labels, touch_idxs, rets, max_rb_ratios = triple_barrier(
+        timestamps, close, event_idxs, targets, (1.0, np.inf), 8.0, 0.0, None, 0.0
+    )
+
+    # Should hit TP (upper barrier) and not worry about SL
+    assert labels[0] == 1
+    assert max_rb_ratios[0] == 1.0
+
+
+def test_triple_barrier_only_stop_loss():
+    """Test with only stop-loss enabled (no take-profit)."""
+    timestamps = np.arange(10, dtype=np.int64) * int(1e9)
+    close = np.array([100, 95, 90, 85, 80, 75, 70, 65, 60, 55], dtype=np.float64)
+    event_idxs = np.array([0], dtype=np.int64)
+    targets = np.array([0.05], dtype=np.float64)
+
+    # Only SL enabled, TP disabled (np.inf)
+    # For side=1: SL = -0.05 (lower barrier), TP = inf (no upper barrier)
+    labels, touch_idxs, rets, max_rb_ratios = triple_barrier(
+        timestamps, close, event_idxs, targets, (np.inf, 1.0), 8.0, 0.0, None, 0.0
+    )
+
+    # Should hit SL (lower barrier) or timeout
+    # With downward trend, should hit lower barrier
+    assert labels[0] == -1
+    assert max_rb_ratios[0] == 1.0

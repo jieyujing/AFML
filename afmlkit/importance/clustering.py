@@ -35,7 +35,14 @@ def get_feature_distance_matrix(X: pd.DataFrame) -> pd.DataFrame:
     ----------
     López de Prado, M. "Advances in Financial Machine Learning." Ch. 4.
     """
+    # Remove constant features (they cause NaN in correlation)
+    const_cols = X.columns[X.nunique() <= 1]
+    if len(const_cols) > 0:
+        X = X.drop(columns=const_cols)
+
     corr = X.corr()
+    # Fill NaN correlations (from constant features removed above) with 0
+    corr = corr.fillna(0.0)
     # Clip to [-1, 1] to handle numerical precision issues
     corr = corr.clip(-1.0, 1.0)
     dist = np.sqrt(0.5 * (1.0 - corr))

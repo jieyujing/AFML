@@ -27,11 +27,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from strategies.IF9999.config import (
     BARS_DIR, FIGURES_DIR, FEATURES_DIR,
     FRACDIFF_THRES, FRACDIFF_D_STEP, FRACDIFF_MAX_D,
-    CUSUM_WINDOW, CUSUM_MULTIPLIER
+    CUSUM_WINDOW, CUSUM_MULTIPLIER, FEATURE_CONFIG
 )
 
 from afmlkit.feature.core.frac_diff import optimize_d, frac_diff_ffd
 from afmlkit.sampling.filters import cusum_filter_with_state
+from strategies.IF9999.feature_compute import (
+    compute_all_features,
+    compute_event_features,
+    compute_trend_scan_labels,
+)
 
 sns.set_theme(style="whitegrid", context="paper")
 
@@ -401,12 +406,49 @@ def main():
         os.path.join(FIGURES_DIR, '02_event_distribution.png')
     )
 
-    # Step 6: 保存输出
-    print("\n[Step 6] 保存输出文件...")
+    # Step 6: 保存基础输出
+    print("\n[Step 6] 保存基础输出文件...")
     save_outputs(
         bars, fracdiff_series, optimal_d, event_indices,
         adf_result[1]  # ADF p-value
     )
+
+    # Step 7: 计算全量特征
+    print("\n[Step 7] 计算全量特征...")
+    features_df = compute_all_features(bars, FEATURE_CONFIG)
+    features_path = os.path.join(FEATURES_DIR, 'bars_features.parquet')
+    features_df.to_parquet(features_path)
+    print(f"✅ 全量特征已保存: {features_path}")
+    print(f"   特征数量: {len(features_df.columns)}")
+    print(f"   样本数量: {len(features_df)}")
+
+    # Step 8: 提取事件点特征
+    print("\n[Step 8] 提取事件点特征...")
+    # 转换 event_indices 为实际 bars 索引
+    fracdiff_diff = fracdiff_series.diff()
+    valid_idx = fracdiff_diff.dropna().index
+    # event_indices 是相对于 valid_idx 的索引，需要转换为 bars 的整数索引
+    bars_event_indices = np.array([bars.index.get_loc(ts) for ts in valid_idx[event_indices]])
+
+    event_features_df = compute_event_features(bars, features_df, bars_event_indices)
+    event_features_path = os.path.join(FEATURES_DIR, 'events_features.parquet')
+    event_features_df.to_parquet(event_features_path)
+    print(f"✅ 事件点特征已保存: {event_features_path}")
+    print(f"   事件数量: {len(event_features_df)}")
+    print(f"   特征数量: {len(event_features_df.columns)}")
+
+    # Step 9: Trend Scan 标签（含未来信息）
+    if FEATURE_CONFIG.get('trend_scan', {}).get('enabled', False):
+        print("\n[Step 9] 计算 Trend Scan 标签...")
+        trend_scan_df = compute_trend_scan_labels(bars, bars_event_indices, FEATURE_CONFIG['trend_scan'])
+        trend_scan_path = os.path.join(FEATURES_DIR, 'trend_scan_labels.parquet')
+        trend_scan_df.to_parquet(trend_scan_path)
+        print(f"✅ Trend Scan 标签已保存: {trend_scan_path}")
+        print(f"   标签数量: {len(trend_scan_df)}")
+        # 统计多空分布
+        long_count = (trend_scan_df['side'] == 1).sum()
+        short_count = (trend_scan_df['side'] == -1).sum()
+        print(f"   多头标签: {long_count}, 空头标签: {short_count}")
 
     # 完成
     print("\n" + "=" * 70)
@@ -416,6 +458,10 @@ def main():
     print(f"  - fracdiff_series.parquet")
     print(f"  - fracdiff_params.parquet")
     print(f"  - cusum_events.parquet")
+    print(f"  - bars_features.parquet (全量特征)")
+    print(f"  - events_features.parquet (事件点特征)")
+    if FEATURE_CONFIG.get('trend_scan', {}).get('enabled', False):
+        print(f"  - trend_scan_labels.parquet (Trend Scan 标签)")
     print(f"图表目录: {FIGURES_DIR}")
     print(f"  - 02_fracdiff_comparison.png")
     print(f"  - 02_cusum_state.png")

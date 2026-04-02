@@ -5,6 +5,7 @@ from afmlkit.utils.log import get_logger
 from afmlkit.bar.data_model import TradesData
 import pandas as pd
 import numpy as np
+import warnings
 
 logger = get_logger(__name__)
 
@@ -85,12 +86,13 @@ class TBMLabel:
 
     Args:
         features (pd.DataFrame): The events dataframe containing the return target column and optionally event indices ("event_idx" column) and features. If not provided, event indices will be computed based on timestamps.
-        target_ret_col (str): The name of the target return column in the ``features`` dataframe. Typically a volatility estimator output. This is used to scale the horizontal barriers. Should be in log-return space.
-        min_ret (float): Minimum required return threshold. Events where the absolute target return (scaled by max horizontal multiplier) is below this threshold will be dropped.
-        horizontal_barriers (tuple[float, float]): Bottom and top (stop-loss/take-profit) horizontal barrier multipliers. The target return is multiplied by these to determine barrier widths. Use -inf/+inf to disable.
+        target_ret_col (str): The name of the target return column in the ``features`` dataframe. Typically a volatility estimator output. This is used to scale the profit/loss barriers. Should be in log-return space.
+        min_ret (float): Minimum required return threshold. Events where the absolute target return (scaled by max multiplier) is below this threshold will be dropped.
+        profit_loss_barriers (tuple[float, float]): Take-profit and stop-loss multipliers (tp_mult, sl_mult). The target return is multiplied by these to determine barrier widths. For long positions (side=1), take-profit is above entry and stop-loss below. For short positions (side=-1), take-profit is below entry and stop-loss above. Use np.inf to disable a barrier.
         vertical_barrier (pd.Timedelta): The temporal barrier duration. Set to a large value (e.g., pd.Timedelta(days=365*1000)) to disable.
         min_close_time (pd.Timedelta, optional): Prevents premature event closure before this minimum time. Default: pd.Timedelta(seconds=1).
         is_meta (bool, optional): Enable meta-labeling mode. If True, ``features`` must contain a 'side' column with primary model predictions (-1, 0, 1). Default: False.
+        horizontal_barriers (tuple[float, float], optional): **Deprecated**. Use ``profit_loss_barriers`` instead. Old order was (bottom_mult, top_mult), new order is (tp_mult, sl_mult).
 
     Raises:
         ValueError: If input validations fail, such as missing columns, invalid types, or empty data after filtering.
@@ -101,37 +103,58 @@ class TBMLabel:
     def __init__(self,
                  features: pd.DataFrame,
                  target_ret_col: str,
-                 min_ret:float,
-                 horizontal_barriers: tuple[float, float],
-                 vertical_barrier: pd.Timedelta,
+                 min_ret: float,
+                 profit_loss_barriers: tuple[float, float] = None,
+                 vertical_barrier: pd.Timedelta = None,
                  min_close_time: pd.Timedelta = pd.Timedelta(seconds=1),
-                 is_meta: bool = False):
+                 is_meta: bool = False,
+                 horizontal_barriers: tuple[float, float] = None):
         """
         Triple barrier labeling method
 
         :param features: The events dataframe the return target column and optionally containing the event indices ("event_idx" column) and features. If not it will be computed based on timestamps.
         :param target_ret_col: The name of the target return column in the `features` dataframe.
             Typically, a volatility estimator output.
-            This will be used to determine the horizontal barriers.
+            This will be used to determine the profit/loss barriers.
             Should be in log-return space.
         :param min_ret: Minimum required return threshold.
             Where `target_col` is below this threshold events will be dropped.
-        :param horizontal_barriers: Bottom and Top (SL/TP) horizontal barrier multipliers.
-            The return target will be multiplied by these multipliers. Determines the width of the horizontal barriers.
-            If you want to disable the barriers, set it to -np.inf or +np.inf, respectively.
+        :param profit_loss_barriers: Take-profit and stop-loss multipliers (tp_mult, sl_mult).
+            The return target will be multiplied by these multipliers. Determines the width of the barriers.
+            For long (side=1): take-profit is upper barrier, stop-loss is lower barrier.
+            For short (side=-1): take-profit is lower barrier, stop-loss is upper barrier.
+            Use np.inf to disable a barrier.
         :param vertical_barrier: The temporal barrier as timedelta. Set it to a large value to disable the vertical barrier (eg. 1000 years)
         :param min_close_time: This prevents closing the event prematurely before the minimum close time is reached. Default is 1 second.
         :param is_meta: Side or meta labeling.
             If `True` `features` must contain `side` column containing the predictions of the primary model.
+        :param horizontal_barriers: **Deprecated**. Use `profit_loss_barriers` instead.
+            Old order: (bottom_mult, top_mult). New order: (tp_mult, sl_mult).
         """
+        # Handle deprecated parameter
+        if horizontal_barriers is not None:
+            warnings.warn(
+                "horizontal_barriers is deprecated, use profit_loss_barriers=(tp_mult, sl_mult). "
+                "Note: order changed from (bottom, top) to (tp, sl).",
+                DeprecationWarning,
+                stacklevel=2
+            )
+            # Convert old order (bottom, top) to new order (tp, sl)
+            # Old: bottom_mult → sl_mult, top_mult → tp_mult
+            profit_loss_barriers = (horizontal_barriers[1], horizontal_barriers[0])
+
+        if profit_loss_barriers is None:
+            raise ValueError("profit_loss_barriers is required. Provide (tp_mult, sl_mult).")
+        if vertical_barrier is None:
+            raise ValueError("vertical_barrier is required.")
 
         # check if target column is in features
         if target_ret_col not in features.columns:
             raise ValueError(f"Target column '{target_ret_col}' not found in features DataFrame.")
         if not isinstance(features.index, pd.DatetimeIndex):
             raise ValueError("Features index must be a DatetimeIndex.")
-        if not isinstance(horizontal_barriers, tuple) or len(horizontal_barriers) != 2:
-            raise ValueError("Horizontal barriers must be a tuple of two floats (bottom, top).")
+        if not isinstance(profit_loss_barriers, tuple) or len(profit_loss_barriers) != 2:
+            raise ValueError("profit_loss_barriers must be a tuple of two floats (tp_mult, sl_mult).")
         if min_ret < 0.:
             raise ValueError("Minimum return must be non-negative.")
         if is_meta:
@@ -140,11 +163,11 @@ class TBMLabel:
             if not pd.api.types.is_integer_dtype(features['side']):
                 raise ValueError("The 'side' column must be of integer type (e.g., -1, 0, 1).")
 
-        self._orig_features = self._preprocess_features(features, target_ret_col, min_ret, horizontal_barriers)
+        self._orig_features = self._preprocess_features(features, target_ret_col, min_ret, profit_loss_barriers)
         self._features = self._orig_features
         self.target_ret_col = target_ret_col
         self.min_ret = min_ret
-        self.horizontal_barriers = horizontal_barriers
+        self.profit_loss_barriers = profit_loss_barriers
         self.vertical_barrier = vertical_barrier.total_seconds()  # get vertical barrier in seconds
         self.min_close_time_sec = min_close_time.total_seconds()
         self.is_meta = is_meta
@@ -153,7 +176,7 @@ class TBMLabel:
 
     @staticmethod
     def _preprocess_features(x: pd.DataFrame, target_ret_col: str, min_ret: float,
-                             horizontal_barriers: tuple[float, float]) -> pd.DataFrame:
+                             profit_loss_barriers: tuple[float, float]) -> pd.DataFrame:
         # Remove the leading NaNs from the features DataFrame
         first_valid_indices = [x[col].first_valid_index() for col in x.columns if
                                x[col].first_valid_index() is not None]
@@ -166,7 +189,7 @@ class TBMLabel:
         x = x.loc[start_idx:]
 
         # Filter out rows where the target return is below the minimum required return threshold
-        max_mult = np.max(horizontal_barriers)
+        max_mult = np.max(profit_loss_barriers)
         x = x[x[target_ret_col].abs() * max_mult >= min_ret]
         if x.empty:
             raise ValueError("No valid events found after filtering by minimum return and removing leading NaNs.")
@@ -293,7 +316,7 @@ class TBMLabel:
             close=trades.data.price.values,
             event_idxs=event_idx,
             targets=self.target_returns.values,
-            horizontal_barriers=self.horizontal_barriers,
+            profit_loss_barriers=self.profit_loss_barriers,
             vertical_barrier=self.vertical_barrier,
             min_close_time_sec=self.min_close_time_sec,
             side=self.features['side'].values.astype(np.int8) if self.is_meta else None,

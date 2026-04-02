@@ -14,7 +14,7 @@ def triple_barrier(
         close: NDArray[np.float64],
         event_idxs: NDArray[np.int64],
         targets: NDArray[np.float64],
-        horizontal_barriers: Tuple[float, float],
+        profit_loss_barriers: Tuple[float, float],
         vertical_barrier: float,
         min_close_time_sec: float,
         side: Optional[NDArray[np.int8]],
@@ -24,19 +24,25 @@ def triple_barrier(
     Implements the Triple Barrier Method (TBM) for labeling financial data based on
     Advances in Financial Machine Learning, Chapter 3.
 
+    The barriers are defined using take-profit and stop-loss semantics:
+    - For long positions (side=1): take-profit is above entry, stop-loss is below
+    - For short positions (side=-1): take-profit is below entry, stop-loss is above
+
     :param timestamps: The timestamps in nanoseconds for the close prices series.
     :param close: The close prices of the asset.
     :param event_idxs: The nanosecond timestamps of the events, e.g. acquired from the cusum filter. (subset of timestamps)
-    :param targets: Log-return targets for the events, e.g. acquired from a moving volatility estimator. Length must matchevent_idxs.
-    :param horizontal_barriers: The bottom and top horizontal barrier multipliers for the triple barrier search by which the target is multiplied.
-        This setup determines the width of the horizontal barriers. If you want to disable the barriers, set it to np.inf or -np.inf.
+    :param targets: Log-return targets for the events, e.g. acquired from a moving volatility estimator. Length must match event_idxs.
+    :param profit_loss_barriers: Take-profit and stop-loss multipliers (tp_mult, sl_mult) by which the target is multiplied.
+        For side=1 (long): take_profit = tgt * tp_mult (upper), stop_loss = -tgt * sl_mult (lower)
+        For side=-1 (short): take_profit = -tgt * tp_mult (lower), stop_loss = tgt * sl_mult (upper)
+        Use np.inf to disable a barrier.
     :param vertical_barrier: The temporal barrier in seconds. Set it to np.inf to disable the vertical barrier.
     :param min_close_time_sec: The minimum open time in seconds (useful when raw tick data is used). This prevents closing the event prematurely before the minimum open time is reached.
-    :param side: Optional array indicating the side of the event (-1 for sell, 1 for buy) for meta labeling. Length must match event_idxs. None for side predication.
+    :param side: Optional array indicating the side of the event (-1 for sell, 1 for buy) for meta labeling. Length must match event_idxs. None for side prediction.
     :param min_ret: The minimum target value for meta-labeling. If the return is below this value, the label will be 0, otherwise 1.
     :returns: A tuple of 4 elements containing:
 
-        - The label (-1, 1) for side prediction (barriers should be symmetric); If side is provided, the meta-labels are (0, 1)
+        - The label (-1, 1) for side prediction; If side is provided, the meta-labels are (0, 1)
         - The first barrier touch index,
         - The return,
         - Maximum return-barrier ratio during the search describing how close the path came to a horizontal barrier.
@@ -62,11 +68,11 @@ def triple_barrier(
         side = np.ones_like(event_idxs, dtype=np.int8)
 
     n_events = len(event_idxs)  # Number of events (subset of samples)
-    bottom_mult, top_mult = horizontal_barriers
-    if bottom_mult == 0.0 or np.isnan(bottom_mult):
-        bottom_mult = np.inf
-    if top_mult == 0.0 or np.isnan(top_mult):
-        top_mult = np.inf
+    tp_mult, sl_mult = profit_loss_barriers
+    if tp_mult == 0.0 or np.isnan(tp_mult):
+        tp_mult = np.inf
+    if sl_mult == 0.0 or np.isnan(sl_mult):
+        sl_mult = np.inf
     vertical_barrier_ns = vertical_barrier * 1e9  # Convert to nanoseconds
     min_close_time_ns = min_close_time_sec * 1e9    # Convert to nanoseconds
 
@@ -87,9 +93,17 @@ def triple_barrier(
         #     continue
         # -> This should be done in a preprocessing step before calling this function.
 
-        # Upper and lower barriers in log-return space
-        upper_barrier = tgt * top_mult
-        lower_barrier = -tgt * bottom_mult
+        # Calculate take-profit and stop-loss based on side
+        # For long (side=1): tp is upper barrier, sl is lower barrier
+        # For short (side=-1): tp is lower barrier, sl is upper barrier
+        side_mult = side[i_event]  # Get side multiplier for this event
+        take_profit = tgt * tp_mult * side_mult  # TP in direction of trade
+        stop_loss = -tgt * sl_mult * side_mult   # SL against direction of trade
+
+        # Determine upper and lower barriers (may be swapped for short positions)
+        upper_barrier = max(take_profit, stop_loss)
+        lower_barrier = min(take_profit, stop_loss)
+
         # Pre-compute barrier conditions outside the loop
         upper_valid = np.isfinite(upper_barrier) and upper_barrier != 0.0
         lower_valid = np.isfinite(lower_barrier) and lower_barrier != 0.0
@@ -104,7 +118,6 @@ def triple_barrier(
             continue
 
         # ---------- Evaluate the path -----------
-        side_mult = side[i_event]
         touch_idx = t1_idx
         max_urbr = 0.0
         max_lrbr = 0.0

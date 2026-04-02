@@ -48,6 +48,21 @@ from .microstructure import (
     roll_spread_estimate,
     corwin_schultz,
 )
+from .trend import (
+    supertrend,
+    adx_core,
+)
+from .theil_imbalance import (
+    theil_index,
+    clv_split,
+    bvc_split,
+    direction_split,
+    rolling_theil_imbalance,
+    rolling_theil_decomposed,
+    TheilImbalanceTransform,
+    TheilDecomposedTransform,
+    theil_imbalance,
+)
 
 __all__ = [
     # frac_diff
@@ -98,4 +113,17 @@ __all__ = [
     "amihud",
     "roll_spread_estimate",
     "corwin_schultz",
+    # trend
+    "supertrend",
+    "adx_core",
+    # theil_imbalance
+    "theil_index",
+    "clv_split",
+    "bvc_split",
+    "direction_split",
+    "rolling_theil_imbalance",
+    "rolling_theil_decomposed",
+    "TheilImbalanceTransform",
+    "TheilDecomposedTransform",
+    "theil_imbalance",
 ]

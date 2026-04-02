@@ -157,10 +157,138 @@ uv run python strategies/IF9999/04_primary_model_backtest.py
 | `04_cumulative_pnl.png` | 累积收益曲线 |
 | `04_tvalue_vs_pnl.png` | |t_value| vs 收益散点图 |
 
+## Phase 4-6: Primary Models & Meta Model
+
+### 训练脚本
+
+| 脚本 | 说明 |
+|------|------|
+| `04_lgbm_primary_model.py` | LightGBM Primary Model |
+| `04_ma_primary_model.py` | MA Cross Primary Model |
+| `04_momentum_primary_model.py` | Momentum Primary Model |
+| `04_supertrend_primary_model.py` | SuperTrend Primary Model |
+| `04c_compare_primary_models.py` | Primary Model 对比 |
+| `06_meta_labels.py` | Meta Labels 生成 |
+| `07_meta_model.py` | Meta Model 训练（MDI + MDA） |
+| `07b_meta_model_feature_selection.py` | 特征筛选对比实验 |
+
+### Meta Model 架构
+
+```python
+# AFML 规范配置
+base_tree = DecisionTreeClassifier(
+    criterion="entropy",
+    max_features=1,              # 消除遮蔽效应
+    max_depth=5,
+    class_weight="balanced",
+)
+
+model = BaggingClassifier(
+    estimator=base_tree,
+    n_estimators=1000,
+    max_samples=0.5,             # 随机子集采样
+)
+```
+
+### 验证方法
+
+- **PurgedKFold**: 5-fold 跨时间验证，防止数据泄露
+- **Embargo**: 5% 禁运期，应对序列相关性
+
+## Phase 7: 特征重要性分析
+
+### MDI vs MDA 核心区别
+
+| 维度 | MDI (Mean Decrease Impurity) | MDA (Mean Decrease Accuracy) |
+|------|------------------------------|------------------------------|
+| **原理** | 树分裂时特征减少的不纯度 | 置换特征后模型性能下降 |
+| **计算时机** | 训练时（in-sample） | 测试时（out-of-sample） |
+| **偏置** | 偏向高基数特征 | 无此偏置 |
+| **替代效应** | 有（共线特征共享重要性） | Clustered MDA 可解决 |
+
+### 关键经验：MDA 负贡献 ≠ 特征无用
+
+**实验结果**：
+
+| Scheme | Features | F1 | Precision | Recall |
+|--------|----------|-----|-----------|--------|
+| Full | 39 | 0.619 | 0.580 | 0.667 |
+| Aggressive (仅MDA正) | 4 | 0.588 | 0.540 | 0.645 |
+| **Balanced (删除C4)** | **26** | **0.633** | **0.590** | **0.688** |
+
+**核心发现**：
+
+1. **Momentum 特征 MDA 负但有价值**
+   - MDA = -0.029，但与标签负相关（rsi_7: -0.177, stoch_k_14: -0.188）
+   - 模型学到了反向信号，删除反而降低性能
+
+2. **Time/Session 特征应删除**
+   - MDA = -0.049 ± 0.506（高方差）
+   - 不同 fold 表现极端不一致
+   - 删除后 F1 提升 2.3%
+
+3. **Bagging 内置特征筛选**
+   - `max_features=1` 每棵树只看 1 个特征
+   - 1000 棵树投票自动过滤噪音
+
+### 特征筛选决策框架
+
+```
+MDA 负贡献的可能原因:
+├─ a) 特征是纯噪音 (特征-标签相关性 ≈ 0) → 删除
+├─ b) 特征被反向利用 (特征-标签相关性显著负) → 保留 ✅
+└─ c) 特征在组合中有交互价值 → 评估保留
+```
+
+**判断流程**：
+
+1. 计算 MDA → 识别负贡献 cluster
+2. 检查特征-标签相关性 → 区分噪音 vs 反向信号
+3. 检查 MDA 方差 → 高方差特征优先删除
+4. 训练对比实验 → 验证筛选效果
+
+### 删除的 C4 特征（13个）
+
+```
+feat_adx_14, feat_sin_time, feat_cos_time, feat_sin_dow, feat_cos_dow,
+feat_asia_sess, feat_eu_sess, feat_lz_entropy_100,
+feat_serial_corr_lag1_20, feat_serial_corr_lag5_20, feat_serial_corr_lag10_20,
+feat_ljung_box_20, feat_adf_test_100
+```
+
+**删除理由**：MDA 负贡献 + 高方差（std=0.506）
+
+### 保留的特征（26个）
+
+- **C1 (Momentum)**：RSI, ROC, Stoch, VWAP dist 等（反向信号有价值）
+- **C2 (Volatility)**：EWM vol, HL vol, Amihud, spread 等
+- **C3 (Entropy)**：Shannon, LZ entropy（MDA 正贡献 +0.096）
+
+## 输出文件
+
+### 模型文件
+
+| 文件 | 说明 |
+|------|------|
+| `output/models/meta_model_balanced.pkl` | 最优 Meta Model（26特征） |
+| `output/models/meta_model_balanced_features.txt` | 特征列表 |
+
+### 特征重要性
+
+| 文件 | 说明 |
+|------|------|
+| `output/features/meta_mda_importance.parquet` | Clustered MDA 结果 |
+| `output/figures/07_feature_importance_mdi.png` | MDI 可视化 |
+| `output/figures/07_feature_importance_mda.png` | MDA 可视化 |
+| `output/figures/07b_feature_selection_comparison.png` | 三方案对比 |
+
 ## 后续阶段
 
-- Phase 4: Meta-Labeling 模型训练
+- Phase 8: 策略组合与回测
+- Phase 9: PBO 验证
 
 ## 参考
 
 - Marcos Lopez de Prado, *Advances in Financial Machine Learning*, 2018
+- AFML Chapter 8: Feature Importance
+- AFML Chapter 3: Meta-Labeling

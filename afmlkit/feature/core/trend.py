@@ -1,8 +1,155 @@
 """
 Trend indicators for financial time series analysis.
 """
+from typing import Tuple
+
 import numpy as np
 from numba import njit
+from numpy.typing import NDArray
+
+
+@njit(nogil=True)
+def _supertrend_core(
+    close: NDArray[np.float64],
+    atr_values: NDArray[np.float64],
+    atr_period: int,
+    multiplier: float,
+) -> Tuple[NDArray[np.float64], NDArray[np.int8], NDArray[np.float64], NDArray[np.float64]]:
+    """
+    Core Numba kernel for SuperTrend calculation.
+
+    Algorithm:
+    1. Base upper = close + multiplier * ATR
+    2. Base lower = close - multiplier * ATR
+    3. Final bands adjust based on trend:
+       - Uptrend (direction=+1): lower band acts as support (can only move up)
+       - Downtrend (direction=-1): upper band acts as resistance (can only move down)
+    4. Trend reversal when price crosses active band
+
+    :param close: Array of close prices
+    :param atr_values: Pre-computed ATR values
+    :param atr_period: ATR calculation period (for warmup skip)
+    :param multiplier: ATR multiplier for band width
+    :returns: (trend_line, direction, upper_band, lower_band)
+    """
+    n = len(close)
+
+    # Initialize output arrays
+    trend_line = np.full(n, np.nan, dtype=np.float64)
+    direction = np.zeros(n, dtype=np.int8)  # 0: undefined, +1: uptrend, -1: downtrend
+    upper_band = np.full(n, np.nan, dtype=np.float64)
+    lower_band = np.full(n, np.nan, dtype=np.float64)
+
+    # Skip warmup period
+    for i in range(atr_period, n):
+        if np.isnan(atr_values[i]) or np.isnan(close[i]):
+            continue
+
+        # Basic bands
+        base_upper = close[i] + multiplier * atr_values[i]
+        base_lower = close[i] - multiplier * atr_values[i]
+
+        # First valid point: initialize with basic bands
+        if i == atr_period or np.isnan(trend_line[i - 1]):
+            upper_band[i] = base_upper
+            lower_band[i] = base_lower
+            # Determine initial direction based on price relative to midpoint
+            mid = (base_upper + base_lower) / 2.0
+            if close[i] >= mid:
+                direction[i] = 1  # uptrend
+                trend_line[i] = lower_band[i]
+            else:
+                direction[i] = -1  # downtrend
+                trend_line[i] = upper_band[i]
+            continue
+
+        # Get previous values
+        prev_upper = upper_band[i - 1]
+        prev_lower = lower_band[i - 1]
+        prev_direction = direction[i - 1]
+
+        # Dynamic band adjustment
+        # Lower band: can only move up during uptrend (acts as support)
+        if base_lower > prev_lower or prev_direction == -1:
+            lower_band[i] = base_lower
+        else:
+            lower_band[i] = prev_lower
+
+        # Upper band: can only move down during downtrend (acts as resistance)
+        if base_upper < prev_upper or prev_direction == 1:
+            upper_band[i] = base_upper
+        else:
+            upper_band[i] = prev_upper
+
+        # Trend direction determination
+        if prev_direction == 1:  # Previous uptrend
+            if close[i] < lower_band[i]:  # Price breaks below support
+                direction[i] = -1  # Switch to downtrend
+                trend_line[i] = upper_band[i]
+            else:
+                direction[i] = 1  # Continue uptrend
+                trend_line[i] = lower_band[i]
+
+        elif prev_direction == -1:  # Previous downtrend
+            if close[i] > upper_band[i]:  # Price breaks above resistance
+                direction[i] = 1  # Switch to uptrend
+                trend_line[i] = lower_band[i]
+            else:
+                direction[i] = -1  # Continue downtrend
+                trend_line[i] = upper_band[i]
+
+        else:  # Previous undefined (shouldn't happen after warmup)
+            mid = (upper_band[i] + lower_band[i]) / 2.0
+            if close[i] >= mid:
+                direction[i] = 1
+                trend_line[i] = lower_band[i]
+            else:
+                direction[i] = -1
+                trend_line[i] = upper_band[i]
+
+    return trend_line, direction, upper_band, lower_band
+
+
+def supertrend(
+    high: NDArray[np.float64],
+    low: NDArray[np.float64],
+    close: NDArray[np.float64],
+    atr_period: int = 10,
+    multiplier: float = 3.0,
+) -> Tuple[NDArray[np.float64], NDArray[np.int8], NDArray[np.float64], NDArray[np.float64]]:
+    """
+    Calculate SuperTrend indicator.
+
+    SuperTrend is a trend-following indicator that uses ATR to determine
+    dynamic support/resistance levels. It's particularly useful for:
+    - Identifying trend direction
+    - Setting trailing stop-losses
+    - Generating buy/sell signals
+
+    :param high: Array of high prices
+    :param low: Array of low prices
+    :param close: Array of close prices
+    :param atr_period: ATR calculation period (default 10)
+    :param multiplier: ATR multiplier for band width (default 3.0)
+    :returns: (trend_line, direction, upper_band, lower_band)
+              - trend_line: Active trend line value (lower in uptrend, upper in downtrend)
+              - direction: +1 (uptrend/buy), -1 (downtrend/sell)
+              - upper_band: Final upper band (resistance in downtrend)
+              - lower_band: Final lower band (support in uptrend)
+
+    Example:
+        >>> from afmlkit.feature.core.trend import supertrend
+        >>> trend_line, direction, upper, lower = supertrend(high, low, close, 10, 3.0)
+        >>> # direction == 1 means uptrend (price above trend_line)
+        >>> # direction == -1 means downtrend (price below trend_line)
+    """
+    from afmlkit.feature.core.volatility import atr
+
+    # Calculate ATR
+    atr_values = atr(high, low, close, atr_period, ema_based=True, normalize=False)
+
+    # Call Numba kernel
+    return _supertrend_core(close, atr_values, atr_period, multiplier)
 
 
 @njit
