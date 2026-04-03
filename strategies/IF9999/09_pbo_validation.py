@@ -1,13 +1,17 @@
 """
-09_pbo_validation.py - IF9999 策略 PBO 验证
+09_pbo_validation.py - IF9999 策略 PBO 验证（修正版）
 
 根据 AFML 方法论，计算回测过拟合概率：
 - 使用 CPCV (Combinatorial Purged Cross-Validation) 生成多条路径
 - 计算 Sharpe Ratio 分布
 - 估计 PBO (Probability of Backtest Overfitting)
 
+修正版说明：
+- 使用滚动回测的交易记录进行验证
+- 更准确地模拟策略在不同时间段的绩效分布
+
 流程:
-1. 加载 TBM 结果和特征矩阵
+1. 加载滚动回测的交易记录
 2. 使用 CPCV 分割数据
 3. 在各路径上计算 Sharpe
 4. 计算 PBO 并生成报告
@@ -23,10 +27,9 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from strategies.IF9999.config import FEATURES_DIR
+from strategies.IF9999.config import FEATURES_DIR, FIGURES_DIR
 from afmlkit.validation import (
     CombinatorialPurgedKFold,
     calculate_pbo,
@@ -35,81 +38,24 @@ from afmlkit.validation import (
 )
 
 
-def simulate_strategy_returns(
-    train_X: pd.DataFrame,
-    test_X: pd.DataFrame,
-    meta_signals: pd.Series,
-    features: pd.DataFrame
-) -> pd.Series:
-    """
-    模拟策略在测试集上的收益率.
-
-    :param train_X: 训练集特征
-    :param test_X: 测试集特征
-    :param meta_signals: Meta Model 信号
-    :param features: 完整特征矩阵
-    :returns: 测试集收益率序列
-    """
-    # 获取测试集索引
-    test_idx = test_X.index
-
-    # 从 meta_signals 提取测试集信号
-    test_signals = meta_signals.loc[test_idx.intersection(meta_signals.index)]
-
-    # 从 TBM 结果获取收益率
-    tbm_path = os.path.join(FEATURES_DIR, 'tbm_results.parquet')
-    if os.path.exists(tbm_path):
-        tbm = pd.read_parquet(tbm_path)
-        test_returns = tbm.loc[test_idx.intersection(tbm.index), 'ret']
-        # 应用信号
-        strategy_returns = test_returns * test_signals.reindex(test_returns.index).fillna(0)
-        return strategy_returns
-    else:
-        # 如果没有 TBM 结果，使用简单的收益率模拟
-        close_col = 'close' if 'close' in test_X.columns else test_X.columns[0]
-        returns = test_X[close_col].pct_change().dropna()
-        return returns * test_signals.reindex(returns.index).fillna(0)
-
-
 def main():
     """IF9999 策略 PBO 验证主流程。"""
     print("=" * 70)
-    print("  IF9999 Strategy PBO Validation")
+    print("  IF9999 Strategy PBO Validation (Rolling Backtest)")
     print("=" * 70)
 
-    # Step 1: 加载特征矩阵和信号
-    print("\n[Step 1] 加载数据...")
+    # Step 1: 加载滚动回测交易记录
+    print("\n[Step 1] 加载滚动回测交易记录...")
 
-    # 尝试多个可能的特征文件
-    features_path = os.path.join(FEATURES_DIR, 'meta_features.parquet')
-    if not os.path.exists(features_path):
-        features_path = os.path.join(FEATURES_DIR, 'bars_features_fd.parquet')
-    if not os.path.exists(features_path):
-        features_path = os.path.join(FEATURES_DIR, 'features.parquet')
+    primary_trades = pd.read_parquet(os.path.join(FEATURES_DIR, 'rolling_primary_trades.parquet'))
+    combined_trades = pd.read_parquet(os.path.join(FEATURES_DIR, 'rolling_combined_trades.parquet'))
 
-    if not os.path.exists(features_path):
-        print(f"❌ 特征文件不存在")
-        print("   请先运行 02_feature_engineering.py 生成特征")
-        return
-
-    features = pd.read_parquet(features_path)
-    print(f"   特征矩阵: {features.shape}")
-
-    # 加载 Meta Model 信号
-    meta_path = os.path.join(FEATURES_DIR, 'meta_labels.parquet')
-    if os.path.exists(meta_path):
-        meta_labels = pd.read_parquet(meta_path)
-        meta_signals = meta_labels.get('agreement', meta_labels.iloc[:, 0])
-        print(f"   Meta Labels: {len(meta_signals)}")
-    else:
-        print("   ⚠️ Meta Labels 文件不存在，使用随机信号演示")
-        meta_signals = pd.Series(np.random.choice([-1, 0, 1], size=len(features)),
-                                  index=features.index)
+    print(f"   Primary 交易数: {len(primary_trades)}")
+    print(f"   Combined 交易数: {len(combined_trades)}")
 
     # Step 2: 估计参数试验次数
     print("\n[Step 2] 估计参数试验次数...")
 
-    # 根据 IF9999 策略的实际参数网格估算
     param_grid = {
         'ma_span': [5, 10, 20, 50, 100],
         'tbm_barriers': [(1.0, 1.0), (1.5, 1.5), (2.0, 2.0), (2.5, 2.5)],
@@ -119,95 +65,85 @@ def main():
     n_trials = estimate_optimal_trials(param_grid)
     print(f"   参数网格估算试验次数: {n_trials}")
 
-    # Step 3: CPCV 分割
+    # Step 3: CPCV 分割（基于 Combined 交易时间）
     print("\n[Step 3] CPCV 分割...")
 
-    # 加载 TBM 结果获取结束时间
-    tbm_path = os.path.join(FEATURES_DIR, 'tbm_results.parquet')
-    if os.path.exists(tbm_path):
-        tbm = pd.read_parquet(tbm_path)
-        # 使用 exit_ts 作为结束时间
-        if 'exit_ts' in tbm.columns:
-            t1 = tbm['exit_ts']
-        elif 't1' in tbm.columns:
-            t1 = tbm['t1']
-        else:
-            t1 = features.index + pd.Timedelta(hours=2)
-    else:
-        # 使用简单的时间偏移
-        t1 = features.index + pd.Timedelta(hours=2)
+    # 使用交易的入场时间作为索引
+    combined_trades = combined_trades.sort_values('entry_time')
+    trade_times = combined_trades['entry_time'].values
 
-    # CPCV 配置：6 个 fold，每次测试 2 个
+    # 创建时间索引
+    trade_index = pd.DatetimeIndex(trade_times)
+
+    # 估算持仓时间（使用实际 exit_time）
+    t1 = pd.Series(combined_trades['exit_time'].values, index=trade_index)
+
     cpcv = CombinatorialPurgedKFold(
-        n_splits=6,
+        n_splits=5,
         n_test_splits=2,
         t1=t1,
         embargo_pct=0.01
     )
 
     n_paths = cpcv.get_n_splits()
-    print(f"   CPCV 配置: 6 folds, 2 test, 共 {n_paths} 条路径")
+    print(f"   CPCV 配置: 5 folds, 2 test, 共 {n_paths} 条路径")
 
     # Step 4: 模拟各路径回测
     print("\n[Step 4] 模拟各路径回测...")
 
-    # 使用简化方法：直接从 TBM 结果提取各路径收益率
-    tbm_path = os.path.join(FEATURES_DIR, 'tbm_results.parquet')
-    if os.path.exists(tbm_path):
-        tbm = pd.read_parquet(tbm_path)
-        all_returns = tbm['ret']
+    sharpe_paths = []
+    annualization_factor = 1500
 
-        # 将收益率按 CPCV 分割到各路径
-        sharpe_paths = []
-        returns_paths = []
-        annualization_factor = 1500  # 6 bars/day × 250 days
+    # 创建虚拟 X 用于分割
+    dummy_X = pd.DataFrame(index=trade_index)
 
-        for split_idx, (train_idx, test_idx, _) in enumerate(cpcv.split(features)):
-            test_returns = all_returns.iloc[test_idx]
-            test_signals = meta_signals.iloc[test_idx]
-            strategy_returns = test_returns * test_signals.reindex(test_returns.index).fillna(0)
+    for fold_info in cpcv.split(dummy_X):
+        train_idx, test_idx, _ = fold_info
 
-            if len(strategy_returns) > 20:
-                sr = strategy_returns.mean() / strategy_returns.std(ddof=1)
-                sr_annual = sr * np.sqrt(annualization_factor)
-                sharpe_paths.append(sr_annual)
-                returns_paths.append(strategy_returns)
+        # 获取测试集收益
+        test_returns = combined_trades.iloc[test_idx]['net_ret']
 
-        print(f"   有效路径数: {len(sharpe_paths)}")
-    else:
-        # 演示模式：生成随机 Sharpe 分布
-        print("   ⚠️ 无 TBM 结果，使用随机演示")
-        sharpe_paths = np.random.normal(loc=0.5, scale=0.3, size=n_paths)
+        # 计算 Sharpe
+        if len(test_returns) > 5 and test_returns.std() > 0:
+            sr = test_returns.mean() / test_returns.std(ddof=1)
+            sr_annual = sr * np.sqrt(annualization_factor)
+            sharpe_paths.append(sr_annual)
+
+    print(f"   有效路径数: {len(sharpe_paths)}")
+
+    if len(sharpe_paths) < 5:
+        print("   ❌ 有效路径数不足")
+        return
 
     # Step 5: 计算 PBO
     print("\n[Step 5] 计算 PBO...")
 
-    if len(sharpe_paths) >= 10:
-        pbo, stats = calculate_pbo(np.array(sharpe_paths))
-        print(f"   Sharpe 均值: {stats['sr_mean']:.4f}")
-        print(f"   Sharpe 标准差: {stats['sr_std']:.4f}")
-        print(f"   PBO: {pbo:.4f}")
-    else:
-        print("   ❌ 路径数不足，无法计算 PBO")
-        pbo = 0.5
-        stats = {'n_paths': len(sharpe_paths), 'sr_mean': np.mean(sharpe_paths), 'sr_std': np.std(sharpe_paths)}
+    sharpe_array = np.array(sharpe_paths)
+    pbo, stats = calculate_pbo(sharpe_array)
+
+    print(f"   Sharpe 均值: {stats['sr_mean']:.4f}")
+    print(f"   Sharpe 标准差: {stats['sr_std']:.4f}")
+    print(f"   Sharpe 最大: {stats['sr_max']:.4f}")
+    print(f"   Sharpe 最小: {stats['sr_min']:.4f}")
+    print(f"   正 Sharpe 比例: {stats['positive_rate']*100:.1f}%")
+    print(f"   PBO: {pbo:.4f}")
 
     # Step 6: 生成验证报告
     print("\n[Step 6] 生成验证报告...")
 
-    report = pbo_validation_report(np.array(sharpe_paths), n_trials)
+    report = pbo_validation_report(sharpe_array, n_trials)
     print(report)
 
     # Step 7: 保存结果
     results = {
-        'n_paths': stats.get('n_paths', len(sharpe_paths)),
+        'n_paths': len(sharpe_paths),
         'n_trials': n_trials,
         'pbo': pbo,
-        'sr_mean': stats.get('sr_mean', np.mean(sharpe_paths)),
-        'sr_std': stats.get('sr_std', np.std(sharpe_paths)),
-        'sr_max': stats.get('sr_max', np.max(sharpe_paths)),
-        'sr_min': stats.get('sr_min', np.min(sharpe_paths)),
-        'positive_rate': stats.get('positive_rate', np.mean(np.array(sharpe_paths) > 0)),
+        'sr_mean': stats['sr_mean'],
+        'sr_std': stats['sr_std'],
+        'sr_max': stats['sr_max'],
+        'sr_min': stats['sr_min'],
+        'positive_rate': stats['positive_rate'],
     }
 
     results_df = pd.DataFrame([results])
@@ -216,21 +152,44 @@ def main():
     print(f"\n✅ PBO 验证结果已保存: {results_path}")
 
     # Step 8: 绘制 Sharpe 分布图
-    fig_path = os.path.join(FEATURES_DIR.replace('features', 'figures'), 'pbo_sharpe_distribution.png')
+    fig_path = os.path.join(FIGURES_DIR, '09_pbo_sharpe_distribution.png')
     os.makedirs(os.path.dirname(fig_path), exist_ok=True)
 
     plt.figure(figsize=(10, 6))
-    plt.hist(sharpe_paths, bins=20, edgecolor='black', alpha=0.7)
-    plt.axvline(x=0, color='red', linestyle='--', label='SR = 0')
-    plt.axvline(x=stats.get('sr_mean', np.mean(sharpe_paths)), color='blue', linestyle='-', label=f'Mean SR = {stats.get("sr_mean", np.mean(sharpe_paths)):.2f}')
-    plt.xlabel('Annualized Sharpe Ratio')
-    plt.ylabel('Frequency')
-    plt.title(f'CPCV Sharpe Distribution (PBO = {pbo:.2f})')
-    plt.legend()
+    plt.hist(sharpe_paths, bins=min(15, len(sharpe_paths)), edgecolor='black', alpha=0.7, color='steelblue')
+    plt.axvline(x=0, color='red', linestyle='--', linewidth=2, label='SR = 0')
+    plt.axvline(x=stats['sr_mean'], color='darkorange', linestyle='-', linewidth=2,
+                label=f'Mean SR = {stats["sr_mean"]:.2f}')
+    plt.xlabel('Annualized Sharpe Ratio', fontsize=12)
+    plt.ylabel('Frequency', fontsize=12)
+    plt.title(f'CPCV Sharpe Distribution (PBO = {pbo:.2f})', fontsize=14)
+    plt.legend(fontsize=10)
     plt.grid(True, alpha=0.3)
-    plt.savefig(fig_path)
+    plt.tight_layout()
+    plt.savefig(fig_path, dpi=150)
     print(f"✅ Sharpe 分布图已保存: {fig_path}")
     plt.close()
+
+    # Step 9: 最终判断
+    print("\n" + "=" * 70)
+    print("  PBO 验证结论")
+    print("=" * 70)
+
+    if pbo < 0.1:
+        print("\n✅ PBO < 10%: 策略过拟合风险很低")
+    elif pbo < 0.3:
+        print("\n⚠️ PBO < 30%: 策略存在一定过拟合风险")
+    else:
+        print("\n❌ PBO >= 30%: 策略过拟合风险较高")
+
+    if stats['positive_rate'] > 0.8:
+        print(f"✅ {stats['positive_rate']*100:.0f}% 的路径 Sharpe > 0")
+    elif stats['positive_rate'] > 0.5:
+        print(f"⚠️ 仅 {stats['positive_rate']*100:.0f}% 的路径 Sharpe > 0")
+    else:
+        print(f"❌ 仅 {stats['positive_rate']*100:.0f}% 的路径 Sharpe > 0")
+
+    print("=" * 70)
 
 
 if __name__ == "__main__":

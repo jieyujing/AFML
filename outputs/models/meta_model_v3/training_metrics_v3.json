@@ -1,0 +1,41 @@
+{
+  "cv_metrics": {
+    "roc_auc": 0.5127012753058761,
+    "accuracy": 0.5164928708235795,
+    "precision": 0.4973544973544973,
+    "recall": 0.20732245258050286,
+    "f1": 0.29265255292652553,
+    "brier": 0.2510327081472421
+  },
+  "full_metrics": {
+    "roc_auc": 0.5786032941169643,
+    "accuracy": 0.5541604596722707,
+    "precision": 0.5637037037037037,
+    "recall": 0.3356859285399206,
+    "f1": 0.42079071053359135,
+    "brier": 0.24476599857932985
+  },
+  "config": {
+    "n_estimators": 1000,
+    "n_splits": 5,
+    "embargo_pct": 0.01,
+    "features": [
+      "log_return",
+      "vol_atr_14",
+      "vol_rel_20",
+      "vol_ewm_100",
+      "vol_parkinson",
+      "ema_diff",
+      "trend_variance_ratio_20",
+      "corr_pv_10",
+      "liq_amihud",
+      "vol_garman_klass",
+      "vol_yang_zhang",
+      "mom_macd",
+      "vol_kyle_lambda",
+      "entropy_shannon",
+      "prob"
+    ],
+    "calibration": true
+  }
+}

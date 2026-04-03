@@ -1,0 +1,107 @@
+{
+  "cv_metrics": {
+    "roc_auc": 0.5294362707126403,
+    "accuracy": 0.5131545338441891,
+    "precision": 0.5074062295633661,
+    "recall": 0.45702125886169787,
+    "f1": 0.4525545843919647
+  },
+  "full_metrics": {
+    "roc_auc": 0.9862879341582892,
+    "accuracy": 0.9363694403064482,
+    "precision": 0.9417301658449126,
+    "recall": 0.9255506607929516,
+    "f1": 0.9335703177071761
+  },
+  "fold_metrics": [
+    {
+      "fold": 1,
+      "roc_auc": 0.48716207391928956,
+      "accuracy": 0.5044699872286079,
+      "precision": 0.475,
+      "recall": 0.2,
+      "f1": 0.2814814814814815
+    },
+    {
+      "fold": 2,
+      "roc_auc": 0.5742246311352002,
+      "accuracy": 0.541507024265645,
+      "precision": 0.5116279069767442,
+      "recall": 0.5962059620596206,
+      "f1": 0.5506883604505632
+    },
+    {
+      "fold": 3,
+      "roc_auc": 0.4978159023424612,
+      "accuracy": 0.4725415070242657,
+      "precision": 0.5543478260869565,
+      "recall": 0.23556581986143188,
+      "f1": 0.33063209076175043
+    },
+    {
+      "fold": 4,
+      "roc_auc": 0.5362314079991591,
+      "accuracy": 0.5146871008939975,
+      "precision": 0.4805914972273567,
+      "recall": 0.724233983286908,
+      "f1": 0.5777777777777777
+    },
+    {
+      "fold": 5,
+      "roc_auc": 0.5517473381670912,
+      "accuracy": 0.5325670498084292,
+      "precision": 0.5154639175257731,
+      "recall": 0.5291005291005291,
+      "f1": 0.5221932114882507
+    }
+  ],
+  "config": {
+    "n_estimators": 200,
+    "max_depth": 6,
+    "learning_rate": 0.05,
+    "positive_threshold": 0.4,
+    "negative_threshold": 0.6,
+    "features": [
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "vwap",
+      "trades",
+      "median_trade_size",
+      "log_return",
+      "vol_ewm_10",
+      "vol_ewm_50",
+      "vol_ewm_100",
+      "vol_parkinson",
+      "vol_atr_14",
+      "vol_bb_pct_b_20",
+      "trend_variance_ratio_20",
+      "ema_short",
+      "ema_long",
+      "log_dist_ema_short",
+      "log_dist_ema_long",
+      "ema_diff",
+      "rsi_14",
+      "mom_roc_10",
+      "mom_stoch_k_14",
+      "corr_pv_10",
+      "liq_amihud",
+      "vol_rel_20",
+      "ffd_log_price",
+      "avg_uniqueness",
+      "return_attribution",
+      "vol_garman_klass",
+      "vol_yang_zhang",
+      "mom_macd",
+      "vol_kyle_lambda",
+      "entropy_shannon"
+    ]
+  },
+  "side_distribution": {
+    "pos": 2708,
+    "neg": 1991,
+    "zero": 0
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "research_trade_count": 182,
+  "research_total_net_pnl": 38059.94675,
+  "research_win_rate": 0.532967032967033,
+  "vnpy_trade_count": 182,
+  "vnpy_total_net_pnl": 38059.94675,
+  "vnpy_win_rate": 0.532967032967033,
+  "trade_count_delta": 0,
+  "net_pnl_delta": 0.0,
+  "matched_entry_timestamps": 182,
+  "matched_exit_timestamps": 182,
+  "matched_sides": 182,
+  "vnpy_statistics": {
+    "start_date": "2020-01-02",
+    "end_date": "2026-04-02",
+    "total_days": "1553",
+    "profit_days": "761",
+    "loss_days": "654",
+    "capital": "1000000",
+    "end_balance": 1036982.1315,
+    "max_drawdown": -2458.5644999999786,
+    "max_ddpercent": -0.24222718742251845,
+    "max_drawdown_duration": "28",
+    "total_net_pnl": 36982.1315,
+    "daily_net_pnl": 23.81334932388925,
+    "total_commission": 349.8685,
+    "daily_commission": 0.22528557630392787,
+    "total_slippage": 363.0,
+    "daily_slippage": 0.23374114616870573,
+    "total_turnover": 6997370.0,
+    "daily_turnover": 4505.711526078558,
+    "total_trade_count": "363",
+    "daily_trade_count": 0.23374114616870573,
+    "total_return": 3.698213150000007,
+    "annual_return": 0.571520383773343,
+    "daily_return": 0.002338357897247966,
+    "return_std": 0.022168651776173505,
+    "sharpe_ratio": 1.634095078934418,
+    "ewm_sharpe": 1.6356752039569635,
+    "rgr_ratio": 2.8775872484075045
+  },
+  "research_reference_table": [
+    {
+      "Metric": "信号数",
+      "Primary (Full)": 698.0,
+      "Combined (Full)": 384.0,
+      "Combined (IS)": 229.0,
+      "Combined (OOS)": 155.0
+    },
+    {
+      "Metric": "总收益(点)",
+      "Primary (Full)": 4777.586799999999,
+      "Combined (Full)": 62053.634190000004,
+      "Combined (IS)": 39260.703665,
+      "Combined (OOS)": 22792.930525
+    },
+    {
+      "Metric": "年化收益(点)",
+      "Primary (Full)": 837.5692516810758,
+      "Combined (Full)": 10889.219461225963,
+      "Combined (IS)": 11337.149396934336,
+      "Combined (OOS)": 10321.860597549628
+    },
+    {
+      "Metric": "年化夏普",
+      "Primary (Full)": 0.3199189298211943,
+      "Combined (Full)": 21.93862111432142,
+      "Combined (IS)": 22.80874667534995,
+      "Combined (OOS)": 20.739054273238537
+    },
+    {
+      "Metric": "最大回撤(点)",
+      "Primary (Full)": -13239.736749999996,
+      "Combined (Full)": -1194.359765000001,
+      "Combined (IS)": -1194.359765000001,
+      "Combined (OOS)": -634.457975
+    },
+    {
+      "Metric": "胜率",
+      "Primary (Full)": 0.4828080229226361,
+      "Combined (Full)": 0.7526041666666666,
+      "Combined (IS)": 0.7641921397379913,
+      "Combined (OOS)": 0.7354838709677419
+    },
+    {
+      "Metric": "盈亏比",
+      "Primary (Full)": 1.04766889646987,
+      "Combined (Full)": 4.129376860372093,
+      "Combined (IS)": 4.088943681146651,
+      "Combined (OOS)": 4.2015619879028545
+    },
+    {
+      "Metric": "DSR",
+      "Primary (Full)": 0.2725816190577556,
+      "Combined (Full)": 1.0,
+      "Combined (IS)": 0.9999999999994161,
+      "Combined (OOS)": 0.9999999996339539
+    }
+  ]
+}

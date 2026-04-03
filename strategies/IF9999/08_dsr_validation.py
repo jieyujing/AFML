@@ -155,28 +155,36 @@ def calculate_dsr_v2(returns: pd.Series, n_trials: int, annualization_factor: fl
 def main():
     """IF9999 策略 DSR 验证主流程。"""
     print("=" * 70)
-    print("  IF9999 组合策略 DSR 验证")
+    print("  IF9999 组合策略 DSR 验证（修正版）")
     print("=" * 70)
 
-    # 年化因子
+    # 年化因子（基于 Dollar Bars 数量）
     annualization_factor = 1500
 
-    # Step 1: 加载数据
-    print("\n[Step 1] 加载数据...")
+    # Step 1: 加载数据（使用修正后的滚动回测结果）
+    print("\n[Step 1] 加载数据（使用修正后的滚动回测结果）...")
 
-    # TBM 结果（Primary Model）
-    tbm = pd.read_parquet(os.path.join(FEATURES_DIR, 'tbm_results.parquet'))
-    primary_returns = tbm['ret']
-    print(f"  Primary Model 样本数: {len(primary_returns)}")
+    # 使用修正后的滚动回测结果
+    primary_trades = pd.read_parquet(os.path.join(FEATURES_DIR, 'rolling_primary_trades.parquet'))
+    combined_trades = pd.read_parquet(os.path.join(FEATURES_DIR, 'rolling_combined_trades.parquet'))
 
-    # 组合策略结果
-    combined = pd.read_parquet(os.path.join(FEATURES_DIR, 'combined_strategy_results.parquet'))
-    combined_returns = combined['ret']
-    print(f"  Combined Strategy 样本数: {len(combined_returns)}")
+    # 使用净收益率
+    primary_returns = primary_trades['net_ret']
+    combined_returns = combined_trades['net_ret']
 
-    # Walk-Forward 结果
-    wf = pd.read_parquet(os.path.join(FEATURES_DIR, 'walk_forward_validation_results.parquet'))
-    print(f"  Walk-Forward folds: {len(wf)}")
+    print(f"  Primary Model 交易数: {len(primary_trades)}")
+    print(f"  Combined Strategy 交易数: {len(combined_trades)}")
+
+    # 样本内/外分割
+    oos_start = pd.Timestamp('2024-01-01')
+    is_mask = combined_trades['exit_time'] < oos_start
+    oos_mask = combined_trades['exit_time'] >= oos_start
+
+    combined_is_returns = combined_trades.loc[is_mask, 'net_ret']
+    combined_oos_returns = combined_trades.loc[oos_mask, 'net_ret']
+
+    print(f"  Combined IS 交易数: {is_mask.sum()}")
+    print(f"  Combined OOS 交易数: {oos_mask.sum()}")
 
     # Step 2: 估算参数试验次数
     print("\n[Step 2] 估算参数试验次数...")
@@ -222,24 +230,16 @@ def main():
     print(f"  DSR: {combined_insample_stats['dsr']*100:.1f}%")
     print(f"  ⚠️ 注意：样本内 DSR 过于乐观，仅供参考")
 
-    # Step 5: 计算 Walk-Forward DSR（样本外）
-    print("\n[Step 5] Walk-Forward DSR (样本外)...")
+    # Step 5: 计算 Combined Strategy DSR（样本外）
+    print("\n[Step 5] Combined Strategy DSR (样本外)...")
 
-    # 样本外收益 = 各 fold 测试集的组合策略收益
-    wf_sharpe_mean = wf['combined_sharpe'].mean()
-    wf_sharpe_std = wf['combined_sharpe'].std()
+    # 样本外 DSR（使用 IS/OOS 分割）
+    combined_oos_stats = calculate_dsr_v2(combined_oos_returns, n_total_trials, annualization_factor)
 
-    # 使用 WF 结果估算 DSR
-    # 由于 WF 只做了一次参数选择，试验次数为 1
-    wf_n_trials = 1
-
-    # 用平均 Sharpe 计算 DSR
-    # 需要估算样本外收益的分布
-    wf_test_samples = wf['n_test'].sum()
-
-    print(f"  测试样本总数: {wf_test_samples}")
-    print(f"  平均 Sharpe: {wf_sharpe_mean:.2f}")
-    print(f"  Sharpe 标准差: {wf_sharpe_std:.2f}")
+    print(f"  样本数: {combined_oos_stats['n']}")
+    print(f"  年化 Sharpe: {combined_oos_stats['sr_annual']:.2f}")
+    print(f"  PSR: {combined_oos_stats['psr']*100:.1f}%")
+    print(f"  DSR: {combined_oos_stats['dsr']*100:.1f}%")
 
     # Step 6: 综合评估
     print("\n" + "=" * 70)
@@ -258,11 +258,12 @@ def main():
     print("\n┌─────────────────────────────────────────────────────────────────────┐")
     print("│                        DSR 验证结果                                  │")
     print("├─────────────────────────────────────────────────────────────────────┤")
-    print("│                        Primary    Combined   WF-OOS                 │")
+    print("│                        Primary    Combined   OOS                    │")
     print("├─────────────────────────────────────────────────────────────────────┤")
-    print(f"│  年化 Sharpe:        {primary_stats['sr_annual']:>7.2f}    {combined_insample_stats['sr_annual']:>7.2f}    {wf_sharpe_mean:>7.2f}          │")
-    print(f"│  PSR:              {primary_stats['psr']*100:>6.1f}%   {combined_insample_stats['psr']*100:>6.1f}%       N/A          │")
-    print(f"│  DSR:              {primary_stats['dsr']*100:>6.1f}%   {combined_insample_stats['dsr']*100:>6.1f}%       N/A          │")
+    print(f"│  交易次数:           {primary_stats['n']:>7}    {combined_insample_stats['n']:>7}    {combined_oos_stats['n']:>7}          │")
+    print(f"│  年化 Sharpe:        {primary_stats['sr_annual']:>7.2f}    {combined_insample_stats['sr_annual']:>7.2f}    {combined_oos_stats['sr_annual']:>7.2f}          │")
+    print(f"│  PSR:              {primary_stats['psr']*100:>6.1f}%   {combined_insample_stats['psr']*100:>6.1f}%   {combined_oos_stats['psr']*100:>6.1f}%          │")
+    print(f"│  DSR:              {primary_stats['dsr']*100:>6.1f}%   {combined_insample_stats['dsr']*100:>6.1f}%   {combined_oos_stats['dsr']*100:>6.1f}%          │")
     print("└─────────────────────────────────────────────────────────────────────┘")
 
     print("\n┌─────────────────────────────────────────────────────────────────────┐")
@@ -279,23 +280,23 @@ def main():
 
     print(f"│  Primary Model DSR:   {primary_dsr_status:>12}  ({primary_stats['dsr']*100:.1f}%)            │")
 
-    # PSR 结论
-    if primary_stats['psr'] > 0.95:
-        psr_status = "✅ PASS"
-    elif primary_stats['psr'] > 0.90:
-        psr_status = "⚠️ BORDERLINE"
+    # Combined OOS DSR 结论
+    if combined_oos_stats['dsr'] > 0.95:
+        oos_dsr_status = "✅ PASS"
+    elif combined_oos_stats['dsr'] > 0.90:
+        oos_dsr_status = "⚠️ BORDERLINE"
     else:
-        psr_status = "❌ FAIL"
+        oos_dsr_status = "❌ FAIL"
 
-    print(f"│  Primary Model PSR:   {psr_status:>12}  ({primary_stats['psr']*100:.1f}%)            │")
+    print(f"│  Combined OOS DSR:    {oos_dsr_status:>12}  ({combined_oos_stats['dsr']*100:.1f}%)            │")
 
-    # 样本外验证
-    if wf_sharpe_mean > 1.0:
-        wf_status = "✅ POSITIVE"
+    # 样本外 Sharpe
+    if combined_oos_stats['sr_annual'] > 1.0:
+        oos_sharpe_status = "✅ POSITIVE"
     else:
-        wf_status = "⚠️ LOW"
+        oos_sharpe_status = "⚠️ LOW"
 
-    print(f"│  WF-OOS Sharpe:       {wf_status:>12}  ({wf_sharpe_mean:.2f})             │")
+    print(f"│  OOS Sharpe:          {oos_sharpe_status:>12}  ({combined_oos_stats['sr_annual']:.2f})             │")
 
     print("└─────────────────────────────────────────────────────────────────────┘")
 
@@ -309,11 +310,11 @@ def main():
     if primary_stats['dsr'] < 0.95:
         issues.append(f"  ⚠️ Primary Model DSR ({primary_stats['dsr']*100:.1f}%) < 95%")
 
-    if primary_stats['psr'] < 0.95:
-        issues.append(f"  ⚠️ Primary Model PSR ({primary_stats['psr']*100:.1f}%) < 95%")
+    if combined_oos_stats['dsr'] < 0.95:
+        issues.append(f"  ⚠️ Combined OOS DSR ({combined_oos_stats['dsr']*100:.1f}%) < 95%")
 
     # 检查样本内外差距
-    sharpe_gap = combined_insample_stats['sr_annual'] - wf_sharpe_mean
+    sharpe_gap = combined_insample_stats['sr_annual'] - combined_oos_stats['sr_annual']
     if sharpe_gap > 5:
         issues.append(f"  ⚠️ 样本内外 Sharpe 差距过大 ({sharpe_gap:.1f})")
 
@@ -332,14 +333,18 @@ def main():
     # Step 8: 保存结果
     results = {
         'n_total_trials': n_total_trials,
+        'primary_n_trades': primary_stats['n'],
         'primary_sr_annual': primary_stats['sr_annual'],
         'primary_psr': primary_stats['psr'],
         'primary_dsr': primary_stats['dsr'],
+        'combined_n_trades': combined_insample_stats['n'],
         'combined_sr_annual': combined_insample_stats['sr_annual'],
         'combined_psr': combined_insample_stats['psr'],
         'combined_dsr': combined_insample_stats['dsr'],
-        'wf_sharpe_mean': wf_sharpe_mean,
-        'wf_sharpe_std': wf_sharpe_std,
+        'oos_n_trades': combined_oos_stats['n'],
+        'oos_sr_annual': combined_oos_stats['sr_annual'],
+        'oos_psr': combined_oos_stats['psr'],
+        'oos_dsr': combined_oos_stats['dsr'],
     }
 
     results_df = pd.DataFrame([results])

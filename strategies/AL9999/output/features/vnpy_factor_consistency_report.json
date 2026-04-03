@@ -1,0 +1,46 @@
+{
+  "batch": {
+    "event_index_equal": true,
+    "feature_columns": 49,
+    "all_feature_columns_within_1e_12": true,
+    "top_feature_max_diff": {
+      "feat_rsi_7": 0.0,
+      "feat_oi_ma5": 0.0,
+      "feat_oi_ma20": 0.0,
+      "feat_oi_ma60": 0.0,
+      "feat_theil_imb_20": 0.0,
+      "feat_theil_imb_60": 0.0,
+      "feat_amihud_20": 0.0,
+      "feat_cs_spread_20": 0.0,
+      "feat_amihud_60": 0.0,
+      "feat_cs_spread_60": 0.0
+    }
+  },
+  "incremental_sample": {
+    "sampled_runtime_events": 25,
+    "matched_reference_events": 22,
+    "sample_only_events": [
+      "2020-07-02T14:01:00",
+      "2020-07-06T14:01:00",
+      "2020-07-07T13:49:00"
+    ],
+    "all_matched_feature_columns_within_1e_12": true,
+    "top_feature_max_diff": {
+      "feat_rsi_7": 0.0,
+      "feat_oi_ma5": 0.0,
+      "feat_oi_ma20": 0.0,
+      "feat_oi_ma60": 0.0,
+      "feat_theil_imb_20": 0.0,
+      "feat_theil_imb_60": 0.0,
+      "feat_amihud_20": 0.0,
+      "feat_cs_spread_20": 0.0,
+      "feat_amihud_60": 0.0,
+      "feat_cs_spread_60": 0.0
+    }
+  },
+  "notes": [
+    "批量重算验证使用与 Phase 2 相同的公式，应当完全一致。",
+    "增量回放样本若出现少量 sample_only_events，通常来自 CUSUM warmup 阈值初始化口径差异。",
+    "离线脚本使用全样本 std 填充早期 rolling std 缺口，而实时系统只能使用当下已知历史。"
+  ]
+}

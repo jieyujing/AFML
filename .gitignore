@@ -14,8 +14,3 @@ coverage.xml
 *.parquet
 data/h5
 .DS_Store
-outputs/
-.superpowers/
-data/csv/P9999.XDCE-dollarbars.csv
-data/csv/T9999.CCFX-2023-1-1-To-2026-03-11-1m_dynamic_dollar_bars.csv
-data/csv/Y9999.XDCE-2023-1-1-To-2026-03-11-1m_dynamic_dollar_bars.csv

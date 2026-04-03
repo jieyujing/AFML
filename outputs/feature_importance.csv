@@ -1,0 +1,11 @@
+,cluster_id,features,mean_importance,std_importance
+0,4,"['close_ema5_ratio', 'close_ema10_ratio', 'close_ema20_ratio', 'close_ema50_ratio', 'returns_5', 'returns_10', 'returns_20', 'rsi_14', 'macd_hist']",0.0002303532630516969,0.00027953932390532566
+1,6,"['oi_change', 'oi_change_ratio']",8.174782266114899e-05,9.746459161059388e-05
+2,1,"['price_position', 'bar_direction']",7.297581477161419e-05,0.00012420319933773808
+3,5,"['close_ema5', 'close_ema10', 'close_ema20', 'close_ema50', 'ema_12', 'ema_26']",6.766061866265715e-05,0.00015102252610308065
+4,10,"['volume_ratio', 'tr']",6.365333683231445e-05,0.0001764328066587158
+5,3,"['macd', 'macd_signal']",4.544482570996155e-05,0.00014295322714745018
+6,8,"['volatility_10', 'volatility_20', 'volatility_50', 'atr_10', 'atr_10_ratio', 'atr_20', 'atr_20_ratio']",-2.9035739756078093e-05,0.0001585458910939557
+7,9,"['volume_ema5', 'volume_ema20']",-3.4457485677741316e-05,7.767452586022852e-05
+8,2,['lower_shadow'],-3.7570674057563205e-05,8.737418912080675e-05
+9,7,['upper_shadow'],-3.8665574046747864e-05,8.624809292637656e-05
