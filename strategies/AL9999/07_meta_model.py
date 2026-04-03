@@ -41,6 +41,38 @@ from afmlkit.importance.mda import clustered_mda
 sns.set_theme(style="whitegrid", context="paper")
 
 
+def split_train_holdout(X, y, sample_weight, holdout_months=6):
+    """
+    划分训练集和 Holdout OOS 集。
+
+    保留最后 holdout_months 个月的数据不参与训练，
+    用于真正的 Out-of-Sample 验证。
+
+    :param X: 特征矩阵
+    :param y: 标签
+    :param sample_weight: 样本权重
+    :param holdout_months: 保留的月份数
+    :returns: (X_train, y_train, w_train), (X_holdout, y_holdout, w_holdout), holdout_start
+    """
+    holdout_start = X.index.max() - pd.DateOffset(months=holdout_months)
+
+    train_mask = X.index < holdout_start
+    holdout_mask = X.index >= holdout_start
+
+    X_train = X[train_mask]
+    y_train = y[train_mask]
+    w_train = sample_weight[train_mask]
+
+    X_holdout = X[holdout_mask]
+    y_holdout = y[holdout_mask]
+    w_holdout = sample_weight[holdout_mask]
+
+    print(f"\n  训练集: {X_train.index.min().date()} ~ {X_train.index.max().date()} ({len(X_train)} 样本)")
+    print(f"  Holdout: {X_holdout.index.min().date()} ~ {X_holdout.index.max().date()} ({len(X_holdout)} 样本)")
+
+    return (X_train, y_train, w_train), (X_holdout, y_holdout, w_holdout), holdout_start
+
+
 def load_data():
     """加载 Meta Features 和 Meta Labels。"""
     print("\n[Step 1] 加载数据...")
@@ -108,7 +140,7 @@ def build_model(n_samples: int):
 
 def main():
     print("=" * 70)
-    print("  AL9999 Phase 6 Meta Model Training (Corrected)")
+    print("  AL9999 Phase 6 Meta Model Training (With Holdout OOS)")
     print("=" * 70)
 
     # 确保输出目录存在
@@ -119,83 +151,131 @@ def main():
     # Step 1: 加载数据
     X, y, sample_weight = load_data()
 
-    # Step 2: 构建模型
-    model = build_model(len(X))
+    # Step 2: 划分训练集和 Holdout OOS 集
+    holdout_months = META_MODEL_CONFIG.get('holdout_months', 6)
+    print(f"\n[Step 2] 划分 Holdout OOS 集（保留最后 {holdout_months} 个月）...")
 
-    # Step 3: Purged 5-Fold CV
-    print("\n[Step 3] Purged 5-Fold CV...")
-    
-    # 假设每个样本的持仓结束时间 t1（用于 Purge）。若无具体 t1，使用索引 + 估算窗口。
-    # 在实际策略中，应从 TBM 结果中提取准确的 t1。
-    t1 = pd.Series(X.index + pd.Timedelta(hours=2), index=X.index) 
+    (X_train, y_train, w_train), (X_holdout, y_holdout, w_holdout), holdout_start = \
+        split_train_holdout(X, y, sample_weight, holdout_months)
+
+    # Step 3: 构建模型
+    model = build_model(len(X_train))
+
+    # Step 4: Purged 5-Fold CV（仅在训练集上）
+    print("\n[Step 4] Purged 5-Fold CV（训练集）...")
+
+    # 假设每个样本的持仓结束时间 t1（用于 Purge）
+    t1_train = pd.Series(X_train.index + pd.Timedelta(hours=2), index=X_train.index)
 
     cv = PurgedKFold(
         n_splits=META_MODEL_CONFIG.get('cv_n_splits', 5),
-        t1=t1,
+        t1=t1_train,
         embargo_pct=META_MODEL_CONFIG.get('cv_embargo_pct', 0.05)
     )
 
-    oof_probs = np.full(len(y), np.nan)
-    
-    for fold, (train_idx, test_idx) in enumerate(cv.split(X)):
-        X_tr, y_tr = X.iloc[train_idx], y.iloc[train_idx]
-        w_tr = sample_weight.iloc[train_idx]
-        X_te = X.iloc[test_idx]
-        
+    oof_probs_train = np.full(len(y_train), np.nan)
+
+    for fold, (train_idx, test_idx) in enumerate(cv.split(X_train)):
+        X_tr, y_tr = X_train.iloc[train_idx], y_train.iloc[train_idx]
+        w_tr = w_train.iloc[train_idx]
+        X_te = X_train.iloc[test_idx]
+
         model.fit(X_tr, y_tr, sample_weight=w_tr)
-        oof_probs[test_idx] = model.predict_proba(X_te)[:, 1]
-        
-        y_pred_fold = (oof_probs[test_idx] >= 0.5).astype(int)
-        f1 = f1_score(y.iloc[test_idx], y_pred_fold)
+        oof_probs_train[test_idx] = model.predict_proba(X_te)[:, 1]
+
+        y_pred_fold = (oof_probs_train[test_idx] >= 0.5).astype(int)
+        f1 = f1_score(y_train.iloc[test_idx], y_pred_fold)
         print(f"  Fold {fold+1}: F1={f1:.4f} [Train={len(train_idx)}, Test={len(test_idx)}]")
 
-    # OOF 结果汇总
-    oof_df = pd.DataFrame({'y_true': y, 'y_prob': oof_probs}, index=X.index)
-    
-    # Step 4: 性能评估与可视化
-    print("\n[Step 4] 性能分析...")
-    
-    # 默认阈值 0.5 的报告
-    y_pred_default = (oof_probs >= 0.5).astype(int)
-    print("\n[Default Threshold 0.5 Report]")
-    print(classification_report(y, y_pred_default, target_names=['Loss (0)', 'Gain (1)']))
+    # OOF 结果汇总（训练集）
+    oof_df = pd.DataFrame({'y_true': y_train, 'y_prob': oof_probs_train}, index=X_train.index)
 
-    # 4.1 PR 曲线
-    prec, rec, thresholds = precision_recall_curve(y, oof_probs)
+    # Step 5: 性能评估（训练集 CV）
+    print("\n[Step 5] CV 性能分析（训练集）...")
+
+    y_pred_default = (oof_probs_train >= 0.5).astype(int)
+    print("\n[CV OOF Report (Threshold=0.5)]")
+    print(classification_report(y_train, y_pred_default, target_names=['Loss (0)', 'Gain (1)']))
+
+    # PR 曲线
+    prec, rec, thresholds = precision_recall_curve(y_train, oof_probs_train)
     fig, ax = plt.subplots(figsize=(8, 6))
     ax.plot(rec, prec, color='blue', lw=2)
-    ax.set_title('Precision-Recall Curve (Meta Model)')
+    ax.set_title('Precision-Recall Curve (Meta Model - CV)')
     ax.set_xlabel('Recall')
     ax.set_ylabel('Precision')
     ax.grid(True, linestyle=':', alpha=0.6)
     plt.savefig(os.path.join(FIGURES_DIR, '07_pr_curve.png'))
     plt.close()
 
-    # 4.2 混淆矩阵 (默认阈值)
-    cm = confusion_matrix(y, y_pred_default)
+    # 混淆矩阵
+    cm = confusion_matrix(y_train, y_pred_default)
     plt.figure(figsize=(6, 5))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
                 xticklabels=['Pred 0', 'Pred 1'], yticklabels=['True 0', 'True 1'])
-    plt.title('Confusion Matrix (Threshold=0.5)')
+    plt.title('Confusion Matrix (CV OOF, Threshold=0.5)')
     plt.savefig(os.path.join(FIGURES_DIR, '07_confusion_matrix.png'))
     plt.close()
 
-    # Step 5: 全量训练与保存
-    print("\n[Step 5] 最终训练与保存...")
-    model.fit(X, y, sample_weight=sample_weight)
-    
+    # Step 6: 最终训练（仅用训练集，不含 Holdout）
+    print("\n[Step 6] 最终训练（仅用训练集）...")
+    model.fit(X_train, y_train, sample_weight=w_train)
+
     model_path = os.path.join(models_dir, 'meta_model.pkl')
     joblib.dump(model, model_path)
     print(f"  ✅ 模型已保存: {model_path}")
-    
-    # 保存 OOF 预测用于后续分析
+
+    # 保存 OOF 预测
     oof_path = os.path.join(models_dir, 'meta_oof_signals.parquet')
     oof_df.to_parquet(oof_path)
     print(f"  ✅ OOF 数据已保存: {oof_path}")
 
-    # Step 6: 特征重要性 (MDI)
+    # Step 7: Holdout OOS 验证（真正的样本外测试）
+    print("\n[Step 7] Holdout OOS 验证...")
+
+    if len(X_holdout) > 0:
+        holdout_probs = model.predict_proba(X_holdout)[:, 1]
+        holdout_pred = (holdout_probs >= META_MODEL_CONFIG.get('precision_threshold', 0.5)).astype(int)
+
+        holdout_df = pd.DataFrame({
+            'y_true': y_holdout,
+            'y_prob': holdout_probs,
+            'y_pred': holdout_pred,
+        }, index=X_holdout.index)
+
+        holdout_f1 = f1_score(y_holdout, holdout_pred)
+        holdout_accuracy = (holdout_pred == y_holdout).mean()
+
+        print(f"\n  Holdout OOS 结果:")
+        print(f"    样本数: {len(X_holdout)}")
+        print(f"    F1 Score: {holdout_f1:.4f}")
+        print(f"    Accuracy: {holdout_accuracy:.4f}")
+        print(f"    预测为 1 的比例: {holdout_pred.mean()*100:.1f}%")
+
+        print("\n[Holdout OOS Classification Report]")
+        print(classification_report(y_holdout, holdout_pred, target_names=['Loss (0)', 'Gain (1)']))
+
+        # 保存 Holdout 预测
+        holdout_path = os.path.join(models_dir, 'meta_holdout_signals.parquet')
+        holdout_df.to_parquet(holdout_path)
+        print(f"  ✅ Holdout 预测已保存: {holdout_path}")
+
+        # Holdout 混淆矩阵
+        cm_holdout = confusion_matrix(y_holdout, holdout_pred)
+        plt.figure(figsize=(6, 5))
+        sns.heatmap(cm_holdout, annot=True, fmt='d', cmap='Oranges',
+                    xticklabels=['Pred 0', 'Pred 1'], yticklabels=['True 0', 'True 1'])
+        plt.title(f'Confusion Matrix (Holdout OOS, {holdout_months} months)')
+        plt.savefig(os.path.join(FIGURES_DIR, '07_holdout_confusion_matrix.png'))
+        plt.close()
+        print(f"  ✅ Holdout 混淆矩阵已保存")
+    else:
+        print("  ⚠️ Holdout 集为空，跳过验证")
+
+    # Step 8: 特征重要性 (MDI)
+    print("\n[Step 8] 特征重要性分析 (MDI)...")
     mdi_importances = np.mean([tree.feature_importances_ for tree in model.estimators_], axis=0)
-    feat_imp = pd.Series(mdi_importances, index=X.columns).sort_values(ascending=False)
+    feat_imp = pd.Series(mdi_importances, index=X_train.columns).sort_values(ascending=False)
 
     imp_path = os.path.join(FIGURES_DIR, '07_feature_importance_mdi.png')
     plt.figure(figsize=(10, 12))
@@ -207,20 +287,20 @@ def main():
     plt.close()
     print(f"  ✅ MDI 特征重要性图已保存: {imp_path}")
 
-    # Step 7: Clustered MDA 特征重要性
-    print("\n[Step 7] Clustered MDA 特征重要性分析...")
+    # Step 9: Clustered MDA 特征重要性
+    print("\n[Step 9] Clustered MDA 特征重要性分析...")
 
-    # 特征聚类
-    clusters = cluster_features(X, method='ward')
+    # 特征聚类（仅在训练集上）
+    clusters = cluster_features(X_train, method='ward')
     print(f"  聚类数: {len(clusters)}")
 
-    # Clustered MDA
+    # Clustered MDA（仅在训练集上）
     df_mda = clustered_mda(
-        X=X,
-        y=y,
+        X=X_train,
+        y=y_train,
         clusters=clusters,
-        t1=t1,
-        sample_weight=sample_weight,
+        t1=t1_train,
+        sample_weight=w_train,
         classifier=DecisionTreeClassifier(
             criterion="entropy",
             max_features=1,
@@ -270,7 +350,7 @@ def main():
     print(f"  ✅ MDA 特征重要性图已保存: {mda_imp_path}")
 
     # MDI vs MDA 对比
-    print("\n[Step 8] MDI vs MDA 对比分析...")
+    print("\n[Step 10] MDI vs MDA 对比分析...")
     print("\n  MDI Top 10 (In-sample):")
     for i, (feat, score) in enumerate(feat_imp.head(10).items(), 1):
         print(f"    {i:2}. {feat}: {score:.4f}")
@@ -281,7 +361,7 @@ def main():
         print(f"    C{int(row['cluster_id'])}: {features_str} → {row['mean_importance']:.4f} ± {row['std_importance']:.4f}")
 
     print("\n" + "=" * 70)
-    print("  Phase 6 Meta Model Training 完成")
+    print("  Phase 6 Meta Model Training 完成（含 Holdout OOS 验证）")
     print("=" * 70)
 
 

@@ -182,6 +182,7 @@ META_MODEL_CONFIG = {
     'n_estimators': 1000,
     'cv_n_splits': 5,
     'cv_embargo_pct': 0.05,
+    'holdout_months': 12,  # 保留最后 N 个月不参与训练，用于真正的 OOS 验证
 }
 
 # ============================================================
