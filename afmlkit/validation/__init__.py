@@ -10,7 +10,7 @@ afmlkit.validation 模块.
 """
 
 from .purged_cv import PurgedKFold
-from .cpcv import CombinatorialPurgedKFold
+from .cpcv import CombinatorialPurgedKFold, generate_cpcv_paths
 from .pbo import (
     calculate_pbo,
     calculate_pbo_from_returns,
@@ -39,6 +39,7 @@ from .psi import (
 __all__ = [
     'PurgedKFold',
     'CombinatorialPurgedKFold',
+    'generate_cpcv_paths',
     'calculate_pbo',
     'calculate_pbo_from_returns',
     'estimate_optimal_trials',

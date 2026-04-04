@@ -13,62 +13,144 @@ PBO (Probability of Backtest Overfitting) 验证模块.
 - Bailey & López de Prado (2017) "The Probability of Backtest Overfitting"
 """
 
+from itertools import combinations
+from typing import Dict, List, Optional, Tuple
+
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
-from typing import Dict, List, Tuple
-from itertools import combinations
 
 
 def calculate_pbo(
-    sharpe_paths: np.ndarray,
-    significance_level: float = 0.05
+    sharpe_is: np.ndarray,
+    sharpe_oos: Optional[np.ndarray] = None,
+    method: str = 'rank'
 ) -> Tuple[float, Dict]:
     """
-    计算 PBO (Probability of Backtest Overfitting).
+    基于多策略矩阵计算 PBO (Probability of Backtest Overfitting).
 
-    PBO = P(SR_OOS < SR_IS_max)，表示最佳样本内策略在样本外表现不佳的概率。
-
-    :param sharpe_paths: 各 CPCV 路径的 Sharpe Ratio 数组
-    :param significance_level: 显著性水平（默认 5%）
+    :param sharpe_is: 样本内 Sharpe 矩阵（兼容 legacy 1D 路径输入）
+    :param sharpe_oos: 样本外 Sharpe 矩阵，shape=(n_strategies, n_paths)
+    :param method: 计算方法，'rank' 或 'probability'
     :returns: (pbo, stats) - PBO 值和详细统计信息
+    :raises ValueError: 当输入不合法、shape 不一致或 method 非法时。
     """
-    n_paths = len(sharpe_paths)
-    if n_paths < 10:
-        raise ValueError(f"需要至少 10 条路径计算 PBO，当前仅 {n_paths} 条")
+    sharpe_is = np.asarray(sharpe_is, dtype=np.float64)
+    if not isinstance(method, str):
+        raise ValueError("method 必须是字符串，且只能为 'rank' 或 'probability'。")
+    method_lower = method.lower()
 
-    # Sharpe 分布统计
-    sr_mean = np.mean(sharpe_paths)
-    sr_std = np.std(sharpe_paths, ddof=1)
-    sr_max = np.max(sharpe_paths)
-    sr_min = np.min(sharpe_paths)
+    # 兼容旧调用：calculate_pbo(sharpe_paths_1d, method='probability')
+    if sharpe_oos is None:
+        if method_lower == 'rank':
+            raise ValueError("method='rank' 时必须提供 sharpe_oos 二维矩阵。")
+        if method_lower != 'probability':
+            raise ValueError("method 必须是 'rank' 或 'probability'。")
+        if sharpe_is.ndim != 1:
+            raise ValueError("legacy probability 调用要求 sharpe_is 为一维数组。")
+        n_paths = sharpe_is.size
+        if n_paths == 0:
+            raise ValueError("sharpe_is 不能为空。")
 
-    # PBO 计算：样本内最大 Sharpe 在样本外分布中的位置
-    # 参考: Bailey & López de Prado (2017) 公式 (8)
-    # PBO = Φ( -μ/σ ) 其中 Φ 是标准正态 CDF
-    # 这里使用更保守的定义：P(SR_OOS <= 0)
-    pbo = norm.cdf(0, loc=sr_mean, scale=sr_std)
+        sr_mean = float(np.mean(sharpe_is))
+        sr_std = float(np.std(sharpe_is, ddof=1)) if n_paths > 1 else 0.0
+        sr_max = float(np.max(sharpe_is))
+        threshold_half_max = sr_max / 2
 
-    # 替代定义：P(SR_OOS < SR_IS_max / 2)
-    # 如果样本外 Sharpe 远低于样本内最佳，说明过拟合
-    threshold_half_max = sr_max / 2
-    pbo_half_max = norm.cdf(threshold_half_max, loc=sr_mean, scale=sr_std)
+        if sr_std > 0:
+            pbo = float(norm.cdf(0, loc=sr_mean, scale=sr_std))
+            pbo_half_max = float(norm.cdf(threshold_half_max, loc=sr_mean, scale=sr_std))
+        else:
+            pbo = 1.0 if sr_mean <= 0 else 0.0
+            pbo_half_max = 1.0 if sr_mean <= threshold_half_max else 0.0
 
-    # 统计信息
-    stats = {
-        'n_paths': n_paths,
-        'sr_mean': sr_mean,
-        'sr_std': sr_std,
-        'sr_max': sr_max,
-        'sr_min': sr_min,
-        'sr_median': np.median(sharpe_paths),
-        'pbo_zero': pbo,  # P(SR_OOS <= 0)
-        'pbo_half_max': pbo_half_max,  # P(SR_OOS < SR_IS_max/2)
-        'positive_rate': np.mean(sharpe_paths > 0),
-        'is_significant': pbo < significance_level,
-    }
+        stats = {
+            'n_strategies': 1,
+            'n_paths': int(n_paths),
+            'pbo': pbo,
+            'method': method_lower,
+            'sr_mean': sr_mean,
+            'sr_std': sr_std,
+            'sr_max': sr_max,
+            'sr_min': float(np.min(sharpe_is)),
+            'sr_median': float(np.median(sharpe_is)),
+            'pbo_zero': pbo,
+            'pbo_half_max': pbo_half_max,
+            'positive_rate': float(np.mean(sharpe_is > 0)),
+            'legacy_mode': True,
+        }
+        return pbo, stats
 
-    return pbo, stats
+    sharpe_oos = np.asarray(sharpe_oos, dtype=np.float64)
+
+    if sharpe_is.shape != sharpe_oos.shape:
+        raise ValueError("sharpe_is 与 sharpe_oos 的 shape 必须一致。")
+    if sharpe_is.ndim != 2:
+        raise ValueError("sharpe_is 与 sharpe_oos 必须是二维矩阵。")
+
+    n_strategies, n_paths = sharpe_is.shape
+    if n_strategies == 0 or n_paths == 0:
+        raise ValueError("sharpe_is 与 sharpe_oos 不能为空矩阵。")
+
+    selected_idx = np.argmax(sharpe_is, axis=0).astype(np.int64)
+    selected_oos = sharpe_oos[selected_idx, np.arange(n_paths)]
+
+    if method_lower == 'rank':
+        ranks = np.empty(n_paths, dtype=np.int64)
+        median_rank = float(np.median(np.arange(1, n_strategies + 1, dtype=np.float64)))
+        for path_idx in range(n_paths):
+            oos_col = sharpe_oos[:, path_idx]
+            best_strategy_idx = selected_idx[path_idx]
+            selected_value = oos_col[best_strategy_idx]
+            # 排名定义：1 表示该路径 OOS 最差，n_strategies 表示最好。
+            ranks[path_idx] = int(np.sum(oos_col < selected_value) + 1)
+
+        overfit_mask = ranks < median_rank
+        overfit_count = int(np.sum(overfit_mask))
+        pbo = float(overfit_count / n_paths)
+        stats = {
+            'n_strategies': n_strategies,
+            'n_paths': n_paths,
+            'pbo': pbo,
+            'method': method_lower,
+            'median_rank': median_rank,
+            'overfit_count': overfit_count,
+            'selected_ranks': ranks,
+            'selected_strategy_indices': selected_idx,
+        }
+        return pbo, stats
+
+    if method_lower == 'probability':
+        sr_mean = float(np.mean(selected_oos))
+        sr_std = float(np.std(selected_oos, ddof=1)) if n_paths > 1 else 0.0
+        sr_max = float(np.max(selected_oos))
+        threshold_half_max = sr_max / 2
+
+        if sr_std > 0:
+            pbo = float(norm.cdf(0, loc=sr_mean, scale=sr_std))
+            pbo_half_max = float(norm.cdf(threshold_half_max, loc=sr_mean, scale=sr_std))
+        else:
+            pbo = 1.0 if sr_mean <= 0 else 0.0
+            pbo_half_max = 1.0 if sr_mean <= threshold_half_max else 0.0
+
+        stats = {
+            'n_strategies': n_strategies,
+            'n_paths': n_paths,
+            'pbo': pbo,
+            'method': method_lower,
+            'sr_mean': sr_mean,
+            'sr_std': sr_std,
+            'sr_max': sr_max,
+            'sr_min': float(np.min(selected_oos)),
+            'sr_median': float(np.median(selected_oos)),
+            'pbo_zero': pbo,
+            'pbo_half_max': pbo_half_max,
+            'positive_rate': float(np.mean(selected_oos > 0)),
+            'selected_strategy_indices': selected_idx,
+        }
+        return pbo, stats
+
+    raise ValueError("method 必须是 'rank' 或 'probability'。")
 
 
 def calculate_pbo_from_returns(
@@ -92,7 +174,12 @@ def calculate_pbo_from_returns(
     if len(sharpe_paths) < 10:
         raise ValueError(f"有效路径数不足: {len(sharpe_paths)}")
 
-    pbo, stats = calculate_pbo(np.array(sharpe_paths))
+    sharpe_array = np.asarray(sharpe_paths, dtype=np.float64)
+    pbo, stats = calculate_pbo(
+        sharpe_is=sharpe_array.reshape(1, -1),
+        sharpe_oos=sharpe_array.reshape(1, -1),
+        method='probability',
+    )
     return float(pbo), stats
 
 
@@ -202,7 +289,12 @@ def pbo_validation_report(
     :param significance_level: 显著性水平
     :returns: 报告文本
     """
-    pbo, stats = calculate_pbo(sharpe_paths, significance_level)
+    sharpe_array = np.asarray(sharpe_paths, dtype=np.float64)
+    pbo, stats = calculate_pbo(
+        sharpe_is=sharpe_array.reshape(1, -1),
+        sharpe_oos=sharpe_array.reshape(1, -1),
+        method='probability',
+    )
 
     report = []
     report.append("=" * 70)

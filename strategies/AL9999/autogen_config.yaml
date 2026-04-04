@@ -1,0 +1,51 @@
+# AL9999 AutoGen 多 Agent 工作流配置
+# 优先级: CLI 参数 > 本文件 > 默认值
+
+openai:
+  # 建议留空并通过环境变量注入，避免明文密钥入库
+  api_key: "sk-jieyujing"
+  api_key_env: "OPENAI_API_KEY"
+
+  # 模型配置
+  model: "glm-5"
+  # 兼容网关示例: "https://api.openai.com/v1"
+  base_url: "http://192.168.100.99:8317/v1"
+  organization: ""
+
+  # 自定义模型信息（非 OpenAI 模型必须提供）
+  model_info:
+    vision: false
+    function_calling: true
+    json_output: true
+    family: "unknown"
+    structured_output: true
+
+  # 可选客户端参数
+  timeout: 120
+  max_retries: 3
+
+  # 透传到底层 OpenAIChatCompletionClient 的额外参数（可选）
+  client_kwargs: {}
+  # 例如:
+  # client_kwargs:
+  #   default_headers:
+  #     X-Trace-Id: "al9999-autogen"
+
+workflow:
+  task: "基于 AL9999 策略执行可复现实验工作流并输出验证结论"
+  phases: "all"
+  no_optimize: false
+  dry_run_execution: false
+  max_messages: 20
+  log_level: "INFO"
+
+# AFML 合格标准（按 afml skill 定义）
+# - PSR > 95%
+# - DSR > 95%
+# - PBO 越低越好（默认 <= 10%）
+afml_acceptance:
+  psr_min: 0.95
+  dsr_min: 0.95
+  pbo_max: 0.10
+  oos_sharpe_min: 0.0
+  oos_vs_primary_sharpe_delta_min: 0.0

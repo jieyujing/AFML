@@ -30,6 +30,11 @@ dependencies = [
     "seaborn>=0.13.2",
     "scikit-learn>=1.7.2",
     "pyyaml>=6.0.3",
+    "autogen-agentchat>=0.7.5",
+    "autogen-core>=0.7.5",
+    "autogen-ext>=0.7.5",
+    "openai>=2.30.0",
+    "tiktoken>=0.12.0",
 ]
 
 [project.optional-dependencies]
