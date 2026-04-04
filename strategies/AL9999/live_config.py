@@ -42,6 +42,10 @@ class Al9999LiveConfig:
     state_path: str = "strategies/AL9999/output/models/live_state.json"
     replay_tbm_path: str = ""
     replay_features_path: str = ""
+    parity_mode: str = "filter_first"
+    strict_filter_first_artifacts: bool = True
+    filter_first_selection_path: str = "strategies/AL9999/output/features/filter_first_selection.parquet"
+    filter_first_threshold_report_path: str = "strategies/AL9999/output/features/filter_first_threshold_report.parquet"
     feature_nan_ratio_limit: float = 0.5
     feature_config: dict[str, Any] = field(default_factory=lambda: FEATURE_CONFIG.copy())
     tbm_config: dict[str, Any] = field(default_factory=lambda: TBM_CONFIG.copy())
@@ -77,6 +81,28 @@ class Al9999LiveConfig:
         Resolve the runtime state path relative to the repository when needed.
         """
         path = Path(self.state_path)
+        if path.is_absolute():
+            return path
+        if base_dir is None:
+            base_dir = Path(__file__).resolve().parents[2]
+        return Path(base_dir) / path
+
+    def resolve_filter_first_selection_path(self, base_dir: str | Path | None = None) -> Path:
+        """
+        Resolve the filter-first selection metadata path.
+        """
+        path = Path(self.filter_first_selection_path)
+        if path.is_absolute():
+            return path
+        if base_dir is None:
+            base_dir = Path(__file__).resolve().parents[2]
+        return Path(base_dir) / path
+
+    def resolve_filter_first_threshold_report_path(self, base_dir: str | Path | None = None) -> Path:
+        """
+        Resolve the filter-first threshold report path.
+        """
+        path = Path(self.filter_first_threshold_report_path)
         if path.is_absolute():
             return path
         if base_dir is None:

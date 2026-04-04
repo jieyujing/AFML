@@ -79,6 +79,32 @@ def _runtime(model_path=None):
     )
 
 
+def _write_filter_first_artifacts(base_path: Path, threshold: float = 0.51, side_mode: str = "both_with_short_penalty", scheme: str = "mda_positive"):
+    selection_path = base_path / "filter_first_selection.parquet"
+    threshold_report_path = base_path / "filter_first_threshold_report.parquet"
+    pd.DataFrame(
+        [
+            {
+                "selected_threshold": threshold,
+                "side_mode": side_mode,
+                "baseline_oos_n": 80,
+                "selected_oos_n": 60,
+                "trade_shrinkage": 0.25,
+                "shrinkage_min": 0.15,
+                "shrinkage_max": 0.30,
+                "scheme_used": scheme,
+            }
+        ]
+    ).to_parquet(selection_path)
+    pd.DataFrame(
+        [
+            {"threshold": 0.50, "oos_sharpe": 1.0, "oos_dsr": 0.8, "trade_shrinkage": 0.10},
+            {"threshold": threshold, "oos_sharpe": 1.2, "oos_dsr": 0.95, "trade_shrinkage": 0.25},
+        ]
+    ).to_parquet(threshold_report_path)
+    return selection_path, threshold_report_path
+
+
 def test_contract_resolver_supports_manual_override():
     resolver = ContractResolver({"AL9999": "AL2506.SHFE"}, manual_overrides={"AL9999": "AL2507.SHFE"})
 
@@ -387,6 +413,7 @@ def test_cta_strategy_can_replay_research_signals(tmp_path):
             "input_bar_mode": "dollar",
             "replay_tbm_path": str(tbm_path),
             "replay_features_path": str(features_path),
+            "strict_filter_first_artifacts": False,
         },
     )
 
@@ -474,6 +501,7 @@ def test_replay_mode_waits_for_trade_callback_before_marking_position(tmp_path):
             "input_bar_mode": "dollar",
             "replay_tbm_path": str(tbm_path),
             "replay_features_path": str(features_path),
+            "strict_filter_first_artifacts": False,
         },
     )
 
@@ -504,6 +532,182 @@ def test_replay_mode_waits_for_trade_callback_before_marking_position(tmp_path):
 
     assert strategy.position_state is not None
     assert strategy.position_state.direction == 1
+
+
+class ShortPenaltyModel:
+    def predict_proba(self, X):
+        probs = np.full((len(X), 2), 0.0)
+        probs[:, 1] = 0.53
+        probs[:, 0] = 0.47
+        return probs
+
+    def predict(self, X):
+        return (self.predict_proba(X)[:, 1] >= 0.5).astype(int)
+
+
+def test_replay_filter_first_selection_applies_short_penalty_and_metadata(tmp_path):
+    model_default = tmp_path / "meta_model.pkl"
+    model_scheme = tmp_path / "meta_model_mda_positive.pkl"
+    tbm_path = tmp_path / "tbm.parquet"
+    features_path = tmp_path / "events_features.parquet"
+    selection_path, threshold_report_path = _write_filter_first_artifacts(tmp_path, threshold=0.51, side_mode="both_with_short_penalty")
+    joblib.dump(ShortPenaltyModel(), model_default)
+    joblib.dump(ShortPenaltyModel(), model_scheme)
+
+    index = pd.DatetimeIndex(["2026-01-05 09:30:00", "2026-01-05 09:32:00"], name="timestamp")
+    pd.DataFrame(
+        {
+            "touch_idx": [1, 3],
+            "touch_type": ["upper", "lower"],
+            "side": [1, -1],
+            "entry_price": [100.0, 98.0],
+            "exit_price": [101.0, 97.0],
+            "exit_ts": [pd.Timestamp("2026-01-05 09:31:00"), pd.Timestamp("2026-01-05 09:33:00")],
+            "pnl": [1.0, 1.0],
+        },
+        index=index,
+    ).to_parquet(tbm_path)
+    pd.DataFrame({"feat_demo": [0.25, 0.75]}, index=index).to_parquet(features_path)
+
+    strategy = Al9999CtaStrategy(
+        cta_engine=None,
+        strategy_name="al_replay_filter_first",
+        vt_symbol="AL2506.SHFE",
+        setting={
+            "fixed_size": 1,
+            "model_path": str(model_default),
+            "research_symbol": "AL9999",
+            "symbol_mapping": {"AL9999": "AL2506.SHFE"},
+            "emit_orders": False,
+            "input_bar_mode": "dollar",
+            "replay_tbm_path": str(tbm_path),
+            "replay_features_path": str(features_path),
+            "parity_mode": "filter_first",
+            "strict_filter_first_artifacts": True,
+            "filter_first_selection_path": str(selection_path),
+            "filter_first_threshold_report_path": str(threshold_report_path),
+        },
+    )
+
+    assert strategy.selected_threshold == 0.51
+    assert strategy.side_mode == "both_with_short_penalty"
+    assert strategy.scheme_used == "mda_positive"
+    assert strategy.model_path.endswith("meta_model_mda_positive.pkl")
+    assert int(strategy.replay_signal_table.loc[index[0], "meta_pred"]) == 1
+    assert int(strategy.replay_signal_table.loc[index[1], "meta_pred"]) == 0
+
+
+def test_replay_filter_first_guard_controls_reverse_and_cooldown(tmp_path):
+    model_default = tmp_path / "meta_model.pkl"
+    model_scheme = tmp_path / "meta_model_mda_positive.pkl"
+    tbm_path = tmp_path / "tbm.parquet"
+    features_path = tmp_path / "events_features.parquet"
+    selection_path, threshold_report_path = _write_filter_first_artifacts(tmp_path, threshold=0.51, side_mode="both")
+    joblib.dump(DummyModel(), model_default)
+    joblib.dump(DummyModel(), model_scheme)
+
+    index = pd.DatetimeIndex(
+        ["2026-01-05 09:30:00", "2026-01-05 09:31:00", "2026-01-05 09:32:00", "2026-01-05 09:33:00"],
+        name="timestamp",
+    )
+    pd.DataFrame(
+        {
+            "touch_idx": [5, 5, 6, 7],
+            "touch_type": ["upper", "upper", "lower", "lower"],
+            "side": [1, -1, -1, -1],
+            "entry_price": [100.0, 100.0, 99.0, 98.0],
+            "exit_price": [101.0, 99.0, 98.0, 97.0],
+            "exit_ts": [pd.Timestamp("2026-01-05 09:34:00")] * 4,
+            "pnl": [1.0, -1.0, 1.0, 1.0],
+        },
+        index=index,
+    ).to_parquet(tbm_path)
+    pd.DataFrame({"feat_demo": [0.1, 0.2, 0.3, 0.4]}, index=index).to_parquet(features_path)
+
+    strategy = Al9999CtaStrategy(
+        cta_engine=None,
+        strategy_name="al_replay_guard",
+        vt_symbol="AL2506.SHFE",
+        setting={
+            "fixed_size": 1,
+            "model_path": str(model_default),
+            "research_symbol": "AL9999",
+            "symbol_mapping": {"AL9999": "AL2506.SHFE"},
+            "emit_orders": False,
+            "input_bar_mode": "dollar",
+            "replay_tbm_path": str(tbm_path),
+            "replay_features_path": str(features_path),
+            "parity_mode": "filter_first",
+            "strict_filter_first_artifacts": True,
+            "filter_first_selection_path": str(selection_path),
+            "filter_first_threshold_report_path": str(threshold_report_path),
+        },
+    )
+
+    strategy.guard_enabled = True
+    strategy.min_hold_bars = 2
+    strategy.cooldown_bars = 1
+    strategy.reverse_confirmation_delta = 0.04
+
+    strategy.on_bar(
+        BarData(
+            datetime=index[0],
+            open_price=100.0,
+            high_price=101.0,
+            low_price=99.0,
+            close_price=100.0,
+            volume=10,
+            open_interest=1000.0,
+        )
+    )
+    assert strategy.position_state is not None
+    assert strategy.position_state.direction == 1
+
+    strategy.on_bar(
+        BarData(
+            datetime=index[1],
+            open_price=100.0,
+            high_price=100.5,
+            low_price=98.5,
+            close_price=99.0,
+            volume=10,
+            open_interest=1000.0,
+        )
+    )
+    assert strategy.position_state is not None
+    assert strategy.position_state.direction == 1
+
+    strategy.replay_signal_table.loc[index[2], "meta_prob"] = 0.53
+    strategy.replay_signal_table.loc[index[2], "meta_pred"] = 1
+    strategy.on_bar(
+        BarData(
+            datetime=index[2],
+            open_price=99.0,
+            high_price=99.5,
+            low_price=97.5,
+            close_price=98.0,
+            volume=10,
+            open_interest=1000.0,
+        )
+    )
+    assert strategy.position_state is not None
+    assert strategy.position_state.direction == 1
+
+    strategy.replay_signal_table.loc[index[3], "meta_prob"] = 0.60
+    strategy.replay_signal_table.loc[index[3], "meta_pred"] = 1
+    strategy.on_bar(
+        BarData(
+            datetime=index[3],
+            open_price=98.0,
+            high_price=98.5,
+            low_price=96.5,
+            close_price=97.0,
+            volume=10,
+            open_interest=1000.0,
+        )
+    )
+    assert strategy.position_state is not None
+    assert strategy.position_state.direction == -1
 
 
 def test_export_comparison_html_writes_interactive_report(tmp_path):
