@@ -88,3 +88,11 @@ python strategies/AL9999/autogen_multi_agent_workflow.py --base-url https://api.
 - `execution_guard.*`: 反手确认、最短持仓、冷却期
 - `short_penalty_delta`: 空头阈值惩罚（`both_with_short_penalty` 模式）
 - `side_mode`: `both` / `both_with_short_penalty` / `long_only` / `short_only`
+
+## 9. /afml 执行规范
+
+统一执行请参考：
+
+- `strategies/AL9999/AFML_SOP.md`
+
+该 SOP 约束了权威回测入口、交易口径、收缩率定义和验收清单，建议作为研发与验收的默认标准。

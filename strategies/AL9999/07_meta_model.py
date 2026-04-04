@@ -74,7 +74,7 @@ def split_train_holdout(X, y, sample_weight, holdout_months=6):
 
 
 def load_data():
-    """加载 Meta Features 和 Meta Labels。"""
+    """加载 Meta Features、Meta Labels 与真实事件结束时间 t1。"""
     print("\n[Step 1] 加载数据...")
 
     # 加载事件特征（替代 meta_features）
@@ -86,10 +86,15 @@ def load_data():
     labels_path = os.path.join(FEATURES_DIR, 'meta_labels.parquet')
     labels = pd.read_parquet(labels_path)
 
+    # 加载 TBM 结果，提取真实事件结束时间（用于 PurgedKFold）
+    tbm_path = os.path.join(FEATURES_DIR, 'tbm_results.parquet')
+    tbm = pd.read_parquet(tbm_path)
+
     # 对齐索引
-    common_idx = features.index.intersection(labels.index)
+    common_idx = features.index.intersection(labels.index).intersection(tbm.index)
     X = features.loc[common_idx]
     y = labels.loc[common_idx, 'bin']
+    t1 = pd.to_datetime(tbm.loc[common_idx, 'exit_ts'], errors='coerce')
 
     # 样本权重 (基于盈利幅度)
     sample_weight = labels.loc[common_idx, 'sample_weight']
@@ -105,7 +110,14 @@ def load_data():
     # 处理 sample_weight 中的 NaN
     sample_weight = sample_weight.fillna(sample_weight.mean())
 
-    return X, y, sample_weight
+    # 若存在缺失结束时间，用“事件后 1 天”保守兜底，避免 PurgedKFold 漏清洗
+    missing_t1 = int(t1.isna().sum())
+    if missing_t1 > 0:
+        print(f"  ⚠️ t1 缺失样本: {missing_t1}，将使用事件后 1 天作为兜底。")
+        fallback_t1 = pd.Series(X.index, index=X.index) + pd.Timedelta(days=1)
+        t1 = t1.fillna(fallback_t1)
+
+    return X, y, sample_weight, t1
 
 
 def build_model(n_samples: int):
@@ -149,7 +161,7 @@ def main():
     os.makedirs(FIGURES_DIR, exist_ok=True)
 
     # Step 1: 加载数据
-    X, y, sample_weight = load_data()
+    X, y, sample_weight, t1 = load_data()
 
     # Step 2: 划分训练集和 Holdout OOS 集
     holdout_months = META_MODEL_CONFIG.get('holdout_months', 6)
@@ -164,8 +176,8 @@ def main():
     # Step 4: Purged 5-Fold CV（仅在训练集上）
     print("\n[Step 4] Purged 5-Fold CV（训练集）...")
 
-    # 假设每个样本的持仓结束时间 t1（用于 Purge）
-    t1_train = pd.Series(X_train.index + pd.Timedelta(hours=2), index=X_train.index)
+    # 使用真实持仓结束时间 t1（来自 TBM 退出时间），避免 purge 不足导致的泄露
+    t1_train = pd.Series(t1.loc[X_train.index], index=X_train.index)
 
     cv = PurgedKFold(
         n_splits=META_MODEL_CONFIG.get('cv_n_splits', 5),

@@ -1,0 +1,11 @@
+{
+  "best_scheme":"mda_positive",
+  "features":[
+    "feat_asia_sess",
+    "feat_us_sess",
+    "feat_oi_trend_5_60",
+    "feat_serial_corr_lag5_20",
+    "feat_serial_corr_lag10_20",
+    "feat_ljung_box_20"
+  ]
+}
