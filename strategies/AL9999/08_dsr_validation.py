@@ -22,6 +22,7 @@
 
 import os
 import sys
+from typing import Optional
 import pandas as pd
 import numpy as np
 from scipy.stats import norm
@@ -29,7 +30,8 @@ from scipy.stats import norm
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from strategies.AL9999.config import FEATURES_DIR
+from strategies.AL9999.config import FEATURES_DIR, FILTER_FIRST_CONFIG
+from strategies.AL9999.threshold_optimizer import calculate_trade_shrinkage
 
 
 # ============================================================
@@ -148,6 +150,71 @@ def calculate_dsr_v2(returns: pd.Series, n_trials: int, annualization_factor: fl
     }
 
 
+def compute_filter_first_diagnostics(
+    primary_trades: pd.DataFrame,
+    combined_trades: pd.DataFrame,
+    side_mode: str,
+    shrinkage_min: float,
+    shrinkage_max: float,
+    selection_info: Optional[pd.DataFrame] = None,
+) -> dict:
+    """
+    Compute side contribution and shrinkage pass/fail diagnostics.
+    """
+    primary_n = int(len(primary_trades))
+    combined_n = int(len(combined_trades))
+    full_shrinkage = calculate_trade_shrinkage(
+        trade_count=combined_n,
+        baseline_trade_count=primary_n,
+    )
+
+    selected_threshold = np.nan
+    baseline_oos_n = 0
+    selected_oos_n = 0
+    oos_trade_shrinkage = np.nan
+    if selection_info is not None and len(selection_info) > 0:
+        row = selection_info.iloc[0]
+        selected_threshold = float(row.get("selected_threshold", np.nan))
+        baseline_oos_n = int(row.get("baseline_oos_n", 0))
+        selected_oos_n = int(row.get("selected_oos_n", 0))
+        oos_trade_shrinkage = float(
+            row.get(
+                "trade_shrinkage",
+                calculate_trade_shrinkage(
+                    trade_count=selected_oos_n,
+                    baseline_trade_count=baseline_oos_n,
+                ),
+            )
+        )
+
+    shrinkage_to_check = oos_trade_shrinkage if not np.isnan(oos_trade_shrinkage) else full_shrinkage
+    shrinkage_pass = (shrinkage_to_check >= shrinkage_min) and (shrinkage_to_check <= shrinkage_max)
+
+    short_mask = combined_trades["side"] == -1 if "side" in combined_trades.columns else pd.Series([], dtype=bool)
+    long_mask = combined_trades["side"] == 1 if "side" in combined_trades.columns else pd.Series([], dtype=bool)
+    short_pnl = float(combined_trades.loc[short_mask, "net_pnl"].sum()) if "net_pnl" in combined_trades.columns else 0.0
+    long_pnl = float(combined_trades.loc[long_mask, "net_pnl"].sum()) if "net_pnl" in combined_trades.columns else 0.0
+    total_pnl = float(combined_trades["net_pnl"].sum()) if "net_pnl" in combined_trades.columns else 0.0
+    short_contrib_ratio = (short_pnl / total_pnl) if total_pnl != 0 else 0.0
+
+    return {
+        "side_mode": side_mode,
+        "primary_n_trades_full": primary_n,
+        "combined_n_trades_full": combined_n,
+        "full_trade_shrinkage": full_shrinkage,
+        "oos_trade_shrinkage": oos_trade_shrinkage,
+        "baseline_oos_n": baseline_oos_n,
+        "selected_oos_n": selected_oos_n,
+        "selected_threshold": selected_threshold,
+        "shrinkage_min": shrinkage_min,
+        "shrinkage_max": shrinkage_max,
+        "shrinkage_pass": bool(shrinkage_pass),
+        "short_net_pnl": short_pnl,
+        "long_net_pnl": long_pnl,
+        "short_contribution_ratio": short_contrib_ratio,
+    }
+
+
 # ============================================================
 # 主函数
 # ============================================================
@@ -164,9 +231,17 @@ def main():
     # Step 1: 加载数据
     print("\n[Step 1] 加载数据（使用修正后的滚动回测结果）...")
 
-    # 使用修正后的滚动回测结果
-    primary_trades = pd.read_parquet(os.path.join(FEATURES_DIR, 'rolling_primary_trades.parquet'))
-    combined_trades = pd.read_parquet(os.path.join(FEATURES_DIR, 'rolling_combined_trades.parquet'))
+    # 优先使用 Filter-First 主回测产物；若不存在则回退滚动回测结果
+    ff_primary_path = os.path.join(FEATURES_DIR, 'filter_first_primary_trades.parquet')
+    ff_combined_path = os.path.join(FEATURES_DIR, 'filter_first_combined_trades.parquet')
+    if os.path.exists(ff_primary_path) and os.path.exists(ff_combined_path):
+        primary_trades = pd.read_parquet(ff_primary_path)
+        combined_trades = pd.read_parquet(ff_combined_path)
+        print("  使用 Filter-First 交易产物进行 DSR 验证")
+    else:
+        primary_trades = pd.read_parquet(os.path.join(FEATURES_DIR, 'rolling_primary_trades.parquet'))
+        combined_trades = pd.read_parquet(os.path.join(FEATURES_DIR, 'rolling_combined_trades.parquet'))
+        print("  ⚠️ 未找到 Filter-First 交易产物，回退到 rolling_* 产物")
 
     # 使用净收益率
     primary_returns = primary_trades['net_ret']
@@ -175,16 +250,36 @@ def main():
     print(f"  Primary Model 交易数: {len(primary_trades)}")
     print(f"  Combined Strategy 交易数: {len(combined_trades)}")
 
-    # 样本内/外分割
-    oos_start = pd.Timestamp('2024-01-01')
+    # 样本内/外分割：与真实 holdout 起点保持一致
+    models_dir = FEATURES_DIR.replace('features', 'models')
+    holdout_path = os.path.join(models_dir, 'meta_holdout_signals.parquet')
+    if not os.path.exists(holdout_path):
+        raise FileNotFoundError(f"缺少 Holdout 文件: {holdout_path}")
+    holdout_df = pd.read_parquet(holdout_path)
+    oos_start = pd.to_datetime(holdout_df.index.min())
     is_mask = combined_trades['exit_time'] < oos_start
     oos_mask = combined_trades['exit_time'] >= oos_start
 
     combined_is_returns = combined_trades.loc[is_mask, 'net_ret']
     combined_oos_returns = combined_trades.loc[oos_mask, 'net_ret']
 
+    print(f"  OOS 起点: {oos_start}")
     print(f"  Combined IS 交易数: {is_mask.sum()}")
     print(f"  Combined OOS 交易数: {oos_mask.sum()}")
+
+    side_mode = FILTER_FIRST_CONFIG.get('side_mode', 'both')
+    shrinkage_min = float(FILTER_FIRST_CONFIG.get('shrinkage_min', 0.0))
+    shrinkage_max = float(FILTER_FIRST_CONFIG.get('shrinkage_max', 1.0))
+    selection_path = os.path.join(FEATURES_DIR, 'filter_first_selection.parquet')
+    selection_info = pd.read_parquet(selection_path) if os.path.exists(selection_path) else None
+    ff_diag = compute_filter_first_diagnostics(
+        primary_trades=primary_trades,
+        combined_trades=combined_trades,
+        side_mode=side_mode,
+        shrinkage_min=shrinkage_min,
+        shrinkage_max=shrinkage_max,
+        selection_info=selection_info,
+    )
 
     # Step 2: 估算参数试验次数
     print("\n[Step 2] 估算参数试验次数...")
@@ -297,8 +392,25 @@ def main():
         oos_sharpe_status = "⚠️ LOW"
 
     print(f"│  OOS Sharpe:          {oos_sharpe_status:>12}  ({combined_oos_stats['sr_annual']:.2f})             │")
+    shrinkage_status = "✅ PASS" if ff_diag["shrinkage_pass"] else "❌ FAIL"
+    shrinkage_value = ff_diag["oos_trade_shrinkage"] if not np.isnan(ff_diag["oos_trade_shrinkage"]) else ff_diag["full_trade_shrinkage"]
+    print(f"│  收缩约束:            {shrinkage_status:>12}  ({shrinkage_value:.3f})             │")
 
     print("└─────────────────────────────────────────────────────────────────────┘")
+
+    print("\n[Filter-First 诊断]")
+    print(f"  Side Mode: {ff_diag['side_mode']}")
+    print(f"  Full Trade Shrinkage: {ff_diag['full_trade_shrinkage']:.4f} "
+          f"(target: {ff_diag['shrinkage_min']:.2f} ~ {ff_diag['shrinkage_max']:.2f})")
+    if not np.isnan(ff_diag["oos_trade_shrinkage"]):
+        print(f"  OOS Trade Shrinkage: {ff_diag['oos_trade_shrinkage']:.4f} "
+              f"(baseline_oos_n={ff_diag['baseline_oos_n']}, selected_oos_n={ff_diag['selected_oos_n']})")
+    if not np.isnan(ff_diag["selected_threshold"]):
+        print(f"  Selected Threshold: {ff_diag['selected_threshold']:.4f}")
+    print(f"  Shrinkage Pass: {ff_diag['shrinkage_pass']}")
+    print(f"  Long Net PnL: {ff_diag['long_net_pnl']:.2f}")
+    print(f"  Short Net PnL: {ff_diag['short_net_pnl']:.2f}")
+    print(f"  Short Contribution Ratio: {ff_diag['short_contribution_ratio']:.4f}")
 
     # Step 7: 最终判断
     print("\n" + "=" * 70)
@@ -333,6 +445,20 @@ def main():
     # Step 8: 保存结果
     results = {
         'n_total_trials': n_total_trials,
+        'side_mode': ff_diag['side_mode'],
+        'primary_n_trades_full': ff_diag['primary_n_trades_full'],
+        'combined_n_trades_full': ff_diag['combined_n_trades_full'],
+        'full_trade_shrinkage': ff_diag['full_trade_shrinkage'],
+        'oos_trade_shrinkage': ff_diag['oos_trade_shrinkage'],
+        'baseline_oos_n': ff_diag['baseline_oos_n'],
+        'selected_oos_n': ff_diag['selected_oos_n'],
+        'selected_threshold': ff_diag['selected_threshold'],
+        'shrinkage_min': ff_diag['shrinkage_min'],
+        'shrinkage_max': ff_diag['shrinkage_max'],
+        'shrinkage_pass': ff_diag['shrinkage_pass'],
+        'long_net_pnl': ff_diag['long_net_pnl'],
+        'short_net_pnl': ff_diag['short_net_pnl'],
+        'short_contribution_ratio': ff_diag['short_contribution_ratio'],
         'primary_n_trades': primary_stats['n'],
         'primary_sr_annual': primary_stats['sr_annual'],
         'primary_psr': primary_stats['psr'],

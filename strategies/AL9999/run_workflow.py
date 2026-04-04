@@ -62,11 +62,12 @@ PHASES = {
     6: {
         'name': '验证与回测',
         'scripts': [
+            '10_rolling_backtest.py',
             '08_dsr_validation.py',
             '09b_cpcv_pbo_validation.py',
             '10_combined_backtest.py',
         ],
-        'description': 'DSR 验证，PBO 验证，组合回测',
+        'description': '滚动回测，DSR 验证，PBO 验证，Filter-First 组合回测',
     },
 }
 

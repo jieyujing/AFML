@@ -178,11 +178,29 @@ TBM_CONFIG = {
 # ============================================================
 
 META_MODEL_CONFIG = {
-    'precision_threshold': 0.50,
+    'precision_threshold': 0.51,
     'n_estimators': 1000,
     'cv_n_splits': 5,
     'cv_embargo_pct': 0.05,
     'holdout_months': 12,  # 保留最后 N 个月不参与训练，用于真正的 OOS 验证
+}
+
+# ============================================================
+# Filter-First 优化参数
+# ============================================================
+
+FILTER_FIRST_CONFIG = {
+    'threshold_grid': [0.50, 0.51, 0.52, 0.53, 0.54, 0.55, 0.56],
+    'shrinkage_min': 0.15,
+    'shrinkage_max': 0.30,
+    'execution_guard': {
+        'enabled': True,
+        'min_hold_bars': 2,
+        'cooldown_bars': 1,
+        'reverse_confirmation_delta': 0.02,
+    },
+    'short_penalty_delta': 0.04,
+    'side_mode': 'both_with_short_penalty',
 }
 
 # ============================================================
