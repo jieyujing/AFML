@@ -405,11 +405,11 @@ def main():
     n_nan_vol = (~nan_mask).sum()
     if n_nan_vol > 0:
         logger.warning(f"  跳过 {n_nan_vol} 个波动率目标为 NaN 的事件")
-    combined_tbm = combined_tbm[nan_mask.values]
-    common_idx_for_tbm = common_idx_for_tbm[nan_mask.values]
-    event_idxs = event_idxs[nan_mask.values]
-    sides = sides[nan_mask.values]
-    vol_targets = vol_targets[nan_mask.values]
+    combined_tbm = combined_tbm[nan_mask]
+    common_idx_for_tbm = common_idx_for_tbm[nan_mask]
+    event_idxs = event_idxs[nan_mask]
+    sides = sides[nan_mask]
+    vol_targets = vol_targets[nan_mask]
 
     # 2.5.4 计算垂直屏障（秒）
     vb_bars = int(TBM_CONFIG['vertical_barrier_bars'])
