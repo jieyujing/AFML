@@ -76,7 +76,8 @@ CUSUM_MULTIPLIER = 5       # 阈值乘数（控制事件率：越大事件越少
 # Phase 3: Trend Scanning 参数
 # ============================================================
 
-TREND_WINDOWS = [5, 10, 15]  # 趋势窗口: 5/10/15 bars ≈ 0.3/0.7/1.0 个交易日
+TREND_WINDOWS = [5, 10, 15, 20]  # 趋势窗口: 5/10/15/20 bars ≈ 0.3/0.7/1.0/1.3 个交易日
+MIN_T_VALUE = 1.5            # t-value 显著性门槛（过滤纯噪音事件）
 
 # ============================================================
 # Feature Engineering 配置
@@ -146,7 +147,7 @@ FEATURE_CONFIG = {
     # Trend Scan 标签（含未来信息，仅用于分析）
     "trend_scan": {
         "enabled": True,
-        "windows": [5, 10, 20, 30, 50],
+        "windows": [5, 10, 15, 20],
     },
 }
 
@@ -154,11 +155,19 @@ FEATURE_CONFIG = {
 # Phase 4: MA Primary Model 参数
 # ============================================================
 
-# PRIMARY_MODEL_TYPE: 'ma' | 'cusum_direction' | 'rf'
+# PRIMARY_MODEL_TYPE: 'ma' | 'cusum_direction' | 'rf' | 'dma'
 # - 'ma': price > MA → long, price < MA → short
 # - 'cusum_direction': g_up >= |g_down| → long, else → short
 # - 'rf': load side from RF primary model output
-PRIMARY_MODEL_TYPE = 'rf'
+# - 'dma': dual moving average crossover at CUSUM events
+PRIMARY_MODEL_TYPE = 'dma'
+
+# Phase 4: DMA Primary Model 参数
+DMA_PRIMARY_CONFIG = {
+    'fast_window': 5,
+    'slow_window': 20,
+    'ma_type': 'ewma',  # 'ewma' or 'sma'
+}
 
 MA_PRIMARY_MODEL = {
     # MA 参数（PRIMARY_MODEL_TYPE='ma' 时使用）
@@ -188,24 +197,25 @@ RF_PRIMARY_CONFIG = {
         'feat_lz_entropy_',
         'feat_hl_vol_',
     ],
-    'min_t_value': 3.0,
+    # Primary model 目标：High Recall，不漏趋势机会
+    'min_t_value': 1.5,
     'max_samples_method': 'avgU',
     'sampling_method': 'sequential_bootstrap',          # 'avgU'（原生Bagging）或 'sequential_bootstrap'
     't1_col': 'exit_ts',
-    # 置信度深渊：概率在此区间内强制 side=0（不作为）
-    # 当前模型区分力有限（std=0.08），深渊保持狭窄
-    'prob_abyss': (0.47, 0.53),
+    # Primary model 目标：High Recall，不漏趋势机会——不设置信度深渊
+    # 'prob_abyss' 已禁用 (None)，让 RF 对所有样本都输出 side
+    'prob_abyss': None,
 }
 
 # ============================================================
-# Phase 4: TBM (Triple Barrier Method) 参数
+# Phase 4b: TBM (Triple Barrier Method) 参数（已弃用，保留作为参照）
 # ============================================================
 
 TBM_CONFIG = {
     'target_ret_col': 'feat_ewm_vol_20',
-    'profit_loss_barriers': (2.0, 2.0),    # (tp_mult, sl_mult) - 优化后参数
-    'vertical_barrier_bars': 80,           # 最大持仓 bars 数量 - 优化后参数
-    'min_ret': 0.002,                      # 最小收益门槛 - 优化后参数
+    'profit_loss_barriers': (2.0, 2.0),
+    'vertical_barrier_bars': 80,
+    'min_ret': 0.002,
     'min_close_time_sec': 60,
 }
 
@@ -218,7 +228,7 @@ META_MODEL_CONFIG = {
     'n_estimators': 1000,
     'cv_n_splits': 5,
     'cv_embargo_pct': 0.05,
-    'holdout_months': 12,  # 保留最后 N 个月不参与训练，用于真正的 OOS 验证
+    'holdout_months': 6,  # 保留最后 6 个月不参与训练，用于 OOS 验证
 }
 
 # ============================================================
@@ -228,7 +238,7 @@ META_MODEL_CONFIG = {
 FILTER_FIRST_CONFIG = {
     'threshold_grid': [0.50, 0.51, 0.52, 0.53, 0.54, 0.55, 0.56],
     'shrinkage_min': 0.15,
-    'shrinkage_max': 0.30,
+    'shrinkage_max': 0.50,
     'execution_guard': {
         'enabled': True,
         'min_hold_bars': 2,
