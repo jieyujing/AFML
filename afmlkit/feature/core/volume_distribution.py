@@ -50,6 +50,8 @@ class VolEntropyTransform(SISOTransform):
         super().__init__(input_col, output_col)
         self.frequency = frequency
         self.n_bins = n_bins
+        # Override output name to include n_bins for uniqueness
+        self.produces = [f'{output_col}_{n_bins}bins']
 
     def get_params(self) -> dict:
         """
@@ -529,11 +531,11 @@ class VolDiffStdTransform(SISOTransform):
             raise ValueError("VolDiffStdTransform requires a DataFrame with 'code' column.")
         if 'code' not in x.columns:
             raise ValueError("Input DataFrame must contain 'code' column for grouping.")
+        if 'count' not in x.columns:
+            raise ValueError("VolDiffStdTransform requires a DataFrame with 'count' column.")
 
         def _diff_std(x_inner: pd.DataFrame) -> float:
             """Std of normalized volume diff for one resample window."""
-            if 'count' not in x_inner.columns:
-                return np.nan
             xx = x_inner['amount'] / x_inner['count']
             xx = xx.replace([np.inf, -np.inf], np.nan).dropna()
             if len(xx) < 2 or xx.mean() == 0:
