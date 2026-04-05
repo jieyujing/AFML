@@ -50,8 +50,8 @@ def test_split_train_holdout_keeps_last_months_as_holdout():
         X, y, t1, holdout_months=6
     )
 
-    X_train, _, _ = train_pack
-    X_holdout, _, _ = holdout_pack
+    X_train, _, _, _ = train_pack
+    X_holdout, _, _, _ = holdout_pack
     assert len(X_train) > 0
     assert len(X_holdout) > 0
     assert X_train.index.max() < holdout_start

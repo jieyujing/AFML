@@ -1,0 +1,63 @@
+{
+  "1": [
+    "feat_rsi_7",
+    "feat_rsi_14",
+    "feat_rsi_21",
+    "feat_roc_5",
+    "feat_roc_10",
+    "feat_roc_20",
+    "feat_stoch_k_14",
+    "feat_vwap_dist_20",
+    "feat_vwap_dist_60",
+    "feat_cross_ma_ratio_5_20",
+    "feat_cross_ma_ratio_10_40"
+  ],
+  "2": [
+    "feat_ewm_vol_10",
+    "feat_ewm_vol_20",
+    "feat_ewm_vol_40",
+    "feat_hl_vol_20",
+    "feat_vol_oi_ratio",
+    "feat_cs_spread_20",
+    "feat_cs_spread_60"
+  ],
+  "10": [
+    "feat_adx_14",
+    "feat_cos_time",
+    "feat_serial_corr_lag5_20",
+    "feat_adf_test_100"
+  ],
+  "8": [
+    "feat_sin_time",
+    "feat_oi_trend_5_60",
+    "feat_serial_corr_lag10_20",
+    "feat_ljung_box_20"
+  ],
+  "5": [
+    "feat_oi_change",
+    "feat_oi_change_rate"
+  ],
+  "3": [
+    "feat_oi_ma5",
+    "feat_oi_ma20",
+    "feat_oi_ma60"
+  ],
+  "7": [
+    "feat_theil_imb_20",
+    "feat_theil_imb_60"
+  ],
+  "6": [
+    "feat_amihud_20",
+    "feat_amihud_60"
+  ],
+  "4": [
+    "feat_shannon_50",
+    "feat_lz_entropy_50",
+    "feat_shannon_100",
+    "feat_lz_entropy_100"
+  ],
+  "9": [
+    "feat_serial_corr_lag1_20",
+    "feat_sadf_10_60"
+  ]
+}

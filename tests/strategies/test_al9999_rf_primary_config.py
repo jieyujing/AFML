@@ -31,5 +31,7 @@ def test_rf_primary_config_contains_expected_keys():
     assert cfg["cv_embargo_pct"] == 0.01
     assert cfg["holdout_months"] == 12
     assert cfg["max_samples_method"] in {"avgU", "float"}
+    assert cfg["sampling_method"] in {"avgU", "sequential_bootstrap"}
+    assert cfg["sampling_method"] == "sequential_bootstrap"
     assert isinstance(cfg["feature_prefixes"], list)
     assert cfg["t1_col"] == "exit_ts"

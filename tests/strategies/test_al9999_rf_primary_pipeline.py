@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 
@@ -52,3 +53,34 @@ def test_build_model_uses_avg_u_for_bagging_max_samples():
     )
     assert model.n_estimators == 200
     assert model.max_samples == 0.37
+
+
+def test_build_model_supports_sequential_bootstrap_sampling():
+    rf_module = _load_rf_module()
+    model = rf_module.build_model(
+        n_estimators=8,
+        random_state=42,
+        n_jobs=-1,
+        max_samples=0.6,
+        sampling_method="sequential_bootstrap",
+    )
+
+    idx = pd.date_range("2024-01-01", periods=30, freq="D")
+    X = pd.DataFrame(
+        {
+            "feat_rsi_14": np.linspace(0.0, 1.0, len(idx)),
+            "feat_roc_5": np.sin(np.linspace(0.0, 3.14, len(idx))),
+        },
+        index=idx,
+    )
+    y = pd.Series(np.where(np.arange(len(idx)) % 2 == 0, 1, -1), index=idx)
+    t1 = pd.Series(idx + pd.Timedelta(days=3), index=idx)
+
+    model.fit(X, y, t1=t1)
+    probs = model.predict_proba(X)
+
+    assert probs.shape == (len(X), 2)
+    assert np.all(probs >= 0.0)
+    assert np.all(probs <= 1.0)
+    assert hasattr(model, "sample_avg_u_")
+    assert len(model.sample_avg_u_) == 8
