@@ -63,6 +63,13 @@ from .theil_imbalance import (
     TheilDecomposedTransform,
     theil_imbalance,
 )
+from .volume_distribution import (
+    VolEntropyTransform,
+    VolSkewTransform,
+    VolKurtTransform,
+    VolPeakTransform,
+    VolDiffStdTransform,
+)
 
 __all__ = [
     # frac_diff
@@ -126,4 +133,10 @@ __all__ = [
     "TheilImbalanceTransform",
     "TheilDecomposedTransform",
     "theil_imbalance",
+    # volume_distribution
+    "VolEntropyTransform",
+    "VolSkewTransform",
+    "VolKurtTransform",
+    "VolPeakTransform",
+    "VolDiffStdTransform",
 ]
