@@ -1137,17 +1137,17 @@ class BShapeTransform(SISOTransform):
         return self._pd(x)
 
 
-class PShapeDiffTransform(SISOTransform):
+class UnanimousBuyingTransform(SISOTransform):
     """
-    QIML0503: Volume profile P-shape — close relative to low price level.
+    QIML0629: Unanimous buying pressure — up/down volume ratio.
 
-    Computes the volume-weighted price level that accumulates 50% of total
-    volume (starting from the peak volume price), then returns the normalized
-    distance from that low price level to the current close price.
+    Measures the ratio of up-volume to down-volume for bars where price
+    movement is unambiguous (alpha > 0.5). Returns (vol_up + vol_down) /
+    (vol_up - vol_down) when vol_up != vol_down, else 0.
 
     :param frequency: Resampling frequency (e.g. '5min', '15min', 'H', 'D').
     :param input_col: Input column name (default 'amount').
-    :param output_col: Output column suffix (default 'vol_p_shape_diff').
+    :param output_col: Output column suffix (default 'vol_unan_buy').
 
     Example:
         >>> import pandas as pd
@@ -1155,11 +1155,14 @@ class PShapeDiffTransform(SISOTransform):
         >>> np.random.seed(42)
         >>> df = pd.DataFrame({
         ...     'code': ['A'] * 50,
-        ...     'close': np.random.rand(50) * 10 + 95,
+        ...     'open': 100 + np.random.randn(50).cumsum(),
+        ...     'high': 100 + np.random.randn(50).cumsum() + 1,
+        ...     'low': 100 + np.random.randn(50).cumsum() - 1,
+        ...     'close': 100 + np.random.randn(50).cumsum(),
         ...     'amount': np.random.rand(50) * 100000,
         ... })
         >>> df.index = pd.date_range('2024-01-01', periods=50, freq='min')
-        >>> transform = PShapeDiffTransform(frequency='H')
+        >>> transform = UnanimousBuyingTransform(frequency='H')
         >>> result = transform(df)
     """
 
@@ -1167,7 +1170,7 @@ class PShapeDiffTransform(SISOTransform):
         self,
         frequency: str = 'H',
         input_col: str = 'amount',
-        output_col: str = 'vol_p_shape_diff',
+        output_col: str = 'vol_unan_buy',
     ):
         super().__init__(input_col, output_col)
         self.frequency = frequency
@@ -1201,49 +1204,349 @@ class PShapeDiffTransform(SISOTransform):
 
     def _pd(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
         """
-        Compute P-shape diff factor using pandas.
+        Compute unanimous buying pressure using pandas.
 
-        :param x: DataFrame with 'code', 'close', and 'amount' columns.
-        :returns: pd.Series with P-shape diff values, index aligned to input DataFrame.
+        :param x: DataFrame with 'code', 'open', 'high', 'low', 'close', 'amount' columns.
+        :returns: pd.Series with unanimous buying values, index aligned to input DataFrame.
         """
         if isinstance(x, pd.Series):
-            raise ValueError("PShapeDiffTransform requires a DataFrame with 'code' column.")
+            raise ValueError("UnanimousBuyingTransform requires a DataFrame with 'code' column.")
         if 'code' not in x.columns:
             raise ValueError("Input DataFrame must contain 'code' column for grouping.")
-        if 'close' not in x.columns:
-            raise ValueError("PShapeDiffTransform requires 'close' column.")
+        for col in ('open', 'high', 'low', 'close', 'amount'):
+            if col not in x.columns:
+                raise ValueError(f"UnanimousBuyingTransform requires '{col}' column.")
 
-        def _p_shape_diff(x_inner: pd.DataFrame) -> float:
-            """P-shape diff value for one resample window."""
-            vol_sum = x_inner.groupby('close')['amount'].sum()
-            if len(vol_sum) == 0 or vol_sum.sum() == 0:
+        def _unan_buy(x_inner: pd.DataFrame) -> float:
+            """Unanimous buying ratio for one resample window."""
+            denom = (x_inner['high'] - x_inner['low']).replace(0, np.nan)
+            alpha = (x_inner['close'] - x_inner['open']).abs() / denom.fillna(0)
+            total = x_inner['amount'].sum()
+            if total == 0:
                 return np.nan
-            vol_acc_sum = vol_sum.sum()
-            idx = np.argmax(vol_sum)
-            ratio = vol_sum.iloc[idx] / vol_acc_sum
-            num = 0
-            while ratio < 0.5 and num <= idx:
-                num += 1
-                if idx - num < 0:
-                    break
-                window = vol_sum.iloc[max(0, idx - num): idx + num + 1]
-                ratio = window.sum() / vol_acc_sum
-            try:
-                if idx - num >= 0:
-                    vsa_low = vol_sum.index[idx - num]
-                else:
-                    vsa_low = np.min(vol_sum.index)
-            except Exception:
-                vsa_low = np.min(vol_sum.index)
-            if vsa_low == 0:
-                return np.nan
-            return (x_inner['close'] - vsa_low).mean() / vsa_low
+            vol_up_mask = (alpha > 0.5) & (x_inner['close'].pct_change() > 0)
+            vol_down_mask = (alpha > 0.5) & (x_inner['close'].pct_change() < 0)
+            vol_up = x_inner['amount'][vol_up_mask].sum() / total
+            vol_down = x_inner['amount'][vol_down_mask].sum() / total
+            diff = vol_up - vol_down
+            if diff == 0:
+                return 0.0
+            return (vol_up + vol_down) / diff
 
         original_index = x.index
         records = []
         ts_index = pd.DatetimeIndex(x.index).floor(self.frequency)  # type: ignore[union-abstract]
         for (code, ts), group in x.groupby([x['code'], ts_index]):  # type: ignore[union-abstract]
-            val = _p_shape_diff(group)
+            val = _unan_buy(group)
+            for idx in group.index:
+                records.append({'idx': idx, 'code': code, 'bucket': ts, 'val': val})
+
+        result_df = pd.DataFrame(records).set_index('idx')
+        arr: np.ndarray = result_df['val'].values  # type: ignore[assignment]
+        return pd.Series(arr, index=original_index, name=self.output_name)
+
+    def _nb(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Numba fallback: delegate to pandas implementation.
+        """
+        return self._pd(x)
+
+
+class VolStdTransform(SISOTransform):
+    """
+    QIML0722: Volume standard deviation across resampled buckets.
+
+    Computes the standard deviation of the fraction of volume in each
+    5-minute sub-bucket relative to the total window volume.
+
+    :param frequency: Resampling frequency (e.g. '5min', '15min', 'H', 'D').
+    :param input_col: Input column name (default 'amount').
+    :param output_col: Output column suffix (default 'vol_vol_std').
+
+    Example:
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> np.random.seed(42)
+        >>> df = pd.DataFrame({
+        ...     'code': ['A'] * 50,
+        ...     'amount': np.random.rand(50) * 100000,
+        ... })
+        >>> df.index = pd.date_range('2024-01-01', periods=50, freq='min')
+        >>> transform = VolStdTransform(frequency='H')
+        >>> result = transform(df)
+    """
+
+    def __init__(
+        self,
+        frequency: str = 'H',
+        input_col: str = 'amount',
+        output_col: str = 'vol_vol_std',
+    ):
+        super().__init__(input_col, output_col)
+        self.frequency = frequency
+
+    def get_params(self) -> dict:
+        """
+        Get the parameters of the transform.
+
+        :returns: Dictionary of current parameter values.
+        """
+        return {
+            'frequency': self.frequency,
+            'input_col': self.requires[0],
+            'output_col': self.produces[0],
+        }
+
+    def set_params(self, **params):
+        """
+        Set the parameters of the transform.
+
+        :param params: Keyword parameters to set.
+        :returns: self
+        """
+        if 'frequency' in params:
+            self.frequency = params['frequency']
+        if 'input_col' in params:
+            self.requires = [params['input_col']]
+        if 'output_col' in params:
+            self.produces = [params['output_col']]
+        return self
+
+    def _pd(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Compute volume std using pandas.
+
+        :param x: DataFrame with 'code' and 'amount' columns.
+        :returns: pd.Series with volume std values, index aligned to input DataFrame.
+        """
+        if isinstance(x, pd.Series):
+            raise ValueError("VolStdTransform requires a DataFrame with 'code' column.")
+        if 'code' not in x.columns:
+            raise ValueError("Input DataFrame must contain 'code' column for grouping.")
+        if 'amount' not in x.columns:
+            raise ValueError("VolStdTransform requires 'amount' column.")
+
+        def _vol_std(x_inner: pd.DataFrame) -> float:
+            """Volume std for one resample window."""
+            total = x_inner['amount'].sum()
+            if total == 0:
+                return np.nan
+            sub = x_inner.resample('5min')['amount'].sum()
+            sub_ratio = sub / total
+            if len(sub_ratio) < 2:
+                return np.nan
+            return sub_ratio.std()
+
+        original_index = x.index
+        records = []
+        ts_index = pd.DatetimeIndex(x.index).floor(self.frequency)  # type: ignore[union-abstract]
+        for (code, ts), group in x.groupby([x['code'], ts_index]):  # type: ignore[union-abstract]
+            val = _vol_std(group)
+            for idx in group.index:
+                records.append({'idx': idx, 'code': code, 'bucket': ts, 'val': val})
+
+        result_df = pd.DataFrame(records).set_index('idx')
+        arr: np.ndarray = result_df['val'].values  # type: ignore[assignment]
+        return pd.Series(arr, index=original_index, name=self.output_name)
+
+    def _nb(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Numba fallback: delegate to pandas implementation.
+        """
+        return self._pd(x)
+
+
+class VolumeVarTransform(SISOTransform):
+    """
+    QIML0806: Volume variance within the resample window.
+
+    Computes the variance of the 'volume' column within each resampled
+    time bucket.
+
+    :param frequency: Resampling frequency (e.g. '5min', '15min', 'H', 'D').
+    :param input_col: Input column name (default 'volume').
+    :param output_col: Output column suffix (default 'vol_vol_var').
+
+    Example:
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> np.random.seed(42)
+        >>> df = pd.DataFrame({
+        ...     'code': ['A'] * 50,
+        ...     'volume': np.random.rand(50) * 1000,
+        ... })
+        >>> df.index = pd.date_range('2024-01-01', periods=50, freq='min')
+        >>> transform = VolumeVarTransform(frequency='H')
+        >>> result = transform(df)
+    """
+
+    def __init__(
+        self,
+        frequency: str = 'H',
+        input_col: str = 'volume',
+        output_col: str = 'vol_vol_var',
+    ):
+        super().__init__(input_col, output_col)
+        self.frequency = frequency
+
+    def get_params(self) -> dict:
+        """
+        Get the parameters of the transform.
+
+        :returns: Dictionary of current parameter values.
+        """
+        return {
+            'frequency': self.frequency,
+            'input_col': self.requires[0],
+            'output_col': self.produces[0],
+        }
+
+    def set_params(self, **params):
+        """
+        Set the parameters of the transform.
+
+        :param params: Keyword parameters to set.
+        :returns: self
+        """
+        if 'frequency' in params:
+            self.frequency = params['frequency']
+        if 'input_col' in params:
+            self.requires = [params['input_col']]
+        if 'output_col' in params:
+            self.produces = [params['output_col']]
+        return self
+
+    def _pd(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Compute volume variance using pandas.
+
+        :param x: DataFrame with 'code' and 'volume' columns.
+        :returns: pd.Series with volume variance values, index aligned to input DataFrame.
+        """
+        if isinstance(x, pd.Series):
+            raise ValueError("VolumeVarTransform requires a DataFrame with 'code' column.")
+        if 'code' not in x.columns:
+            raise ValueError("Input DataFrame must contain 'code' column for grouping.")
+        if 'volume' not in x.columns:
+            raise ValueError("VolumeVarTransform requires 'volume' column.")
+
+        def _vol_var(x_inner: pd.DataFrame) -> float:
+            """Volume variance for one resample window."""
+            return x_inner['volume'].var()
+
+        original_index = x.index
+        records = []
+        ts_index = pd.DatetimeIndex(x.index).floor(self.frequency)  # type: ignore[union-abstract]
+        for (code, ts), group in x.groupby([x['code'], ts_index]):  # type: ignore[union-abstract]
+            val = _vol_var(group)
+            for idx in group.index:
+                records.append({'idx': idx, 'code': code, 'bucket': ts, 'val': val})
+
+        result_df = pd.DataFrame(records).set_index('idx')
+        arr: np.ndarray = result_df['val'].values  # type: ignore[assignment]
+        return pd.Series(arr, index=original_index, name=self.output_name)
+
+    def _nb(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Numba fallback: delegate to pandas implementation.
+        """
+        return self._pd(x)
+
+
+class UnanimousTradingTransform(SISOTransform):
+    """
+    QIML0827: Unanimous trading volume — proportion of volume in unambiguous bars.
+
+    Measures the proportion of total volume that occurs in bars where price
+    movement is unambiguous (alpha > 0.5), including both up and down moves.
+
+    :param frequency: Resampling frequency (e.g. '5min', '15min', 'H', 'D').
+    :param input_col: Input column name (default 'amount').
+    :param output_col: Output column suffix (default 'vol_unan_trade').
+
+    Example:
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> np.random.seed(42)
+        >>> df = pd.DataFrame({
+        ...     'code': ['A'] * 50,
+        ...     'open': 100 + np.random.randn(50).cumsum(),
+        ...     'high': 100 + np.random.randn(50).cumsum() + 1,
+        ...     'low': 100 + np.random.randn(50).cumsum() - 1,
+        ...     'close': 100 + np.random.randn(50).cumsum(),
+        ...     'amount': np.random.rand(50) * 100000,
+        ... })
+        >>> df.index = pd.date_range('2024-01-01', periods=50, freq='min')
+        >>> transform = UnanimousTradingTransform(frequency='H')
+        >>> result = transform(df)
+    """
+
+    def __init__(
+        self,
+        frequency: str = 'H',
+        input_col: str = 'amount',
+        output_col: str = 'vol_unan_trade',
+    ):
+        super().__init__(input_col, output_col)
+        self.frequency = frequency
+
+    def get_params(self) -> dict:
+        """
+        Get the parameters of the transform.
+
+        :returns: Dictionary of current parameter values.
+        """
+        return {
+            'frequency': self.frequency,
+            'input_col': self.requires[0],
+            'output_col': self.produces[0],
+        }
+
+    def set_params(self, **params):
+        """
+        Set the parameters of the transform.
+
+        :param params: Keyword parameters to set.
+        :returns: self
+        """
+        if 'frequency' in params:
+            self.frequency = params['frequency']
+        if 'input_col' in params:
+            self.requires = [params['input_col']]
+        if 'output_col' in params:
+            self.produces = [params['output_col']]
+        return self
+
+    def _pd(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Compute unanimous trading volume using pandas.
+
+        :param x: DataFrame with 'code', 'open', 'high', 'low', 'close', 'amount' columns.
+        :returns: pd.Series with unanimous trading values, index aligned to input DataFrame.
+        """
+        if isinstance(x, pd.Series):
+            raise ValueError("UnanimousTradingTransform requires a DataFrame with 'code' column.")
+        if 'code' not in x.columns:
+            raise ValueError("Input DataFrame must contain 'code' column for grouping.")
+        for col in ('open', 'high', 'low', 'close', 'amount'):
+            if col not in x.columns:
+                raise ValueError(f"UnanimousTradingTransform requires '{col}' column.")
+
+        def _unan_trade(x_inner: pd.DataFrame) -> float:
+            """Unanimous trading volume ratio for one resample window."""
+            denom = (x_inner['high'] - x_inner['low']).replace(0, np.nan)
+            alpha = (x_inner['close'] - x_inner['open']).abs() / denom.fillna(0)
+            total = x_inner['amount'].sum()
+            if total == 0:
+                return np.nan
+            vol_unan = x_inner['amount'][alpha > 0.5].sum() / total
+            return vol_unan
+
+        original_index = x.index
+        records = []
+        ts_index = pd.DatetimeIndex(x.index).floor(self.frequency)  # type: ignore[union-abstract]
+        for (code, ts), group in x.groupby([x['code'], ts_index]):  # type: ignore[union-abstract]
+            val = _unan_trade(group)
             for idx in group.index:
                 records.append({'idx': idx, 'code': code, 'bucket': ts, 'val': val})
 
