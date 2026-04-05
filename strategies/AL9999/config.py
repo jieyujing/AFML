@@ -43,7 +43,7 @@ def map_to_trading_date(dt):
 # Dollar Bars 参数
 # ============================================================
 
-TARGET_DAILY_BARS = 4      # 目标每天 6 个 Bars（初始值，优化后调整）
+TARGET_DAILY_BARS = 15      # 目标每天 6 个 Bars（初始值，优化后调整）
 EWMA_SPAN = 20             # 动态阈值 EWMA 窗口
 
 # 验证参数
@@ -70,13 +70,13 @@ FRACDIFF_MAX_D = 1.0       # d 最大值
 
 # CUSUM Filter 参数
 CUSUM_WINDOW = 20          # 动态阈值滚动窗口
-CUSUM_MULTIPLIER = 3       # 阈值乘数（控制事件率：越大事件越少）
+CUSUM_MULTIPLIER = 5       # 阈值乘数（控制事件率：越大事件越少）
 
 # ============================================================
 # Phase 3: Trend Scanning 参数
 # ============================================================
 
-TREND_WINDOWS = [5, 10, 20, 30, 50]  # 趋势窗口范围
+TREND_WINDOWS = [5, 10, 15]  # 趋势窗口: 5/10/15 bars ≈ 0.3/0.7/1.0 个交易日
 
 # ============================================================
 # Feature Engineering 配置
@@ -154,12 +154,48 @@ FEATURE_CONFIG = {
 # Phase 4: MA Primary Model 参数
 # ============================================================
 
+# PRIMARY_MODEL_TYPE: 'ma' | 'cusum_direction' | 'rf'
+# - 'ma': price > MA → long, price < MA → short
+# - 'cusum_direction': g_up >= |g_down| → long, else → short
+# - 'rf': load side from RF primary model output
+PRIMARY_MODEL_TYPE = 'rf'
+
 MA_PRIMARY_MODEL = {
+    # MA 参数（PRIMARY_MODEL_TYPE='ma' 时使用）
     'ma_type': 'ewma',
     'span': 20,
+    # CUSUM Direction 参数
+    'cusum_z_min': 0.0,  # Z-score 强度过滤阈值（0=不过滤）
 }
 
-PRIMARY_MODEL_TYPE = 'ma'
+# Phase 4: RF Primary Model 参数
+RF_PRIMARY_CONFIG = {
+    'n_estimators': 1000,
+    'max_features': 'sqrt',           # 'sqrt' 或 'log2'：释放特征联合效应
+    'n_jobs': -1,
+    'random_state': 42,
+    'cv_n_splits': 5,
+    'cv_embargo_pct': 0.01,
+    'holdout_months': 12,
+    'feature_prefixes': [
+        'feat_rsi_',
+        'feat_roc_',
+        'feat_stoch_',
+        'feat_adx_',
+        'feat_vwap_',
+        'feat_cross_ma_',
+        'feat_shannon_',
+        'feat_lz_entropy_',
+        'feat_hl_vol_',
+    ],
+    'min_t_value': 3.0,
+    'max_samples_method': 'avgU',
+    'sampling_method': 'sequential_bootstrap',          # 'avgU'（原生Bagging）或 'sequential_bootstrap'
+    't1_col': 'exit_ts',
+    # 置信度深渊：概率在此区间内强制 side=0（不作为）
+    # 当前模型区分力有限（std=0.08），深渊保持狭窄
+    'prob_abyss': (0.47, 0.53),
+}
 
 # ============================================================
 # Phase 4: TBM (Triple Barrier Method) 参数
@@ -178,11 +214,29 @@ TBM_CONFIG = {
 # ============================================================
 
 META_MODEL_CONFIG = {
-    'precision_threshold': 0.50,
+    'precision_threshold': 0.51,
     'n_estimators': 1000,
     'cv_n_splits': 5,
     'cv_embargo_pct': 0.05,
     'holdout_months': 12,  # 保留最后 N 个月不参与训练，用于真正的 OOS 验证
+}
+
+# ============================================================
+# Filter-First 优化参数
+# ============================================================
+
+FILTER_FIRST_CONFIG = {
+    'threshold_grid': [0.50, 0.51, 0.52, 0.53, 0.54, 0.55, 0.56],
+    'shrinkage_min': 0.15,
+    'shrinkage_max': 0.30,
+    'execution_guard': {
+        'enabled': True,
+        'min_hold_bars': 2,
+        'cooldown_bars': 1,
+        'reverse_confirmation_delta': 0.02,
+    },
+    'short_penalty_delta': 0.04,
+    'side_mode': 'both_with_short_penalty',
 }
 
 # ============================================================

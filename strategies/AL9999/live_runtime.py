@@ -212,6 +212,10 @@ class Al9999LiveRuntime:
         contract_resolver: ContractResolver | None = None,
         research_symbol: str = "AL9999",
         feature_nan_ratio_limit: float = 0.5,
+        selected_threshold: float | None = None,
+        side_mode: str = "both",
+        guard_flags: dict[str, Any] | None = None,
+        scheme_used: str = "default",
     ) -> None:
         self.target_daily_bars = int(target_daily_bars or research_config.TARGET_DAILY_BARS)
         self.ewma_span = int(ewma_span or research_config.EWMA_SPAN)
@@ -226,6 +230,10 @@ class Al9999LiveRuntime:
         self.contract_resolver = contract_resolver or ContractResolver()
         self.research_symbol = research_symbol
         self.feature_nan_ratio_limit = float(feature_nan_ratio_limit)
+        self.selected_threshold = float(selected_threshold) if selected_threshold is not None else np.nan
+        self.side_mode = str(side_mode)
+        self.guard_flags = dict(guard_flags or {})
+        self.scheme_used = str(scheme_used)
 
         self.minute_bars = pd.DataFrame()
         self.dollar_bars = pd.DataFrame()
@@ -525,6 +533,10 @@ class Al9999LiveRuntime:
             "nan_ratio": nan_ratio,
             "model_reason": model_prediction.reason,
             "symbol_reason": symbol_reason,
+            "selected_threshold": self.selected_threshold,
+            "side_mode": self.side_mode,
+            "guard_flags": dict(self.guard_flags),
+            "scheme_used": self.scheme_used,
         }
 
         snapshot = SignalSnapshot(
@@ -600,4 +612,8 @@ class Al9999LiveRuntime:
             contract_resolver=resolver,
             research_symbol=config.research_symbol,
             feature_nan_ratio_limit=config.feature_nan_ratio_limit,
+            selected_threshold=config.meta_probability_threshold,
+            side_mode="both",
+            guard_flags={},
+            scheme_used="default",
         )

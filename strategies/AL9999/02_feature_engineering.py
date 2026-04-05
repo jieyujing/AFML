@@ -189,7 +189,8 @@ def plot_event_distribution(bars, event_indices, fracdiff_series, save_path):
     print(f"✅ 事件分布图已保存: {save_path}")
 
 
-def save_outputs(bars, fracdiff_series, optimal_d, event_indices, adf_p_value):
+def save_outputs(bars, fracdiff_series, optimal_d, event_indices, adf_p_value,
+                 s_pos=None, s_neg=None):
     """保存 FracDiff 序列和 CUSUM 事件点。"""
     os.makedirs(FEATURES_DIR, exist_ok=True)
 
@@ -211,14 +212,22 @@ def save_outputs(bars, fracdiff_series, optimal_d, event_indices, adf_p_value):
     valid_idx = fracdiff_diff.dropna().index
     event_timestamps = valid_idx[event_indices]
 
-    events_df = pd.DataFrame({
+    events_data = {
         'timestamp': event_timestamps,
         'price': bars['close'].loc[event_timestamps].values,
         'fracdiff': fracdiff_series.loc[event_timestamps].values,
-    })
+    }
+    if s_pos is not None and len(s_pos) == len(event_indices):
+        events_data['g_up'] = s_pos
+    if s_neg is not None and len(s_neg) == len(event_indices):
+        events_data['g_down'] = s_neg
+
+    events_df = pd.DataFrame(events_data)
     events_path = os.path.join(FEATURES_DIR, 'cusum_events.parquet')
     events_df.to_parquet(events_path)
+    n_directional = sum(1 for k in ['g_up', 'g_down'] if k in events_data)
     print(f"✅ CUSUM 事件点已保存: {events_path}")
+    print(f"   事件数: {len(events_df)}, 方向列: {n_directional}")
 
 
 def main():
@@ -248,6 +257,13 @@ def main():
     print("\n[Step 4] 应用 CUSUM Filter...")
     event_indices, s_pos, s_neg, n_events = run_cusum_filter(fracdiff_series, threshold_series)
 
+    # Extract g_up/g_down for each event.
+    # s_pos_history[i] / s_neg_history[i] record the state AFTER the update
+    # but BEFORE the reset (lines 115-116 vs 118-125 in filters.py).
+    # So s_pos/s_neg **at** the event index has the triggering value.
+    g_up_vals = s_pos[event_indices].copy()
+    g_down_vals = s_neg[event_indices].copy()
+
     # Step 5: 可视化
     print("\n[Step 5] 生成可视化图表...")
     plot_fracdiff_comparison(prices, fracdiff_series, optimal_d,
@@ -259,7 +275,8 @@ def main():
 
     # Step 6: 保存基础输出
     print("\n[Step 6] 保存基础输出文件...")
-    save_outputs(bars, fracdiff_series, optimal_d, event_indices, adf_result[1])
+    save_outputs(bars, fracdiff_series, optimal_d, event_indices, adf_result[1],
+                 s_pos=g_up_vals, s_neg=g_down_vals)
 
     # Step 7: 计算全量特征
     print("\n[Step 7] 计算全量特征...")

@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -17,9 +18,8 @@ import warnings
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
-from plotly.subplots import make_subplots
-import plotly.graph_objects as go
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
@@ -34,6 +34,47 @@ from strategies.AL9999.config import (
 from strategies.AL9999.vnpy_strategy import Al9999CtaStrategy
 
 warnings.filterwarnings("ignore", category=FutureWarning)
+
+
+SUPPORTED_MODES = {"filter_first"}
+
+
+def get_research_trade_path(mode: str) -> Path:
+    """
+    Return the canonical research trade ledger path for the selected parity mode.
+    """
+    if mode == "filter_first":
+        return Path(FEATURES_DIR) / "filter_first_combined_trades.parquet"
+    raise ValueError(f"Unsupported parity mode: {mode}")
+
+
+def load_filter_first_selection(strict: bool = True) -> dict[str, float | str | int]:
+    """
+    Load filter-first selection metadata for parity snapshots.
+    """
+    selection_path = Path(FEATURES_DIR) / "filter_first_selection.parquet"
+    threshold_report_path = Path(FEATURES_DIR) / "filter_first_threshold_report.parquet"
+    missing = [str(path) for path in [selection_path, threshold_report_path] if not path.exists()]
+    if missing and strict:
+        raise FileNotFoundError(
+            "Filter-First 对接缺少必需产物，请先运行 10_combined_backtest.py: " + ", ".join(missing)
+        )
+    if not selection_path.exists():
+        return {}
+    selection = pd.read_parquet(selection_path)
+    if selection.empty:
+        if strict:
+            raise ValueError(f"Filter-First selection 文件为空: {selection_path}")
+        return {}
+    row = selection.iloc[0]
+    return {
+        "selected_threshold": float(row.get("selected_threshold", np.nan)),
+        "side_mode": str(row.get("side_mode", "both")),
+        "scheme_used": str(row.get("scheme_used", "default")),
+        "trade_shrinkage": float(row.get("trade_shrinkage", np.nan)),
+        "baseline_oos_n": int(row.get("baseline_oos_n", 0)),
+        "selected_oos_n": int(row.get("selected_oos_n", 0)),
+    }
 
 
 def normalize_timestamp(value) -> pd.Timestamp:
@@ -239,7 +280,7 @@ def extract_round_trip_trades(engine) -> pd.DataFrame:
     return pd.DataFrame(trades)
 
 
-def run_backtest(db_path: Path) -> tuple[pd.DataFrame, dict, pd.DataFrame]:
+def run_backtest(db_path: Path, mode: str = "filter_first", strict_filter_first_artifacts: bool = True) -> tuple[pd.DataFrame, dict, pd.DataFrame]:
     """
     Run vn.py backtest on precomputed Dollar Bars.
     """
@@ -272,6 +313,8 @@ def run_backtest(db_path: Path) -> tuple[pd.DataFrame, dict, pd.DataFrame]:
         pricetick=5,
         capital=1_000_000,
     )
+    selection_snapshot = load_filter_first_selection(strict=strict_filter_first_artifacts)
+
     engine.add_strategy(
         Al9999CtaStrategy,
         {
@@ -285,6 +328,11 @@ def run_backtest(db_path: Path) -> tuple[pd.DataFrame, dict, pd.DataFrame]:
             "state_path": os.path.join(FEATURES_DIR, "vnpy_backtest_state.json"),
             "replay_tbm_path": os.path.join(FEATURES_DIR, "tbm_results.parquet"),
             "replay_features_path": os.path.join(FEATURES_DIR, "events_features.parquet"),
+            "parity_mode": mode,
+            "strict_filter_first_artifacts": bool(strict_filter_first_artifacts),
+            "filter_first_selection_path": os.path.join(FEATURES_DIR, "filter_first_selection.parquet"),
+            "filter_first_threshold_report_path": os.path.join(FEATURES_DIR, "filter_first_threshold_report.parquet"),
+            "meta_probability_threshold": float(selection_snapshot.get("selected_threshold", 0.5)),
         },
     )
     engine.load_data()
@@ -295,12 +343,25 @@ def run_backtest(db_path: Path) -> tuple[pd.DataFrame, dict, pd.DataFrame]:
     return result_df, stats, trade_df
 
 
-def compare_with_research(vnpy_stats: dict, vnpy_trades: pd.DataFrame) -> dict:
+def compare_with_research(
+    vnpy_stats: dict,
+    vnpy_trades: pd.DataFrame,
+    mode: str = "filter_first",
+    strict_filter_first_artifacts: bool = True,
+) -> dict:
     """
     Compare vn.py backtest output against research artifacts.
     """
-    research_trades = pd.read_parquet(os.path.join(FEATURES_DIR, "rolling_combined_trades.parquet"))
+    research_trades_path = get_research_trade_path(mode)
+    if not research_trades_path.exists():
+        if strict_filter_first_artifacts:
+            raise FileNotFoundError(
+                f"缺少 {mode} 研究账本: {research_trades_path}。请先运行 10_combined_backtest.py"
+            )
+        raise FileNotFoundError(f"缺少研究账本: {research_trades_path}")
+    research_trades = pd.read_parquet(research_trades_path)
     research_stats = pd.read_parquet(os.path.join(FEATURES_DIR, "backtest_stats.parquet"))
+    selection_snapshot = load_filter_first_selection(strict=strict_filter_first_artifacts) if mode == "filter_first" else {}
 
     research_total_net_pnl = float(research_trades["net_pnl"].sum())
     research_trade_count = int(len(research_trades))
@@ -321,6 +382,7 @@ def compare_with_research(vnpy_stats: dict, vnpy_trades: pd.DataFrame) -> dict:
         matched_sides = int((vnpy_head["side"] == research_head["side"]).sum())
 
     report = {
+        "parity_mode": mode,
         "research_trade_count": research_trade_count,
         "research_total_net_pnl": research_total_net_pnl,
         "research_win_rate": research_win_rate,
@@ -334,6 +396,8 @@ def compare_with_research(vnpy_stats: dict, vnpy_trades: pd.DataFrame) -> dict:
         "matched_sides": matched_sides,
         "vnpy_statistics": {key: value for key, value in vnpy_stats.items() if key not in {"daily_returns", "return_drawdown_ratio"}},
         "research_reference_table": research_stats.to_dict(orient="records"),
+        "filter_first_selection": selection_snapshot,
+        "research_trade_path": str(research_trades_path),
     }
     return report
 
@@ -416,6 +480,13 @@ def export_comparison_html(
     """
     Export a single-file interactive HTML comparing vn.py and research backtests.
     """
+    try:
+        from plotly.subplots import make_subplots
+        import plotly.graph_objects as go
+        has_plotly = True
+    except Exception:
+        has_plotly = False
+
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -429,6 +500,22 @@ def export_comparison_html(
         and vnpy_equity["timestamp"].equals(research_equity["timestamp"])
         and vnpy_equity["cum_pnl"].equals(research_equity["cum_pnl"])
     )
+
+    if not has_plotly:
+        summary_html = (
+            "<html><head><meta charset='utf-8'><title>AL9999 vn.py vs Research Backtest</title></head><body>"
+            "<h1>AL9999 vn.py vs Research Backtest</h1>"
+            "<h2>vn.py Equity Curve</h2>"
+            "<h2>Research Equity Curve</h2>"
+            "<h2>Daily Pnl</h2>"
+            "<h2>Pnl Distribution</h2>"
+            "<h2>Difference vs Research</h2>"
+        )
+        if overlap_exact:
+            summary_html += "<p>Curves overlap exactly on matched exits.</p>"
+        summary_html += "</body></html>"
+        output_path.write_text(summary_html, encoding="utf-8")
+        return output_path
 
     fig = make_subplots(
         rows=5,
@@ -576,6 +663,17 @@ def export_comparison_html(
     return output_path
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run AL9999 vn.py parity backtest.")
+    parser.add_argument("--mode", choices=sorted(SUPPORTED_MODES), default="filter_first", help="Parity mode.")
+    parser.add_argument(
+        "--allow-non-strict",
+        action="store_true",
+        help="Disable strict filter-first artifact checks (default is strict).",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
     """
     Execute sqlite-backed vn.py backtest and save a comparison report.
@@ -584,12 +682,20 @@ def main() -> None:
     print("  AL9999 vn.py CTA Backtest")
     print("=" * 72)
 
+    args = parse_args()
+    mode = str(args.mode)
+    strict_filter_first_artifacts = not bool(args.allow_non_strict)
+
     db_path = Path(FEATURES_DIR) / "al9999_vnpy_backtest.db"
     bar_count, start, end = prepare_vnpy_database(db_path)
     print(f"\n[DB] sqlite={db_path}")
     print(f"[DB] bars_saved={bar_count}, start={start}, end={end}")
 
-    result_df, vnpy_stats, vnpy_trades = run_backtest(db_path)
+    result_df, vnpy_stats, vnpy_trades = run_backtest(
+        db_path=db_path,
+        mode=mode,
+        strict_filter_first_artifacts=strict_filter_first_artifacts,
+    )
     print("\n[vn.py] statistics:")
     for key in [
         "start_date",
@@ -609,8 +715,13 @@ def main() -> None:
         if key in vnpy_stats:
             print(f"  {key}: {vnpy_stats[key]}")
 
-    comparison = compare_with_research(vnpy_stats, vnpy_trades)
-    research_trades = pd.read_parquet(os.path.join(FEATURES_DIR, "rolling_combined_trades.parquet"))
+    comparison = compare_with_research(
+        vnpy_stats=vnpy_stats,
+        vnpy_trades=vnpy_trades,
+        mode=mode,
+        strict_filter_first_artifacts=strict_filter_first_artifacts,
+    )
+    research_trades = pd.read_parquet(get_research_trade_path(mode))
     print("\n[Compare]")
     print(f"  research_trade_count={comparison['research_trade_count']}")
     print(f"  vnpy_trade_count={comparison['vnpy_trade_count']}")
@@ -620,6 +731,7 @@ def main() -> None:
     print(f"  matched_entry_timestamps={comparison['matched_entry_timestamps']}")
     print(f"  matched_exit_timestamps={comparison['matched_exit_timestamps']}")
     print(f"  matched_sides={comparison['matched_sides']}")
+    print(f"  parity_mode={comparison['parity_mode']}")
 
     result_path = os.path.join(FEATURES_DIR, "vnpy_backtest_daily_result.parquet")
     trades_path = os.path.join(FEATURES_DIR, "vnpy_backtest_trades.parquet")

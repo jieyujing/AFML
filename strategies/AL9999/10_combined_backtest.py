@@ -14,9 +14,10 @@ AFML 规范：
 
 import os
 import sys
+import json
+from typing import Optional
 import numpy as np
 import pandas as pd
-import joblib
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -26,7 +27,18 @@ from scipy.stats import norm
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from strategies.AL9999.config import FEATURES_DIR, FIGURES_DIR, BARS_DIR, CONTRACT_MULTIPLIER
+from strategies.AL9999.config import (
+    FEATURES_DIR,
+    FIGURES_DIR,
+    BARS_DIR,
+    META_MODEL_CONFIG,
+    FILTER_FIRST_CONFIG,
+    COMMISSION_RATE,
+    SLIPPAGE_POINTS,
+    TARGET_DAILY_BARS,
+)
+from strategies.AL9999.threshold_optimizer import build_threshold_report, select_best_threshold
+from strategies.AL9999.backtest_utils import rolling_backtest
 from afmlkit.utils.log import get_logger
 
 logger = get_logger("Backtest")
@@ -36,12 +48,8 @@ sns.set_theme(style="whitegrid", context="paper")
 # 配置与常量
 # ============================================================
 
-# 交易成本设值
-COMMISSION_RATE = 0.000023  # 手续费率 (双边约 0.23 bp)
-SLIPPAGE_POINTS = 0.5       # 单边滑点 (双边 1.0 点)
 ANNUALIZATION_FACTOR = 1500 # 每年约 1500 个 Dollar Bars
 N_TRIALS = 214              # 08_dsr_validation.py 估算的参数试验总次数
-OOS_START_DATE = '2024-01-01' # 样本内/外分割日期
 
 # ============================================================
 # 指标计算函数
@@ -105,6 +113,218 @@ def calculate_performance(pnl_points: pd.Series, rets: pd.Series) -> dict:
         'n_trades': len(pnl_points)
     }
 
+
+def _resolve_meta_signal_paths(models_dir: str) -> tuple[str, str, str]:
+    """
+    Resolve preferred meta signal files based on selected_features.json.
+    """
+    default_oof = os.path.join(models_dir, 'meta_oof_signals.parquet')
+    default_holdout = os.path.join(models_dir, 'meta_holdout_signals.parquet')
+    selected_path = os.path.join(FEATURES_DIR, 'selected_features.json')
+
+    if not os.path.exists(selected_path):
+        return default_oof, default_holdout, "default"
+
+    try:
+        with open(selected_path, 'r', encoding='utf-8') as f:
+            selected = json.load(f)
+        scheme = selected.get("best_scheme", "")
+    except (OSError, json.JSONDecodeError):
+        return default_oof, default_holdout, "default"
+
+    if not scheme or scheme == "full":
+        return default_oof, default_holdout, "full"
+
+    preferred_oof = os.path.join(models_dir, f"meta_oof_signals_{scheme}.parquet")
+    preferred_holdout = os.path.join(models_dir, f"meta_holdout_signals_{scheme}.parquet")
+    if os.path.exists(preferred_oof) and os.path.exists(preferred_holdout):
+        return preferred_oof, preferred_holdout, scheme
+
+    return default_oof, default_holdout, "default"
+
+
+def load_honest_meta_signals(models_dir: str, precision_threshold: float) -> tuple[pd.DataFrame, pd.Timestamp, str]:
+    """
+    加载“无前视”元模型信号：
+    - 训练期使用 OOF 预测
+    - Holdout 期使用真正 OOS 预测
+
+    :returns: (signals_df, holdout_start)
+    """
+    oof_path, holdout_path, scheme = _resolve_meta_signal_paths(models_dir)
+
+    if not os.path.exists(oof_path):
+        raise FileNotFoundError(f"缺少 OOF 文件: {oof_path}。请先运行 07_meta_model.py。")
+    if not os.path.exists(holdout_path):
+        raise FileNotFoundError(f"缺少 Holdout 文件: {holdout_path}。请先运行 07_meta_model.py。")
+
+    oof_df = pd.read_parquet(oof_path)
+    holdout_df = pd.read_parquet(holdout_path)
+
+    oof_df = oof_df.copy()
+    holdout_df = holdout_df.copy()
+    oof_df['meta_pred'] = (oof_df['y_prob'] >= precision_threshold).astype(int)
+    if 'meta_pred' not in holdout_df.columns:
+        holdout_df['meta_pred'] = (holdout_df['y_prob'] >= precision_threshold).astype(int)
+
+    signals_df = pd.concat(
+        [
+            oof_df[['meta_pred', 'y_prob']].rename(columns={'y_prob': 'meta_prob'}),
+            holdout_df[['meta_pred', 'y_prob']].rename(columns={'y_prob': 'meta_prob'}),
+        ],
+        axis=0,
+    )
+    signals_df = signals_df[~signals_df.index.duplicated(keep='last')].sort_index()
+
+    holdout_start = holdout_df.index.min()
+    return signals_df, holdout_start, scheme
+
+
+def _apply_threshold_to_signals(
+    signals: pd.DataFrame,
+    threshold: float,
+    side_mode: str,
+    short_penalty_delta: float,
+) -> pd.DataFrame:
+    """
+    Apply threshold and side governance to signal table.
+    """
+    out = signals.copy()
+    if side_mode == "both_with_short_penalty":
+        short_threshold = threshold + short_penalty_delta
+        out["meta_pred"] = np.where(
+            out["side"] == -1,
+            (out["meta_prob"] >= short_threshold).astype(int),
+            (out["meta_prob"] >= threshold).astype(int),
+        )
+    else:
+        out["meta_pred"] = (out["meta_prob"] >= threshold).astype(int)
+    return out
+
+
+def _perf_from_trades(trades_df: pd.DataFrame) -> dict:
+    """
+    Convert trades dataframe to existing performance schema.
+    """
+    if trades_df is None or len(trades_df) == 0:
+        return {k: 0 for k in ['total_pnl', 'annual_pnl', 'sharpe', 'mdd', 'calmar', 'win_rate', 'profit_factor', 'psr', 'dsr', 'n_trades']}
+
+    use_cols = trades_df.copy()
+    use_cols["exit_time"] = pd.to_datetime(use_cols["exit_time"])
+    use_cols = use_cols.sort_values("exit_time").set_index("exit_time")
+    return calculate_performance(use_cols["net_pnl"], use_cols["net_ret"])
+
+
+def _resolve_bars_path() -> str:
+    """
+    Resolve dollar bars file path with fallback for test fixtures or custom runs.
+    """
+    preferred = os.path.join(BARS_DIR, f'dollar_bars_target{TARGET_DAILY_BARS}.parquet')
+    if os.path.exists(preferred):
+        return preferred
+
+    candidates = sorted(
+        [
+            os.path.join(BARS_DIR, name)
+            for name in os.listdir(BARS_DIR)
+            if name.startswith("dollar_bars_target") and name.endswith(".parquet")
+        ]
+    ) if os.path.isdir(BARS_DIR) else []
+
+    if not candidates:
+        raise FileNotFoundError(
+            f"无法找到 bars 文件: {preferred}，且 {BARS_DIR} 下不存在任何 dollar_bars_target*.parquet"
+        )
+
+    fallback = candidates[-1]
+    logger.warning("bars 文件缺失，回退使用: %s", fallback)
+    return fallback
+
+
+def _build_filter_first_threshold_report(
+    signals: pd.DataFrame,
+    bars: pd.DataFrame,
+    oos_start: pd.Timestamp,
+    threshold_grid: list[float],
+    side_mode: str,
+    short_penalty_delta: float,
+    guard_cfg: dict,
+    baseline_threshold: float,
+    shrinkage_min: float,
+    shrinkage_max: float,
+) -> tuple[pd.DataFrame, Optional[dict], int]:
+    """
+    Build threshold report using guard-aware single-position rolling backtest.
+    """
+    guard_enabled = bool(guard_cfg.get("enabled", False))
+    min_hold_bars = int(guard_cfg.get("min_hold_bars", 0))
+    cooldown_bars = int(guard_cfg.get("cooldown_bars", 0))
+    reverse_confirmation_delta = float(guard_cfg.get("reverse_confirmation_delta", 0.0))
+
+    # Use a neutral baseline (no short penalty, no execution guard) so shrinkage is
+    # measured versus the original combined strategy, not versus a self-penalized baseline.
+    base_signals = signals.copy()
+    base_signals["meta_pred"] = (base_signals["meta_prob"] >= baseline_threshold).astype(int)
+    base_trades = rolling_backtest(
+        base_signals,
+        bars,
+        use_meta_filter=True,
+        side_mode="both",
+        guard_enabled=False,
+        min_hold_bars=0,
+        cooldown_bars=0,
+        reverse_confirmation_delta=0.0,
+        entry_threshold=baseline_threshold,
+    )
+    baseline_oos_n = int((pd.to_datetime(base_trades["exit_time"]) >= oos_start).sum()) if len(base_trades) > 0 else 0
+
+    rows = []
+    for th in threshold_grid:
+        threshold_signals = _apply_threshold_to_signals(
+            signals=signals,
+            threshold=float(th),
+            side_mode=side_mode,
+            short_penalty_delta=short_penalty_delta,
+        )
+        test_side_mode = "both" if side_mode == "both_with_short_penalty" else side_mode
+        trades = rolling_backtest(
+            threshold_signals,
+            bars,
+            use_meta_filter=True,
+            side_mode=test_side_mode,
+            guard_enabled=guard_enabled,
+            min_hold_bars=min_hold_bars,
+            cooldown_bars=cooldown_bars,
+            reverse_confirmation_delta=reverse_confirmation_delta,
+            entry_threshold=float(th),
+        )
+        if len(trades) > 0:
+            trades["exit_time"] = pd.to_datetime(trades["exit_time"])
+            trades = trades.sort_values("exit_time")
+            trades["net_pnl"] = (
+                trades["pnl"] - (trades["entry_price"] + trades["exit_price"]) * COMMISSION_RATE - SLIPPAGE_POINTS * 2
+            )
+            trades["net_ret"] = trades["net_pnl"] / trades["entry_price"]
+            oos_trades = trades[trades["exit_time"] >= oos_start].copy()
+        else:
+            oos_trades = pd.DataFrame()
+
+        full_perf = _perf_from_trades(trades) if len(trades) > 0 else _perf_from_trades(pd.DataFrame())
+        oos_perf = _perf_from_trades(oos_trades)
+        rows.append(
+            {
+                "threshold": float(th),
+                "full_n": int(full_perf.get("n_trades", 0)),
+                "oos_n": int(oos_perf.get("n_trades", 0)),
+                "oos_sharpe": float(oos_perf.get("sharpe", 0.0)),
+                "oos_dsr": float(oos_perf.get("dsr", 0.0)),
+            }
+        )
+
+    report = build_threshold_report(rows=rows, baseline_trade_count=max(1, baseline_oos_n))
+    best = select_best_threshold(report, shrinkage_min=shrinkage_min, shrinkage_max=shrinkage_max)
+    return report, best, baseline_oos_n
+
 # ============================================================
 # 主回测流程
 # ============================================================
@@ -117,55 +337,111 @@ def main():
     # 1. 加载数据
     logger.info("[Step 1] 加载信号与模型...")
     tbm = pd.read_parquet(os.path.join(FEATURES_DIR, 'tbm_results.parquet'))
-    meta_features = pd.read_parquet(os.path.join(FEATURES_DIR, 'events_features.parquet'))
-    meta_model = joblib.load(os.path.join(FEATURES_DIR.replace('features', 'models'), 'meta_model.pkl'))
-    
-    # 2. 对齐与特征工程
-    common_idx = tbm.index.intersection(meta_features.index)
-    tbm = tbm.loc[common_idx]
-    X = meta_features.loc[common_idx]
-    feature_cols = [c for c in X.columns if c.startswith('feat_')]
-    X = X[feature_cols].fillna(0)
-    
-    # 3. Meta Model 过滤
-    meta_pred = meta_model.predict(X)
-    tbm['meta_pred'] = meta_pred
-    
-    # 4. 计算成本后的真实 PnL
-    logger.info("[Step 2] 模拟交易成本与滑点...")
-    
-    def apply_costs(row):
-        # 手续费：双边 (开仓 + 平仓)
-        # 简化计算：0.23 bp * entry + 0.23 bp * exit
-        comm = (row['entry_price'] + row['exit_price']) * COMMISSION_RATE
-        # 滑点：单边 0.5 点，双边 1.0 点
-        slip = SLIPPAGE_POINTS * 2
-        # 净收益 (点数)
-        net_pnl = row['pnl'] - comm - slip
-        # 净收益率
-        net_ret = net_pnl / row['entry_price']
-        return pd.Series({'net_pnl': net_pnl, 'net_ret': net_ret})
+    models_dir = FEATURES_DIR.replace('features', 'models')
+    threshold = META_MODEL_CONFIG.get('precision_threshold', 0.5)
+    meta_signals, oos_start, scheme_used = load_honest_meta_signals(
+        models_dir=models_dir,
+        precision_threshold=threshold,
+    )
 
-    # Primary (无过滤)
-    primary_costs = tbm.apply(apply_costs, axis=1)
-    tbm['primary_net_pnl'] = primary_costs['net_pnl']
-    tbm['primary_net_ret'] = primary_costs['net_ret']
+    # 2. 对齐（只保留有“可交易时可得”的预测样本）
+    common_idx = tbm.index.intersection(meta_signals.index)
+    tbm = tbm.loc[common_idx].copy()
+    tbm[['meta_pred', 'meta_prob']] = meta_signals.loc[common_idx, ['meta_pred', 'meta_prob']]
+    logger.info(f"  可用无前视样本: {len(tbm)}")
+    logger.info(f"  OOS 起点(来自 holdout): {oos_start}")
+    logger.info(f"  Meta 信号方案: {scheme_used}")
+
+    # 2.1 Filter-First 阈值扫描（guard-aware rolling backtest）
+    filter_cfg = FILTER_FIRST_CONFIG
+    threshold_grid = filter_cfg.get("threshold_grid", [threshold])
+    side_mode = filter_cfg.get("side_mode", "both")
+    short_penalty_delta = float(filter_cfg.get("short_penalty_delta", 0.0))
+    guard_cfg = filter_cfg.get("execution_guard", {})
+    threshold_report, best_threshold, baseline_oos_n = _build_filter_first_threshold_report(
+        signals=tbm,
+        bars=pd.read_parquet(_resolve_bars_path()),
+        oos_start=oos_start,
+        threshold_grid=threshold_grid,
+        side_mode=side_mode,
+        short_penalty_delta=short_penalty_delta,
+        guard_cfg=guard_cfg,
+        baseline_threshold=threshold,
+        shrinkage_min=filter_cfg.get("shrinkage_min", 0.0),
+        shrinkage_max=filter_cfg.get("shrinkage_max", 1.0),
+    )
+    if best_threshold is not None:
+        threshold = float(best_threshold["threshold"])
+        logger.info(
+            "  Filter-First 选中阈值: %.2f (oos_dsr=%.4f, oos_sharpe=%.4f, shrinkage=%.4f)",
+            threshold,
+            best_threshold.get("oos_dsr", 0.0),
+            best_threshold.get("oos_sharpe", 0.0),
+            best_threshold.get("trade_shrinkage", 0.0),
+        )
+    else:
+        logger.warning("  Filter-First 未找到满足收缩约束的阈值，回退默认阈值: %.2f", threshold)
+
+    threshold_report.to_parquet(os.path.join(FEATURES_DIR, "filter_first_threshold_report.parquet"), index=False)
+    logger.info(f"✅ 阈值扫描报告已保存至: {FEATURES_DIR}/filter_first_threshold_report.parquet")
     
-    # Combined (Meta 过滤)
-    combined_tbm = tbm[tbm['meta_pred'] == 1].copy()
+    # 3. 使用 guard-aware 单仓位回测主口径
+    logger.info("[Step 2] 运行 guard-aware 单仓位回测...")
+    bars = pd.read_parquet(_resolve_bars_path())
+
+    primary_trades = rolling_backtest(
+        tbm,
+        bars,
+        use_meta_filter=False,
+        side_mode="both",
+    )
+    if len(primary_trades) > 0:
+        primary_trades["net_pnl"] = (
+            primary_trades["pnl"] - (primary_trades["entry_price"] + primary_trades["exit_price"]) * COMMISSION_RATE - SLIPPAGE_POINTS * 2
+        )
+        primary_trades["net_ret"] = primary_trades["net_pnl"] / primary_trades["entry_price"]
+
+    selected_signals = _apply_threshold_to_signals(
+        signals=tbm,
+        threshold=threshold,
+        side_mode=side_mode,
+        short_penalty_delta=short_penalty_delta,
+    )
+    combined_side_mode = "both" if side_mode == "both_with_short_penalty" else side_mode
+    combined_trades = rolling_backtest(
+        selected_signals,
+        bars,
+        use_meta_filter=True,
+        side_mode=combined_side_mode,
+        guard_enabled=bool(guard_cfg.get("enabled", False)),
+        min_hold_bars=int(guard_cfg.get("min_hold_bars", 0)),
+        cooldown_bars=int(guard_cfg.get("cooldown_bars", 0)),
+        reverse_confirmation_delta=float(guard_cfg.get("reverse_confirmation_delta", 0.0)),
+        entry_threshold=threshold,
+    )
+    if len(combined_trades) > 0:
+        combined_trades["net_pnl"] = (
+            combined_trades["pnl"] - (combined_trades["entry_price"] + combined_trades["exit_price"]) * COMMISSION_RATE - SLIPPAGE_POINTS * 2
+        )
+        combined_trades["net_ret"] = combined_trades["net_pnl"] / combined_trades["entry_price"]
+
+    primary_trades.to_parquet(os.path.join(FEATURES_DIR, "filter_first_primary_trades.parquet"), index=False)
+    combined_trades.to_parquet(os.path.join(FEATURES_DIR, "filter_first_combined_trades.parquet"), index=False)
+    logger.info(f"✅ Filter-First 交易明细已保存至: {FEATURES_DIR}/filter_first_primary_trades.parquet")
+    logger.info(f"✅ Filter-First 交易明细已保存至: {FEATURES_DIR}/filter_first_combined_trades.parquet")
     
-    # 5. 绩效统计 (IS / OOS 分开)
+    # 4. 绩效统计 (IS / OOS 分开)
     logger.info("[Step 3] 计算绩效指标 (全样本 & IS/OOS 分解)...")
     
     # 全样本
-    primary_perf = calculate_performance(tbm['primary_net_pnl'], tbm['primary_net_ret'])
-    combined_perf = calculate_performance(combined_tbm['primary_net_pnl'], combined_tbm['primary_net_ret'])
+    primary_perf = _perf_from_trades(primary_trades)
+    combined_perf = _perf_from_trades(combined_trades)
     
     # IS / OOS 分解 (仅对 Combined)
-    is_mask = (combined_tbm.index < OOS_START_DATE)
-    oos_mask = (combined_tbm.index >= OOS_START_DATE)
-    combined_is_perf = calculate_performance(combined_tbm.loc[is_mask, 'primary_net_pnl'], combined_tbm.loc[is_mask, 'primary_net_ret'])
-    combined_oos_perf = calculate_performance(combined_tbm.loc[oos_mask, 'primary_net_pnl'], combined_tbm.loc[oos_mask, 'primary_net_ret'])
+    combined_is_trades = combined_trades[pd.to_datetime(combined_trades["exit_time"]) < oos_start].copy() if len(combined_trades) > 0 else pd.DataFrame()
+    combined_oos_trades = combined_trades[pd.to_datetime(combined_trades["exit_time"]) >= oos_start].copy() if len(combined_trades) > 0 else pd.DataFrame()
+    combined_is_perf = _perf_from_trades(combined_is_trades)
+    combined_oos_perf = _perf_from_trades(combined_oos_trades)
     
     # 输出报表
     report = pd.DataFrame({
@@ -189,26 +465,53 @@ def main():
     })
     
     logger.info("\n" + report.to_string(index=False))
+    logger.info(f"  Side Mode: {side_mode}")
+
+    selected_oos_n = int((pd.to_datetime(combined_trades["exit_time"]) >= oos_start).sum()) if len(combined_trades) > 0 else 0
+    selected_trade_shrinkage = float(best_threshold.get("trade_shrinkage", 0.0)) if best_threshold is not None else 0.0
+    selection_df = pd.DataFrame(
+        [
+            {
+                "selected_threshold": float(threshold),
+                "side_mode": side_mode,
+                "baseline_oos_n": int(baseline_oos_n),
+                "selected_oos_n": selected_oos_n,
+                "trade_shrinkage": selected_trade_shrinkage,
+                "shrinkage_min": float(filter_cfg.get("shrinkage_min", 0.0)),
+                "shrinkage_max": float(filter_cfg.get("shrinkage_max", 1.0)),
+                "scheme_used": scheme_used,
+            }
+        ]
+    )
+    selection_df.to_parquet(os.path.join(FEATURES_DIR, "filter_first_selection.parquet"), index=False)
+    logger.info(f"✅ Filter-First 选择元数据已保存至: {FEATURES_DIR}/filter_first_selection.parquet")
     
-    # 6. 可视化
+    # 5. 可视化
     logger.info("[Step 4] 生成高对比图表...")
     
     # 加载原始价格数据进行对比
-    bars = pd.read_parquet(os.path.join(BARS_DIR, 'dollar_bars_target4.parquet'))
     price_bh = bars['close'] - bars['close'].iloc[0] # 计算买入持有收益 (点数)
     
     # 累积收益曲线 (高对比配色)
     plt.figure(figsize=(14, 8))
     
     # 背景阴影区分 IS / OOS
-    plt.axvspan(bars.index.min(), pd.to_datetime(OOS_START_DATE), color='gray', alpha=0.05, label='In-Sample (Training)')
-    plt.axvspan(pd.to_datetime(OOS_START_DATE), bars.index.max(), color='green', alpha=0.05, label='Out-of-Sample (Live/Test)')
-    plt.axvline(pd.to_datetime(OOS_START_DATE), color='darkred', linestyle='--', alpha=0.5, lw=1.5)
+    plt.axvspan(bars.index.min(), pd.to_datetime(oos_start), color='gray', alpha=0.05, label='In-Sample (Training)')
+    plt.axvspan(pd.to_datetime(oos_start), bars.index.max(), color='green', alpha=0.05, label='Out-of-Sample (Live/Test)')
+    plt.axvline(pd.to_datetime(oos_start), color='darkred', linestyle='--', alpha=0.5, lw=1.5)
     
     # PnL 多曲线对比
     plt.plot(price_bh.index, price_bh.values, label='Benchmark: Buy & Hold (AL9999)', color='#555555', alpha=0.3, linestyle=(0, (3, 5, 1, 5)))
-    plt.plot(tbm.index, tbm['primary_net_pnl'].cumsum(), label='Primary Model (Net PnL)', alpha=0.7, color='#9b59b6', lw=1.5)
-    plt.plot(combined_tbm.index, combined_tbm['primary_net_pnl'].cumsum(), label='Combined Strategy (Net PnL)', color='#e67e22', lw=2.5)
+    if len(primary_trades) > 0:
+        p = primary_trades.copy()
+        p["exit_time"] = pd.to_datetime(p["exit_time"])
+        p = p.sort_values("exit_time")
+        plt.plot(p["exit_time"], p['net_pnl'].cumsum(), label='Primary Model (Net PnL)', alpha=0.7, color='#9b59b6', lw=1.5)
+    if len(combined_trades) > 0:
+        c = combined_trades.copy()
+        c["exit_time"] = pd.to_datetime(c["exit_time"])
+        c = c.sort_values("exit_time")
+        plt.plot(c["exit_time"], c['net_pnl'].cumsum(), label='Combined Strategy (Net PnL)', color='#e67e22', lw=2.5)
     
     plt.title("AL9999 Strategy Cumulative PnL: In-Sample vs Out-of-Sample Comparison", fontsize=15, fontweight='bold')
     plt.ylabel("Net PnL Marks (Points)", fontsize=12)
@@ -217,7 +520,7 @@ def main():
     plt.grid(True, alpha=0.2, linestyle=':')
     
     # 标记 OOS 夏普
-    plt.text(pd.to_datetime(OOS_START_DATE) + pd.Timedelta(days=30), combined_perf['total_pnl']*0.1, 
+    plt.text(pd.to_datetime(oos_start) + pd.Timedelta(days=30), combined_perf['total_pnl']*0.1,
              f"OOS Sharpe: {combined_oos_perf['sharpe']:.2f}\nDSR: {combined_oos_perf['dsr']:.4f}", 
              bbox=dict(facecolor='white', alpha=0.8, edgecolor='green'), fontweight='bold', color='green')
 
@@ -227,9 +530,17 @@ def main():
     
     # 回撤曲线
     plt.figure(figsize=(12, 4))
-    cum_pnl = combined_tbm['primary_net_pnl'].cumsum()
-    drawdown = cum_pnl - cum_pnl.cummax()
-    plt.fill_between(drawdown.index, drawdown.values, 0, color='#e74c3c', alpha=0.3)
+    if len(combined_trades) > 0:
+        draw_input = combined_trades.copy()
+        draw_input["exit_time"] = pd.to_datetime(draw_input["exit_time"])
+        draw_input = draw_input.sort_values("exit_time")
+        cum_pnl = draw_input['net_pnl'].cumsum()
+        drawdown = cum_pnl - cum_pnl.cummax()
+        x_vals = draw_input["exit_time"]
+    else:
+        drawdown = pd.Series([0.0])
+        x_vals = pd.RangeIndex(1)
+    plt.fill_between(x_vals, drawdown.values, 0, color='#e74c3c', alpha=0.3)
     plt.title("Combined Strategy Drawdown (Points)", fontsize=14)
     plt.ylabel("Drawdown")
     plt.grid(True, alpha=0.3)
@@ -237,12 +548,18 @@ def main():
     plt.close()
     
     # 月度收益热力图
-    combined_tbm['month'] = combined_tbm.index.to_period('M')
-    monthly_ret = combined_tbm.groupby('month')['primary_net_pnl'].sum()
+    if len(combined_trades) > 0:
+        month_input = combined_trades.copy()
+        month_input["exit_time"] = pd.to_datetime(month_input["exit_time"])
+        month_input = month_input.sort_values("exit_time").set_index("exit_time")
+        month_input['month'] = month_input.index.to_period('M')
+        monthly_ret = month_input.groupby('month')['net_pnl'].sum()
+    else:
+        monthly_ret = pd.Series(dtype=float)
     monthly_pivot = monthly_ret.to_frame()
     monthly_pivot['year'] = monthly_pivot.index.year
     monthly_pivot['month_num'] = monthly_pivot.index.month
-    pivot_table = monthly_pivot.pivot_table(index='year', columns='month_num', values='primary_net_pnl').fillna(0)
+    pivot_table = monthly_pivot.pivot_table(index='year', columns='month_num', values='net_pnl').fillna(0)
     
     plt.figure(figsize=(12, 5))
     sns.heatmap(pivot_table, annot=True, fmt=".0f", cmap="RdYlGn", center=0, cbar_kws={'label': 'Net PnL (Points)'})
@@ -258,7 +575,7 @@ def main():
     logger.info(f"✅ 图表已保存至: {FIGURES_DIR}/ (10_cumulative_pnl.png, 10_drawdown.png, 10_monthly_heatmap.png)")
     
     # 判定
-    if combined_perf['dsr'] > 0.95:
+    if combined_oos_perf['dsr'] > 0.95:
         logger.info("🚀 判定结果：✅ 策略具备实盘潜力 (DSR > 95%)")
     else:
         logger.info("⚠️ 判定结果：❌ 策略存在过拟合风险 (DSR <= 95%)")

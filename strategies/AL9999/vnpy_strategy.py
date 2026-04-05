@@ -5,6 +5,7 @@ vn.py compatible AL9999 CTA strategy wrapper.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -12,6 +13,7 @@ import pandas as pd
 
 from strategies.AL9999.live_config import Al9999LiveConfig
 from strategies.AL9999.live_runtime import Al9999LiveRuntime, PositionState, SignalSnapshot
+from strategies.AL9999 import config as research_config
 
 
 try:  # pragma: no cover - exercised only when vn.py is installed
@@ -103,6 +105,12 @@ class Al9999CtaStrategy(CtaTemplate):
         "last_signal_time",
         "last_exit_reason",
         "live_symbol",
+        "selected_threshold",
+        "side_mode",
+        "guard_enabled",
+        "min_hold_bars",
+        "cooldown_bars",
+        "reverse_confirmation_delta",
     ]
 
     def __init__(self, cta_engine: Any, strategy_name: str, vt_symbol: str, setting: dict[str, Any]) -> None:
@@ -117,11 +125,23 @@ class Al9999CtaStrategy(CtaTemplate):
         self.replay_tbm_path = str(self.config.replay_tbm_path or "")
         self.replay_features_path = str(self.config.replay_features_path or "")
         self.use_replay_signals = bool(self.replay_tbm_path and self.replay_features_path)
+        self.parity_mode = str(self.config.parity_mode)
+        self.strict_filter_first_artifacts = bool(self.config.strict_filter_first_artifacts)
+
+        self.selected_threshold = float(self.config.meta_probability_threshold)
+        self.side_mode = "both"
+        self.scheme_used = "default"
+        self.trade_shrinkage = np.nan
+        self.guard_enabled = False
+        self.min_hold_bars = 0
+        self.cooldown_bars = 0
+        self.reverse_confirmation_delta = 0.0
 
         self.runtime = Al9999LiveRuntime.from_config(self.config)
         self.position_state: PositionState | None = None
         self.pending_entry_snapshot: SignalSnapshot | None = None
         self.pending_exit_reason: str = ""
+        self.last_exit_bar_idx: int | None = None
         self.action_log: list[dict[str, Any]] = []
         self.replay_signal_table = pd.DataFrame()
         self.runtime_state: dict[str, Any] = {
@@ -132,6 +152,8 @@ class Al9999CtaStrategy(CtaTemplate):
             "dollar_bar_count": 0,
         }
         if self.use_replay_signals:
+            self._load_filter_first_controls()
+            self._align_runtime_filter_first_diagnostics()
             self.replay_signal_table = self._load_replay_signal_table()
 
     def on_init(self) -> None:
@@ -355,17 +377,100 @@ class Al9999CtaStrategy(CtaTemplate):
         """
         Process research replay signals using the rolling_backtest single-position logic.
         """
+        if self.side_mode == "long_only" and int(snapshot.primary_side) < 0:
+            return
+        if self.side_mode == "short_only" and int(snapshot.primary_side) > 0:
+            return
+
         current_direction = self._current_direction()
+        current_bar_idx = int(snapshot.bar_index)
 
         if current_direction == 0:
+            if self.guard_enabled and self.cooldown_bars > 0 and self.last_exit_bar_idx is not None:
+                bars_since_exit = current_bar_idx - int(self.last_exit_bar_idx)
+                if bars_since_exit <= self.cooldown_bars:
+                    return
             self.enter_position(snapshot)
             return
 
         if current_direction == snapshot.primary_side:
             return
 
+        if self.guard_enabled and self.min_hold_bars > 0 and self.position_state is not None:
+            held_bars = current_bar_idx - int(self.position_state.entry_bar_idx)
+            if held_bars < self.min_hold_bars:
+                return
+        if self.guard_enabled and self.reverse_confirmation_delta > 0:
+            confirm_threshold = float(self.selected_threshold) + float(self.reverse_confirmation_delta)
+            if float(snapshot.meta_prob) < confirm_threshold:
+                return
+
+        self.last_exit_bar_idx = current_bar_idx
         self.exit_position(snapshot.bar_close, "reverse_signal")
         self.enter_position(snapshot)
+
+    def _load_filter_first_controls(self) -> None:
+        """
+        Load filter-first selection metadata and execution guard config.
+        """
+        guard_cfg = research_config.FILTER_FIRST_CONFIG.get("execution_guard", {})
+        self.guard_enabled = bool(guard_cfg.get("enabled", False))
+        self.min_hold_bars = int(guard_cfg.get("min_hold_bars", 0))
+        self.cooldown_bars = int(guard_cfg.get("cooldown_bars", 0))
+        self.reverse_confirmation_delta = float(guard_cfg.get("reverse_confirmation_delta", 0.0))
+
+        if self.parity_mode != "filter_first":
+            return
+
+        selection_path = self.config.resolve_filter_first_selection_path()
+        threshold_report_path = self.config.resolve_filter_first_threshold_report_path()
+        required_paths = [selection_path, threshold_report_path]
+        missing = [str(path) for path in required_paths if not path.exists()]
+        if missing and self.strict_filter_first_artifacts:
+            raise FileNotFoundError(
+                "Filter-First 对接缺少必需产物，请先运行 10_combined_backtest.py: " + ", ".join(missing)
+            )
+        if not selection_path.exists():
+            return
+
+        selection = pd.read_parquet(selection_path)
+        if selection.empty:
+            if self.strict_filter_first_artifacts:
+                raise ValueError(f"Filter-First selection 文件为空: {selection_path}")
+            return
+
+        row = selection.iloc[0]
+        self.selected_threshold = float(row.get("selected_threshold", self.selected_threshold))
+        self.side_mode = str(row.get("side_mode", self.side_mode))
+        self.scheme_used = str(row.get("scheme_used", self.scheme_used))
+        self.trade_shrinkage = float(row.get("trade_shrinkage", np.nan))
+
+        scheme = self.scheme_used
+        if scheme not in {"", "default", "full"}:
+            current_model = Path(self.model_path)
+            if current_model.name == "meta_model.pkl":
+                candidate = current_model.with_name(f"meta_model_{scheme}.pkl")
+                if candidate.exists():
+                    self.model_path = str(candidate)
+                    self.runtime.model.model_path = candidate
+                elif self.strict_filter_first_artifacts:
+                    raise FileNotFoundError(
+                        f"Filter-First scheme={scheme} 需要模型文件 {candidate}，当前不存在。"
+                    )
+
+    def _align_runtime_filter_first_diagnostics(self) -> None:
+        """
+        Keep runtime diagnostics aligned with selected filter-first controls.
+        """
+        self.runtime.selected_threshold = float(self.selected_threshold)
+        self.runtime.side_mode = str(self.side_mode)
+        self.runtime.scheme_used = str(self.scheme_used)
+        self.runtime.guard_flags = {
+            "enabled": bool(self.guard_enabled),
+            "min_hold_bars": int(self.min_hold_bars),
+            "cooldown_bars": int(self.cooldown_bars),
+            "reverse_confirmation_delta": float(self.reverse_confirmation_delta),
+        }
 
     def _load_replay_signal_table(self) -> pd.DataFrame:
         """
@@ -391,7 +496,10 @@ class Al9999CtaStrategy(CtaTemplate):
                 meta_prob = model.predict_proba(feature_frame)[:, 1]
             else:
                 meta_prob = model.predict(feature_frame).astype(float)
-            meta_pred = model.predict(feature_frame).astype(int)
+            meta_pred = self._apply_filter_first_threshold_to_pred(
+                meta_prob=meta_prob,
+                sides=tbm.loc[common_index, "side"].values,
+            )
             safe_mode = False
 
         replay_table = tbm.loc[common_index].copy()
@@ -399,7 +507,34 @@ class Al9999CtaStrategy(CtaTemplate):
         replay_table["meta_pred"] = meta_pred
         replay_table["meta_prob"] = meta_prob
         replay_table["safe_mode"] = safe_mode
+        replay_table["selected_threshold"] = float(self.selected_threshold)
+        replay_table["side_mode"] = str(self.side_mode)
+        replay_table["scheme_used"] = str(self.scheme_used)
+        replay_table["trade_shrinkage"] = float(self.trade_shrinkage) if np.isfinite(self.trade_shrinkage) else np.nan
         return replay_table
+
+    def _apply_filter_first_threshold_to_pred(self, meta_prob: np.ndarray, sides: np.ndarray) -> np.ndarray:
+        """
+        Recompute meta_pred using the same threshold policy as filter-first backtest.
+        """
+        threshold = float(self.selected_threshold)
+        side_mode = str(self.side_mode)
+        short_delta = float(research_config.FILTER_FIRST_CONFIG.get("short_penalty_delta", 0.0))
+        probs = np.asarray(meta_prob, dtype=np.float64)
+        side_values = np.asarray(sides, dtype=np.int64)
+
+        if side_mode == "both_with_short_penalty":
+            short_threshold = threshold + short_delta
+            return np.where(
+                side_values == -1,
+                (probs >= short_threshold).astype(np.int64),
+                (probs >= threshold).astype(np.int64),
+            )
+        if side_mode == "long_only":
+            return np.where((side_values == 1) & (probs >= threshold), 1, 0).astype(np.int64)
+        if side_mode == "short_only":
+            return np.where((side_values == -1) & (probs >= threshold), 1, 0).astype(np.int64)
+        return (probs >= threshold).astype(np.int64)
 
     def _build_replay_snapshot(self, dollar_bar: Any) -> SignalSnapshot | None:
         """
@@ -446,6 +581,15 @@ class Al9999CtaStrategy(CtaTemplate):
                 "mode": "research_replay",
                 "touch_type": touch_type,
                 "touch_idx": expire_bar_idx,
+                "selected_threshold": float(self.selected_threshold),
+                "side_mode": str(self.side_mode),
+                "guard_flags": {
+                    "enabled": bool(self.guard_enabled),
+                    "min_hold_bars": int(self.min_hold_bars),
+                    "cooldown_bars": int(self.cooldown_bars),
+                    "reverse_confirmation_delta": float(self.reverse_confirmation_delta),
+                },
+                "scheme_used": str(self.scheme_used),
             },
         )
 

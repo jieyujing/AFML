@@ -48,7 +48,7 @@ PHASES = {
     4: {
         'name': 'Primary Model + TBM',
         'script': '04_ma_primary_model.py',
-        'description': 'MA Primary Model 回测，TBM 标签',
+        'description': "Primary Model 回测（支持 ma/cusum_direction/rf），TBM 标签",
     },
     5: {
         'name': 'Meta Model',
@@ -63,10 +63,9 @@ PHASES = {
         'name': '验证与回测',
         'scripts': [
             '08_dsr_validation.py',
-            '09b_cpcv_pbo_validation.py',
             '10_combined_backtest.py',
         ],
-        'description': 'DSR 验证，PBO 验证，组合回测',
+        'description': 'DSR 验证 + Filter-First 组合回测（唯一权威回测入口：10_combined_backtest.py）',
     },
 }
 

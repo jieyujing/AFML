@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from strategies.AL9999.config import (
     BARS_DIR, FIGURES_DIR, FEATURES_DIR,
-    TREND_WINDOWS
+    TREND_WINDOWS, TARGET_DAILY_BARS
 )
 
 from afmlkit.feature.core.trend_scan import trend_scan_labels
@@ -255,7 +255,7 @@ def main():
 
     # Step 1: 加载 Dollar Bars
     print("\n[Step 1] 加载 Dollar Bars...")
-    bars_path = os.path.join(BARS_DIR, 'dollar_bars_target4.parquet')
+    bars_path = os.path.join(BARS_DIR, f'dollar_bars_target{TARGET_DAILY_BARS}.parquet')
     bars = load_dollar_bars(bars_path)
     prices = bars['close']
 

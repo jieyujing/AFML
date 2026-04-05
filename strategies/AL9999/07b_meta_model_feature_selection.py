@@ -1,109 +1,126 @@
 """
-07b_meta_model_feature_selection.py - Meta Model 特征筛选对比实验
+07b_meta_model_feature_selection.py - MDA 正贡献簇特征裁剪重训对比
 
-根据 MDA 分析结果，对比三种特征筛选方案：
-1. Full: 所有 39 个特征（原始）
-2. Conservative: C3 + C2 (MDA 正 + MDA ≈ 0)
-3. Aggressive: 仅 C3 (MDA 正)
+对比两个方案：
+1) full: 使用全部 feat_ 特征
+2) mda_positive: 仅使用 meta_mda_importance.parquet 中 mean_importance > 0 的簇内特征
 
-AFML 原则：删除 MDA 负贡献特征，保留 OOS 有效特征。
+输出：
+- output/features/07b_mda_pruned_comparison.parquet
+- output/features/07b_mda_pruned_comparison.csv
+- output/models/meta_model_full.pkl
+- output/models/meta_model_mda_positive.pkl
+- output/models/meta_oof_signals_full.parquet
+- output/models/meta_oof_signals_mda_positive.parquet
+- output/models/meta_holdout_signals_full.parquet
+- output/models/meta_holdout_signals_mda_positive.parquet
 """
 
+import argparse
+import ast
 import os
 import sys
+from typing import Dict, List, Sequence
+
 import joblib
 import numpy as np
 import pandas as pd
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.tree import DecisionTreeClassifier
+from scipy.stats import norm
 from sklearn.ensemble import BaggingClassifier
-from sklearn.metrics import (
-    classification_report,
-    confusion_matrix,
-    precision_recall_curve,
-    f1_score,
-    precision_score,
-    recall_score,
-)
+from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
+from sklearn.tree import DecisionTreeClassifier
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from strategies.AL9999.config import FEATURES_DIR, FIGURES_DIR, META_MODEL_CONFIG
+from strategies.AL9999.backtest_utils import calculate_performance, load_dollar_bars, rolling_backtest
 from afmlkit.validation.purged_cv import PurgedKFold
+from strategies.AL9999.config import FEATURES_DIR, META_MODEL_CONFIG
 
-sns.set_theme(style="whitegrid", context="paper")
-
-
-# ============================================================
-# 特征筛选方案定义
-# ============================================================
-
-# MDA 结果（从 meta_mda_importance.parquet 提取）
-FEATURE_CLUSTERS = {
-    1: ['feat_rsi_7', 'feat_rsi_14', 'feat_rsi_21', 'feat_roc_5', 'feat_roc_10',
-        'feat_roc_20', 'feat_stoch_k_14', 'feat_vwap_dist_20', 'feat_vwap_dist_60',
-        'feat_cs_spread_60', 'feat_cross_ma_ratio_5_20', 'feat_cross_ma_sig_5_20',
-        'feat_cross_ma_ratio_10_40'],  # MDA: -0.029 ± 0.243 (REMOVE)
-    2: ['feat_ewm_vol_10', 'feat_ewm_vol_20', 'feat_ewm_vol_40', 'feat_hl_vol_20',
-        'feat_us_sess', 'feat_amihud_20', 'feat_cs_spread_20', 'feat_amihud_60'],  # MDA: -0.008 ± 0.023 (可选)
-    3: ['feat_cross_ma_sig_10_40', 'feat_shannon_50', 'feat_lz_entropy_50',
-        'feat_shannon_100'],  # MDA: +0.096 ± 0.185 (KEEP)
-    4: ['feat_adx_14', 'feat_sin_time', 'feat_cos_time', 'feat_sin_dow', 'feat_cos_dow',
-        'feat_asia_sess', 'feat_eu_sess', 'feat_lz_entropy_100', 'feat_serial_corr_lag1_20',
-        'feat_serial_corr_lag5_20', 'feat_serial_corr_lag10_20', 'feat_ljung_box_20',
-        'feat_adf_test_100'],  # MDA: -0.049 ± 0.506 (REMOVE)
-}
-
-SELECTION_SCHEMES = {
-    'full': [],  # 空列表表示使用所有特征
-    'conservative': FEATURE_CLUSTERS[2] + FEATURE_CLUSTERS[3],  # C2 + C3 (12 features)
-    'aggressive': FEATURE_CLUSTERS[3],  # 仅 C3 (4 features)
-}
+ANNUALIZATION_FACTOR = 1500
+N_TRIALS = 214
+COMMISSION_RATE = 0.000023
+SLIPPAGE_POINTS = 0.5
 
 
-# ============================================================
-# 核心函数
-# ============================================================
+def _ensure_list(value) -> List[str]:
+    """Normalize parquet object column to list[str]."""
+    if isinstance(value, list):
+        return [str(x) for x in value]
+    if isinstance(value, tuple):
+        return [str(x) for x in value]
+    if isinstance(value, np.ndarray):
+        return [str(x) for x in value.tolist()]
+    if isinstance(value, str):
+        text = value.strip()
+        if text.startswith("[") and text.endswith("]"):
+            try:
+                parsed = ast.literal_eval(text)
+                if isinstance(parsed, (list, tuple)):
+                    return [str(x) for x in parsed]
+            except (SyntaxError, ValueError):
+                pass
+        return [text]
+    return []
+
+
+def split_train_holdout(
+    X: pd.DataFrame, y: pd.Series, sample_weight: pd.Series, holdout_months: int
+):
+    """Split train/holdout by time."""
+    holdout_start = X.index.max() - pd.DateOffset(months=holdout_months)
+    train_mask = X.index < holdout_start
+    holdout_mask = X.index >= holdout_start
+
+    X_train = X[train_mask]
+    y_train = y[train_mask]
+    w_train = sample_weight[train_mask]
+
+    X_holdout = X[holdout_mask]
+    y_holdout = y[holdout_mask]
+    w_holdout = sample_weight[holdout_mask]
+
+    return (X_train, y_train, w_train), (X_holdout, y_holdout, w_holdout), holdout_start
+
 
 def load_data():
-    """加载 Meta Features 和 Meta Labels。"""
-    features_path = os.path.join(FEATURES_DIR, 'meta_features.parquet')
-    features = pd.read_parquet(features_path)
+    """Load features, labels, t1 and aligned TBM frame."""
+    features = pd.read_parquet(os.path.join(FEATURES_DIR, "events_features.parquet"))
+    labels = pd.read_parquet(os.path.join(FEATURES_DIR, "meta_labels.parquet"))
+    tbm = pd.read_parquet(os.path.join(FEATURES_DIR, "tbm_results.parquet"))
 
-    labels_path = os.path.join(FEATURES_DIR, 'meta_labels.parquet')
-    labels = pd.read_parquet(labels_path)
+    idx = features.index.intersection(labels.index).intersection(tbm.index)
+    X = features.loc[idx].copy()
+    y = labels.loc[idx, "bin"].copy()
+    sample_weight = labels.loc[idx, "sample_weight"].copy().fillna(labels["sample_weight"].mean())
+    t1 = pd.to_datetime(tbm.loc[idx, "exit_ts"], errors="coerce")
+    if t1.isna().any():
+        t1 = t1.fillna(pd.Series(X.index, index=X.index) + pd.Timedelta(days=1))
 
-    common_idx = features.index.intersection(labels.index)
-    X = features.loc[common_idx]
-    y = labels.loc[common_idx, 'bin']
-    sample_weight = labels.loc[common_idx, 'sample_weight']
+    feat_cols = [c for c in X.columns if c.startswith("feat_")]
+    X = X[feat_cols].fillna(0.0)
 
-    # 只保留 feat_ 开头的特征
-    feature_cols = [c for c in X.columns if c.startswith('feat_')]
-    X = X[feature_cols].fillna(0)
-
-    return X, y, sample_weight
-
-
-def filter_features(X, scheme_name):
-    """根据筛选方案过滤特征。"""
-    keep_features = SELECTION_SCHEMES[scheme_name]
-
-    if len(keep_features) == 0:
-        # Full: 使用所有特征
-        return X
-
-    # 确保特征存在
-    valid_features = [f for f in keep_features if f in X.columns]
-    return X[valid_features]
+    return X, y, sample_weight, t1, tbm.loc[idx].copy()
 
 
-def train_and_evaluate(X, y, sample_weight, scheme_name):
-    """训练并评估模型，返回关键指标。"""
-    # 构建模型
+def load_positive_features(all_features: Sequence[str]) -> List[str]:
+    """Get features from positive MDA clusters."""
+    path = os.path.join(FEATURES_DIR, "meta_mda_importance.parquet")
+    mda = pd.read_parquet(path)
+    pos = mda[mda["mean_importance"] > 0].copy()
+
+    keep = set()
+    for value in pos["features"].tolist():
+        for feat in _ensure_list(value):
+            keep.add(feat)
+
+    ordered = [f for f in all_features if f in keep]
+    if len(ordered) == 0:
+        raise ValueError("MDA 正贡献簇未筛到任何可用特征，请检查 meta_mda_importance.parquet。")
+    return ordered
+
+
+def build_model() -> BaggingClassifier:
+    """Create AFML-style meta model."""
     base_tree = DecisionTreeClassifier(
         criterion="entropy",
         max_features=1,
@@ -111,213 +128,285 @@ def train_and_evaluate(X, y, sample_weight, scheme_name):
         class_weight="balanced",
         random_state=42,
     )
-
-    model = BaggingClassifier(
+    return BaggingClassifier(
         estimator=base_tree,
-        n_estimators=META_MODEL_CONFIG.get('n_estimators', 1000),
+        n_estimators=META_MODEL_CONFIG.get("n_estimators", 1000),
         max_samples=0.5,
         max_features=1.0,
         n_jobs=-1,
         random_state=42,
     )
 
-    # Purged CV
-    t1 = pd.Series(X.index + pd.Timedelta(hours=2), index=X.index)
-    cv = PurgedKFold(
-        n_splits=META_MODEL_CONFIG.get('cv_n_splits', 5),
-        t1=t1,
-        embargo_pct=META_MODEL_CONFIG.get('cv_embargo_pct', 0.05)
+
+def calculate_psr(returns: pd.Series, benchmark_sr: float = 0.0) -> float:
+    """Probabilistic Sharpe Ratio."""
+    returns = returns.dropna()
+    n = len(returns)
+    if n < 5:
+        return 0.0
+    std = returns.std()
+    if std == 0:
+        return 0.0
+    sr = returns.mean() / std
+    skew = returns.skew()
+    kurt = returns.kurtosis() + 3
+    sigma_sr = np.sqrt((1 - skew * sr + (kurt - 1) / 4 * sr**2) / (n - 1))
+    return float(norm.cdf((sr - benchmark_sr) / sigma_sr))
+
+
+def calculate_dsr(returns: pd.Series, n_trials: int = N_TRIALS) -> float:
+    """Deflated Sharpe Ratio."""
+    returns = returns.dropna()
+    if len(returns) < 5:
+        return 0.0
+    sr_std = 0.5
+    gamma = 0.5772
+    exp_max_sr_annual = sr_std * (
+        (1 - gamma) * norm.ppf(1 - 1 / n_trials)
+        + gamma * norm.ppf(1 - 1 / (n_trials * np.exp(-1)))
     )
+    benchmark_sr_period = exp_max_sr_annual / np.sqrt(ANNUALIZATION_FACTOR)
+    return calculate_psr(returns, benchmark_sr_period)
 
-    oof_probs = np.full(len(y), np.nan)
-    fold_f1_scores = []
 
-    for fold, (train_idx, test_idx) in enumerate(cv.split(X)):
-        X_tr, y_tr = X.iloc[train_idx], y.iloc[train_idx]
-        w_tr = sample_weight.iloc[train_idx]
-        X_te = X.iloc[test_idx]
-        y_te = y.iloc[test_idx]
+def evaluate_backtest_by_probs(
+    tbm: pd.DataFrame, probs: pd.Series, oos_start: pd.Timestamp, threshold: float
+) -> Dict[str, float]:
+    """Evaluate Combined strategy with the real single-position backtest."""
+    eval_df = tbm.loc[tbm.index.intersection(probs.index)].copy()
+    eval_df["meta_prob"] = probs.loc[eval_df.index]
+    eval_df["meta_pred"] = (eval_df["meta_prob"] >= threshold).astype(int)
 
-        model.fit(X_tr, y_tr, sample_weight=w_tr)
-        oof_probs[test_idx] = model.predict_proba(X_te)[:, 1]
+    bars = load_dollar_bars()
+    combined_trades = rolling_backtest(eval_df, bars, use_meta_filter=True)
+    combined_full_perf = calculate_performance(combined_trades)
 
-        y_pred_fold = (oof_probs[test_idx] >= 0.5).astype(int)
-        fold_f1 = f1_score(y_te, y_pred_fold)
-        fold_f1_scores.append(fold_f1)
+    combined_full_trades = combined_full_perf.get("trades_df", pd.DataFrame())
+    combined_oos_trades = combined_full_trades[combined_full_trades["exit_time"] >= oos_start].copy()
+    combined_oos_perf = calculate_performance(combined_oos_trades)
 
-    # 整体评估
-    y_pred = (oof_probs >= 0.5).astype(int)
-
-    metrics = {
-        'scheme': scheme_name,
-        'n_features': X.shape[1],
-        'f1_mean': np.mean(fold_f1_scores),
-        'f1_std': np.std(fold_f1_scores),
-        'precision': precision_score(y, y_pred),
-        'recall': recall_score(y, y_pred),
-        'f1_overall': f1_score(y, y_pred),
-        'oof_probs': oof_probs,
-        'y_pred': y_pred,
+    return {
+        "combined_full_n": combined_full_perf.get("n_trades", 0),
+        "combined_full_sharpe": combined_full_perf.get("sharpe", 0.0),
+        "combined_full_dsr": calculate_dsr(combined_full_trades["net_ret"]) if len(combined_full_trades) > 0 else 0.0,
+        "combined_oos_n": combined_oos_perf.get("n_trades", 0),
+        "combined_oos_sharpe": combined_oos_perf.get("sharpe", 0.0),
+        "combined_oos_dsr": calculate_dsr(combined_oos_trades["net_ret"]) if len(combined_oos_trades) > 0 else 0.0,
+        "combined_oos_total_pnl": combined_oos_perf.get("total_pnl", 0.0),
     }
 
-    return metrics, model
 
+def train_scheme(
+    scheme: str,
+    feature_cols: List[str],
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    w_train: pd.Series,
+    t1_train: pd.Series,
+    X_holdout: pd.DataFrame,
+    y_holdout: pd.Series,
+    threshold: float,
+):
+    """Train one scheme and return metrics/model/predictions."""
+    model = build_model()
+    cv = PurgedKFold(
+        n_splits=META_MODEL_CONFIG.get("cv_n_splits", 5),
+        t1=t1_train,
+        embargo_pct=META_MODEL_CONFIG.get("cv_embargo_pct", 0.05),
+    )
 
-def plot_comparison(results, output_dir):
-    """绘制三种方案的对比图。"""
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    Xtr = X_train[feature_cols]
+    Xho = X_holdout[feature_cols]
+    oof_probs = np.full(len(Xtr), np.nan)
+    fold_f1 = []
 
-    schemes = ['full', 'conservative', 'aggressive']
-    colors = {'full': '#3498db', 'conservative': '#2ecc71', 'aggressive': '#e74c3c'}
+    for train_idx, test_idx in cv.split(Xtr):
+        x_tr = Xtr.iloc[train_idx]
+        y_tr = y_train.iloc[train_idx]
+        w_tr = w_train.iloc[train_idx]
+        x_te = Xtr.iloc[test_idx]
+        y_te = y_train.iloc[test_idx]
 
-    # 1. F1 对比
-    ax1 = axes[0]
-    x_pos = np.arange(len(schemes))
-    f1_means = [results[s]['f1_mean'] for s in schemes]
-    f1_stds = [results[s]['f1_std'] for s in schemes]
-    ax1.bar(x_pos, f1_means, yerr=f1_stds, color=[colors[s] for s in schemes],
-            capsize=5, edgecolor='white', linewidth=1.5)
-    ax1.set_xticks(x_pos)
-    ax1.set_xticklabels([s.capitalize() for s in schemes])
-    ax1.set_ylabel('F1 Score')
-    ax1.set_title('Cross-Validation F1 Comparison')
-    ax1.set_ylim(0, 1)
+        model.fit(x_tr, y_tr, sample_weight=w_tr)
+        prob = model.predict_proba(x_te)[:, 1]
+        oof_probs[test_idx] = prob
+        pred = (prob >= 0.5).astype(int)
+        fold_f1.append(f1_score(y_te, pred))
 
-    # 2. Precision vs Recall
-    ax2 = axes[1]
-    for s in schemes:
-        ax2.scatter(results[s]['recall'], results[s]['precision'],
-                   s=150, c=colors[s], label=s.capitalize(), edgecolors='white', linewidth=2)
-    ax2.set_xlabel('Recall')
-    ax2.set_ylabel('Precision')
-    ax2.set_title('Precision vs Recall')
-    ax2.legend()
-    ax2.set_xlim(0, 1)
-    ax2.set_ylim(0, 1)
-    ax2.grid(True, linestyle=':', alpha=0.6)
+    oof_pred = (oof_probs >= threshold).astype(int)
+    cv_precision = precision_score(y_train, oof_pred, zero_division=0)
+    cv_recall = recall_score(y_train, oof_pred, zero_division=0)
+    cv_f1 = f1_score(y_train, oof_pred, zero_division=0)
 
-    # 3. 特征数量 vs F1
-    ax3 = axes[2]
-    n_features = [results[s]['n_features'] for s in schemes]
-    ax3.bar(x_pos, n_features, color=[colors[s] for s in schemes],
-            edgecolor='white', linewidth=1.5)
-    ax3.set_xticks(x_pos)
-    ax3.set_xticklabels([s.capitalize() for s in schemes])
-    ax3.set_ylabel('Number of Features')
-    ax3.set_title('Feature Count')
-    for i, (s, n) in enumerate(zip(schemes, n_features)):
-        ax3.text(i, n + 1, str(n), ha='center', fontsize=12, fontweight='bold')
+    # final fit on train only
+    model.fit(Xtr, y_train, sample_weight=w_train)
+    holdout_probs = model.predict_proba(Xho)[:, 1]
+    holdout_pred = (holdout_probs >= threshold).astype(int)
 
-    fig.tight_layout()
-    plt.savefig(os.path.join(output_dir, '07b_feature_selection_comparison.png'), dpi=150)
-    plt.close()
+    hold_precision = precision_score(y_holdout, holdout_pred, zero_division=0)
+    hold_recall = recall_score(y_holdout, holdout_pred, zero_division=0)
+    hold_f1 = f1_score(y_holdout, holdout_pred, zero_division=0)
+    hold_acc = accuracy_score(y_holdout, holdout_pred)
 
+    oof_df = pd.DataFrame(
+        {"y_true": y_train, "y_prob": oof_probs, "y_pred": oof_pred},
+        index=Xtr.index,
+    )
+    hold_df = pd.DataFrame(
+        {"y_true": y_holdout, "y_prob": holdout_probs, "y_pred": holdout_pred},
+        index=Xho.index,
+    )
 
-def plot_pr_curves(results, y_true, output_dir):
-    """绘制三种方案的 PR 曲线对比。"""
-    fig, ax = plt.subplots(figsize=(10, 8))
+    metrics = {
+        "scheme": scheme,
+        "n_features": len(feature_cols),
+        "cv_fold_f1_mean": float(np.mean(fold_f1)),
+        "cv_fold_f1_std": float(np.std(fold_f1)),
+        "cv_precision": float(cv_precision),
+        "cv_recall": float(cv_recall),
+        "cv_f1": float(cv_f1),
+        "holdout_precision": float(hold_precision),
+        "holdout_recall": float(hold_recall),
+        "holdout_f1": float(hold_f1),
+        "holdout_accuracy": float(hold_acc),
+        "holdout_pred_positive_rate": float(np.mean(holdout_pred)),
+    }
 
-    colors = {'full': '#3498db', 'conservative': '#2ecc71', 'aggressive': '#e74c3c'}
+    return metrics, model, oof_df, hold_df
 
-    for scheme in ['full', 'conservative', 'aggressive']:
-        prec, rec, _ = precision_recall_curve(y_true, results[scheme]['oof_probs'])
-        ax.plot(rec, prec, color=colors[scheme], lw=2,
-               label=f"{scheme.capitalize()} (F1={results[scheme]['f1_overall']:.3f})")
-
-    ax.set_xlabel('Recall')
-    ax.set_ylabel('Precision')
-    ax.set_title('Precision-Recall Curve Comparison')
-    ax.legend(loc='lower left')
-    ax.grid(True, linestyle=':', alpha=0.6)
-
-    plt.savefig(os.path.join(output_dir, '07b_pr_curve_comparison.png'), dpi=150)
-    plt.close()
-
-
-# ============================================================
-# 主函数
-# ============================================================
 
 def main():
-    print("=" * 70)
-    print("  Meta Model Feature Selection Comparison Experiment")
-    print("=" * 70)
-
-    output_dir = FIGURES_DIR
-    os.makedirs(output_dir, exist_ok=True)
-
-    # 加载原始数据
-    print("\n[Step 1] 加载数据...")
-    X_full, y, sample_weight = load_data()
-    print(f"  原始特征数: {X_full.shape[1]}")
-    print(f"  样本数: {len(y)}")
-    print(f"  标签分布: 正(1)={y.sum()}, 负(0)={len(y)-y.sum()}")
-
-    # 三种方案训练对比
-    print("\n[Step 2] 训练三种方案...")
-    results = {}
-
-    for scheme in ['full', 'conservative', 'aggressive']:
-        print(f"\n  --- {scheme.upper()} ---")
-
-        X_filtered = filter_features(X_full, scheme)
-        print(f"    特征数: {X_filtered.shape[1]}")
-        print(f"    特征列表: {X_filtered.columns.tolist()[:5]}...")
-
-        metrics, model = train_and_evaluate(X_filtered, y, sample_weight, scheme)
-        results[scheme] = metrics
-
-        print(f"    CV F1: {metrics['f1_mean']:.4f} ± {metrics['f1_std']:.4f}")
-        print(f"    Precision: {metrics['precision']:.4f}")
-        print(f"    Recall: {metrics['recall']:.4f}")
-        print(f"    Overall F1: {metrics['f1_overall']:.4f}")
-
-    # 保存最佳模型
-    print("\n[Step 3] 保存最佳模型...")
-    best_scheme = max(results, key=lambda s: results[s]['f1_overall'])
-    print(f"  最佳方案: {best_scheme} (F1={results[best_scheme]['f1_overall']:.4f})")
-
-    X_best = filter_features(X_full, best_scheme)
-    _, best_model = train_and_evaluate(X_best, y, sample_weight, best_scheme)
+    parser = argparse.ArgumentParser(description="MDA 正贡献簇特征裁剪重训对比")
+    parser.add_argument(
+        "--apply-best",
+        action="store_true",
+        help="将最佳方案覆盖写入 meta_model.pkl / meta_oof_signals.parquet / meta_holdout_signals.parquet",
+    )
+    args = parser.parse_args()
 
     models_dir = os.path.join(os.path.dirname(__file__), "output", "models")
-    model_path = os.path.join(models_dir, f'meta_model_{best_scheme}.pkl')
-    joblib.dump(best_model, model_path)
-    print(f"  ✅ 最佳模型已保存: {model_path}")
+    os.makedirs(models_dir, exist_ok=True)
+    os.makedirs(FEATURES_DIR, exist_ok=True)
 
-    # 可视化对比
-    print("\n[Step 4] 可视化对比...")
-    plot_comparison(results, output_dir)
-    print(f"  ✅ 对比图已保存: {output_dir}/07b_feature_selection_comparison.png")
+    X, y, sample_weight, t1, tbm = load_data()
+    holdout_months = META_MODEL_CONFIG.get("holdout_months", 12)
+    threshold = META_MODEL_CONFIG.get("precision_threshold", 0.5)
+    (X_train, y_train, w_train), (X_holdout, y_holdout, _), holdout_start = split_train_holdout(
+        X, y, sample_weight, holdout_months
+    )
+    t1_train = pd.Series(t1.loc[X_train.index], index=X_train.index)
 
-    plot_pr_curves(results, y, output_dir)
-    print(f"  ✅ PR 曲线对比已保存: {output_dir}/07b_pr_curve_comparison.png")
+    full_features = list(X.columns)
+    pos_features = load_positive_features(full_features)
 
-    # 汇总报告
+    print("=" * 70)
+    print("  MDA 正贡献簇特征裁剪重训对比")
+    print("=" * 70)
+    print(f"训练样本: {len(X_train)} | Holdout样本: {len(X_holdout)}")
+    print(f"阈值: {threshold:.2f} | holdout_months: {holdout_months}")
+    print(f"full 特征数: {len(full_features)}")
+    print(f"mda_positive 特征数: {len(pos_features)}")
+    print(f"mda_positive 示例: {pos_features[:8]}")
+
+    scheme_features = {"full": full_features, "mda_positive": pos_features}
+    all_metrics = []
+    stitched_prob_series = {}
+
+    for scheme, cols in scheme_features.items():
+        print(f"\n--- 训练方案: {scheme} ---")
+        metrics, model, oof_df, hold_df = train_scheme(
+            scheme=scheme,
+            feature_cols=cols,
+            X_train=X_train,
+            y_train=y_train,
+            w_train=w_train,
+            t1_train=t1_train,
+            X_holdout=X_holdout,
+            y_holdout=y_holdout,
+            threshold=threshold,
+        )
+
+        model_path = os.path.join(models_dir, f"meta_model_{scheme}.pkl")
+        oof_path = os.path.join(models_dir, f"meta_oof_signals_{scheme}.parquet")
+        hold_path = os.path.join(models_dir, f"meta_holdout_signals_{scheme}.parquet")
+        joblib.dump(model, model_path)
+        oof_df.to_parquet(oof_path)
+        hold_df.to_parquet(hold_path)
+
+        stitched_probs = pd.concat(
+            [
+                oof_df[["y_prob"]].rename(columns={"y_prob": "meta_prob"}),
+                hold_df[["y_prob"]].rename(columns={"y_prob": "meta_prob"}),
+            ],
+            axis=0,
+        )
+        stitched_probs = stitched_probs[~stitched_probs.index.duplicated(keep="last")].sort_index()
+        stitched_prob_series[scheme] = stitched_probs["meta_prob"]
+
+        backtest_metrics = evaluate_backtest_by_probs(
+            tbm=tbm,
+            probs=stitched_prob_series[scheme],
+            oos_start=holdout_start,
+            threshold=threshold,
+        )
+
+        row = {**metrics, **backtest_metrics}
+        all_metrics.append(row)
+
+        print(
+            f"holdout_f1={row['holdout_f1']:.4f}, "
+            f"oos_sharpe={row['combined_oos_sharpe']:.4f}, "
+            f"oos_dsr={row['combined_oos_dsr']:.4f}, "
+            f"oos_n={row['combined_oos_n']}"
+        )
+
+    result_df = pd.DataFrame(all_metrics).sort_values(
+        ["combined_oos_dsr", "combined_oos_sharpe", "holdout_f1"],
+        ascending=False,
+    )
+
+    out_parquet = os.path.join(FEATURES_DIR, "07b_mda_pruned_comparison.parquet")
+    out_csv = os.path.join(FEATURES_DIR, "07b_mda_pruned_comparison.csv")
+    result_df.to_parquet(out_parquet, index=False)
+    result_df.to_csv(out_csv, index=False)
+
     print("\n" + "=" * 70)
-    print("  Feature Selection Comparison Summary")
+    print("对比结果（按 OOS DSR 排序）")
     print("=" * 70)
+    cols_show = [
+        "scheme",
+        "n_features",
+        "holdout_f1",
+        "holdout_precision",
+        "holdout_recall",
+        "combined_oos_n",
+        "combined_oos_sharpe",
+        "combined_oos_dsr",
+        "combined_oos_total_pnl",
+    ]
+    print(result_df[cols_show].to_string(index=False))
+    print(f"\n✅ 已保存: {out_parquet}")
+    print(f"✅ 已保存: {out_csv}")
 
-    print("\n  | Scheme       | Features | CV F1      | Precision | Recall | Overall F1 |")
-    print("  |--------------|----------|------------|-----------|--------|------------|")
-    for scheme in ['full', 'conservative', 'aggressive']:
-        r = results[scheme]
-        print(f"  | {scheme.capitalize():12} | {r['n_features']:8} | {r['f1_mean']:.4f}±{r['f1_std']:.2f} | {r['precision']:.4f}    | {r['recall']:.4f} | {r['f1_overall']:.4f}     |")
+    if args.apply_best:
+        best = result_df.iloc[0]["scheme"]
+        print(f"\n应用最佳方案到主产物: {best}")
+        src_model = os.path.join(models_dir, f"meta_model_{best}.pkl")
+        src_oof = os.path.join(models_dir, f"meta_oof_signals_{best}.parquet")
+        src_hold = os.path.join(models_dir, f"meta_holdout_signals_{best}.parquet")
+        dst_model = os.path.join(models_dir, "meta_model.pkl")
+        dst_oof = os.path.join(models_dir, "meta_oof_signals.parquet")
+        dst_hold = os.path.join(models_dir, "meta_holdout_signals.parquet")
 
-    # AFML 结论
-    print("\n" + "=" * 70)
-    print("  AFML Analysis Conclusion")
-    print("=" * 70)
+        joblib.dump(joblib.load(src_model), dst_model)
+        pd.read_parquet(src_oof).to_parquet(dst_oof)
+        pd.read_parquet(src_hold).to_parquet(dst_hold)
 
-    if results['aggressive']['f1_overall'] > results['full']['f1_overall']:
-        print("  ✅ 激进筛选优于全特征 → MDA 负贡献特征确实是噪音")
-    elif results['conservative']['f1_overall'] > results['full']['f1_overall']:
-        print("  ✅ 保守筛选优于全特征 → 部分噪音特征可删除")
-    else:
-        print("  ⚠️ 筛选效果不明显 → 需进一步分析特征交互")
-
-    print(f"\n  最佳方案: {best_scheme.upper()} ({results[best_scheme]['n_features']} features)")
-    print("=" * 70)
+        selected_path = os.path.join(FEATURES_DIR, "selected_features.json")
+        pd.Series({"best_scheme": best, "features": scheme_features[best]}).to_json(
+            selected_path, force_ascii=False, indent=2
+        )
+        print(f"✅ 已覆盖主模型产物并记录特征: {selected_path}")
 
 
 if __name__ == "__main__":
