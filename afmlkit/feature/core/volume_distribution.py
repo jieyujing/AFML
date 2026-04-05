@@ -563,3 +563,696 @@ class VolDiffStdTransform(SISOTransform):
         which are not efficiently expressible in pure NumPy/Numba.
         """
         return self._pd(x)
+
+
+class AmbiguityTransform(SISOTransform):
+    """
+    QIML0212: Ambiguity aversion factor — difference of volume and amount ratios.
+
+    Measures the流动性 cost when investors rush to close positions due to
+    ambiguous volatility. The factor is the difference between volume-based
+    and amount-based ambiguity ratios.
+
+    The transform uses ``groupby('code').resample(frequency).apply(_ambiguity_func)``
+    to compute the factor per instrument per time bucket.
+
+    :param frequency: Resampling frequency (e.g. '5min', '15min', 'H', 'D').
+    :param input_col: Input column name (default 'amount').
+    :param output_col: Output column suffix (default 'vol_ambiguity').
+
+    Example:
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> np.random.seed(42)
+        >>> df = pd.DataFrame({
+        ...     'code': ['A'] * 50,
+        ...     'close': 100 + np.cumsum(np.random.randn(50) * 0.5),
+        ...     'volume': np.random.rand(50) * 1000,
+        ...     'amount': np.random.rand(50) * 100000,
+        ... })
+        >>> df.index = pd.date_range('2024-01-01', periods=50, freq='min')
+        >>> transform = AmbiguityTransform(frequency='H')
+        >>> result = transform(df)
+    """
+
+    def __init__(
+        self,
+        frequency: str = 'H',
+        input_col: str = 'amount',
+        output_col: str = 'vol_ambiguity',
+    ):
+        super().__init__(input_col, output_col)
+        self.frequency = frequency
+
+    def get_params(self) -> dict:
+        """
+        Get the parameters of the transform.
+
+        :returns: Dictionary of current parameter values.
+        """
+        return {
+            'frequency': self.frequency,
+            'input_col': self.requires[0],
+            'output_col': self.produces[0],
+        }
+
+    def set_params(self, **params):
+        """
+        Set the parameters of the transform.
+
+        :param params: Keyword parameters to set.
+        :returns: self
+        """
+        if 'frequency' in params:
+            self.frequency = params['frequency']
+        if 'input_col' in params:
+            self.requires = [params['input_col']]
+        if 'output_col' in params:
+            self.produces = [params['output_col']]
+        return self
+
+    def _pd(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Compute ambiguity aversion factor using pandas.
+
+        :param x: DataFrame with 'code', 'close', 'volume', and 'amount' columns.
+        :returns: pd.Series with ambiguity values, index aligned to input DataFrame.
+        """
+        if isinstance(x, pd.Series):
+            raise ValueError("AmbiguityTransform requires a DataFrame with 'code' column.")
+        if 'code' not in x.columns:
+            raise ValueError("Input DataFrame must contain 'code' column for grouping.")
+        if 'close' not in x.columns or 'volume' not in x.columns:
+            raise ValueError("AmbiguityTransform requires 'close' and 'volume' columns.")
+
+        def _ambiguity(x_inner: pd.DataFrame) -> float:
+            """Ambiguity ratio difference for one resample window."""
+            x_ret = x_inner['close'].pct_change()
+            x_amb = x_ret.rolling(5).std().rolling(5).std()
+            x_fogging = x_inner[x_amb > x_amb.mean()]
+            if len(x_fogging) == 0 or x_inner['volume'].mean() == 0:
+                return np.nan
+            x_amb_ratio = x_fogging['volume'].mean() / x_inner['volume'].mean()
+            x_amb_ratio_1 = x_fogging['amount'].mean() / x_inner['amount'].mean() if x_inner['amount'].mean() != 0 else np.nan
+            if np.isnan(x_amb_ratio_1):
+                return np.nan
+            return x_amb_ratio - x_amb_ratio_1
+
+        original_index = x.index
+        records = []
+        ts_index = pd.DatetimeIndex(x.index).floor(self.frequency)  # type: ignore[union-abstract]
+        for (code, ts), group in x.groupby([x['code'], ts_index]):  # type: ignore[union-abstract]
+            val = _ambiguity(group)
+            for idx in group.index:
+                records.append({'idx': idx, 'code': code, 'bucket': ts, 'val': val})
+
+        result_df = pd.DataFrame(records).set_index('idx')
+        arr: np.ndarray = result_df['val'].values  # type: ignore[assignment]
+        return pd.Series(arr, index=original_index, name=self.output_name)
+
+    def _nb(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Numba fallback: delegate to pandas implementation.
+
+        Ambiguity involves rolling window and conditional filtering
+        which are not efficiently expressible in pure NumPy/Numba.
+        """
+        return self._pd(x)
+
+
+class AmbiguityVolTransform(SISOTransform):
+    """
+    QIML0301: Ambiguity aversion factor — volume-based ratio.
+
+    Measures the degree of trading when ambiguity is high, indicating
+    investor ambiguity aversion via volume ratio in foggy periods.
+
+    The transform uses ``groupby('code').resample(frequency).apply(_ambiguity_func)``
+    to compute the factor per instrument per time bucket.
+
+    :param frequency: Resampling frequency (e.g. '5min', '15min', 'H', 'D').
+    :param input_col: Input column name (default 'amount').
+    :param output_col: Output column suffix (default 'vol_ambiguity_vol').
+
+    Example:
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> np.random.seed(42)
+        >>> df = pd.DataFrame({
+        ...     'code': ['A'] * 50,
+        ...     'close': 100 + np.cumsum(np.random.randn(50) * 0.5),
+        ...     'volume': np.random.rand(50) * 1000,
+        ...     'amount': np.random.rand(50) * 100000,
+        ... })
+        >>> df.index = pd.date_range('2024-01-01', periods=50, freq='min')
+        >>> transform = AmbiguityVolTransform(frequency='H')
+        >>> result = transform(df)
+    """
+
+    def __init__(
+        self,
+        frequency: str = 'H',
+        input_col: str = 'amount',
+        output_col: str = 'vol_ambiguity_vol',
+    ):
+        super().__init__(input_col, output_col)
+        self.frequency = frequency
+
+    def get_params(self) -> dict:
+        """
+        Get the parameters of the transform.
+
+        :returns: Dictionary of current parameter values.
+        """
+        return {
+            'frequency': self.frequency,
+            'input_col': self.requires[0],
+            'output_col': self.produces[0],
+        }
+
+    def set_params(self, **params):
+        """
+        Set the parameters of the transform.
+
+        :param params: Keyword parameters to set.
+        :returns: self
+        """
+        if 'frequency' in params:
+            self.frequency = params['frequency']
+        if 'input_col' in params:
+            self.requires = [params['input_col']]
+        if 'output_col' in params:
+            self.produces = [params['output_col']]
+        return self
+
+    def _pd(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Compute volume-based ambiguity aversion using pandas.
+
+        :param x: DataFrame with 'code', 'close', and 'volume' columns.
+        :returns: pd.Series with ambiguity values, index aligned to input DataFrame.
+        """
+        if isinstance(x, pd.Series):
+            raise ValueError("AmbiguityVolTransform requires a DataFrame with 'code' column.")
+        if 'code' not in x.columns:
+            raise ValueError("Input DataFrame must contain 'code' column for grouping.")
+        if 'close' not in x.columns or 'volume' not in x.columns:
+            raise ValueError("AmbiguityVolTransform requires 'close' and 'volume' columns.")
+
+        def _ambiguity(x_inner: pd.DataFrame) -> float:
+            """Ambiguity volume ratio for one resample window."""
+            x_ret = x_inner['close'].pct_change()
+            x_amb = x_ret.rolling(5).std().rolling(5).std()
+            x_fogging = x_inner[x_amb > x_amb.mean()]
+            if len(x_fogging) == 0 or x_inner['volume'].mean() == 0:
+                return np.nan
+            return x_fogging['volume'].mean() / x_inner['volume'].mean()
+
+        original_index = x.index
+        records = []
+        ts_index = pd.DatetimeIndex(x.index).floor(self.frequency)  # type: ignore[union-abstract]
+        for (code, ts), group in x.groupby([x['code'], ts_index]):  # type: ignore[union-abstract]
+            val = _ambiguity(group)
+            for idx in group.index:
+                records.append({'idx': idx, 'code': code, 'bucket': ts, 'val': val})
+
+        result_df = pd.DataFrame(records).set_index('idx')
+        arr: np.ndarray = result_df['val'].values  # type: ignore[assignment]
+        return pd.Series(arr, index=original_index, name=self.output_name)
+
+    def _nb(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Numba fallback: delegate to pandas implementation.
+        """
+        return self._pd(x)
+
+
+class AmbiguityCountTransform(SISOTransform):
+    """
+    QIML0331: Ambiguity aversion factor — count-based ratio.
+
+    Measures the degree of trading when ambiguity is high, indicating
+    investor ambiguity aversion via trade count ratio in foggy periods.
+
+    The transform uses ``groupby('code').resample(frequency).apply(_ambiguity_func)``
+    to compute the factor per instrument per time bucket.
+
+    :param frequency: Resampling frequency (e.g. '5min', '15min', 'H', 'D').
+    :param input_col: Input column name (default 'amount').
+    :param output_col: Output column suffix (default 'vol_ambiguity_count').
+
+    Example:
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> np.random.seed(42)
+        >>> df = pd.DataFrame({
+        ...     'code': ['A'] * 50,
+        ...     'close': 100 + np.cumsum(np.random.randn(50) * 0.5),
+        ...     'volume': np.random.rand(50) * 1000,
+        ...     'count': np.random.randint(1, 100, size=50),
+        ...     'amount': np.random.rand(50) * 100000,
+        ... })
+        >>> df.index = pd.date_range('2024-01-01', periods=50, freq='min')
+        >>> transform = AmbiguityCountTransform(frequency='H')
+        >>> result = transform(df)
+    """
+
+    def __init__(
+        self,
+        frequency: str = 'H',
+        input_col: str = 'amount',
+        output_col: str = 'vol_ambiguity_count',
+    ):
+        super().__init__(input_col, output_col)
+        self.frequency = frequency
+
+    def get_params(self) -> dict:
+        """
+        Get the parameters of the transform.
+
+        :returns: Dictionary of current parameter values.
+        """
+        return {
+            'frequency': self.frequency,
+            'input_col': self.requires[0],
+            'output_col': self.produces[0],
+        }
+
+    def set_params(self, **params):
+        """
+        Set the parameters of the transform.
+
+        :param params: Keyword parameters to set.
+        :returns: self
+        """
+        if 'frequency' in params:
+            self.frequency = params['frequency']
+        if 'input_col' in params:
+            self.requires = [params['input_col']]
+        if 'output_col' in params:
+            self.produces = [params['output_col']]
+        return self
+
+    def _pd(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Compute count-based ambiguity aversion using pandas.
+
+        :param x: DataFrame with 'code', 'close', and 'count' columns.
+        :returns: pd.Series with ambiguity values, index aligned to input DataFrame.
+        """
+        if isinstance(x, pd.Series):
+            raise ValueError("AmbiguityCountTransform requires a DataFrame with 'code' column.")
+        if 'code' not in x.columns:
+            raise ValueError("Input DataFrame must contain 'code' column for grouping.")
+        if 'close' not in x.columns or 'count' not in x.columns:
+            raise ValueError("AmbiguityCountTransform requires 'close' and 'count' columns.")
+
+        def _ambiguity(x_inner: pd.DataFrame) -> float:
+            """Ambiguity count ratio for one resample window."""
+            x_ret = x_inner['close'].pct_change()
+            x_amb = x_ret.rolling(5).std().rolling(5).std()
+            x_fogging = x_inner[x_amb > x_amb.mean()]
+            if len(x_fogging) == 0 or x_inner['count'].mean() == 0:
+                return np.nan
+            return x_fogging['count'].mean() / x_inner['count'].mean()
+
+        original_index = x.index
+        records = []
+        ts_index = pd.DatetimeIndex(x.index).floor(self.frequency)  # type: ignore[union-abstract]
+        for (code, ts), group in x.groupby([x['code'], ts_index]):  # type: ignore[union-abstract]
+            val = _ambiguity(group)
+            for idx in group.index:
+                records.append({'idx': idx, 'code': code, 'bucket': ts, 'val': val})
+
+        result_df = pd.DataFrame(records).set_index('idx')
+        arr: np.ndarray = result_df['val'].values  # type: ignore[assignment]
+        return pd.Series(arr, index=original_index, name=self.output_name)
+
+    def _nb(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Numba fallback: delegate to pandas implementation.
+        """
+        return self._pd(x)
+
+
+class PShapeTransform(SISOTransform):
+    """
+    QIML0401: Volume profile P-shape — low price level relative to max.
+
+    Computes the volume-weighted price level that accumulates 50% of total
+    volume (starting from the peak volume price), then returns the normalized
+    distance from that low price level to the maximum close price.
+
+    :param frequency: Resampling frequency (e.g. '5min', '15min', 'H', 'D').
+    :param input_col: Input column name (default 'amount').
+    :param output_col: Output column suffix (default 'vol_p_shape').
+
+    Example:
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> np.random.seed(42)
+        >>> df = pd.DataFrame({
+        ...     'code': ['A'] * 50,
+        ...     'close': np.random.rand(50) * 10 + 95,
+        ...     'amount': np.random.rand(50) * 100000,
+        ... })
+        >>> df.index = pd.date_range('2024-01-01', periods=50, freq='min')
+        >>> transform = PShapeTransform(frequency='H')
+        >>> result = transform(df)
+    """
+
+    def __init__(
+        self,
+        frequency: str = 'H',
+        input_col: str = 'amount',
+        output_col: str = 'vol_p_shape',
+    ):
+        super().__init__(input_col, output_col)
+        self.frequency = frequency
+
+    def get_params(self) -> dict:
+        """
+        Get the parameters of the transform.
+
+        :returns: Dictionary of current parameter values.
+        """
+        return {
+            'frequency': self.frequency,
+            'input_col': self.requires[0],
+            'output_col': self.produces[0],
+        }
+
+    def set_params(self, **params):
+        """
+        Set the parameters of the transform.
+
+        :param params: Keyword parameters to set.
+        :returns: self
+        """
+        if 'frequency' in params:
+            self.frequency = params['frequency']
+        if 'input_col' in params:
+            self.requires = [params['input_col']]
+        if 'output_col' in params:
+            self.produces = [params['output_col']]
+        return self
+
+    def _pd(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Compute P-shape factor using pandas.
+
+        :param x: DataFrame with 'code', 'close', and 'amount' columns.
+        :returns: pd.Series with P-shape values, index aligned to input DataFrame.
+        """
+        if isinstance(x, pd.Series):
+            raise ValueError("PShapeTransform requires a DataFrame with 'code' column.")
+        if 'code' not in x.columns:
+            raise ValueError("Input DataFrame must contain 'code' column for grouping.")
+        if 'close' not in x.columns:
+            raise ValueError("PShapeTransform requires 'close' column.")
+
+        def _p_shape(x_inner: pd.DataFrame) -> float:
+            """P-shape value for one resample window."""
+            vol_sum = x_inner.groupby('close')['amount'].sum()
+            if len(vol_sum) == 0 or vol_sum.sum() == 0:
+                return np.nan
+            vol_acc_sum = vol_sum.sum()
+            idx = np.argmax(vol_sum)
+            ratio = vol_sum.iloc[idx] / vol_acc_sum
+            num = 0
+            while ratio < 0.5 and num <= idx:
+                num += 1
+                if idx - num < 0:
+                    break
+                window = vol_sum.iloc[max(0, idx - num): idx + num + 1]
+                ratio = window.sum() / vol_acc_sum
+            try:
+                if idx - num >= 0:
+                    vsa_low = vol_sum.index[idx - num]
+                else:
+                    vsa_low = np.min(vol_sum.index)
+            except Exception:
+                vsa_low = np.min(vol_sum.index)
+            if vsa_low == 0:
+                return np.nan
+            return (x_inner['close'].max() - vsa_low) / vsa_low
+
+        original_index = x.index
+        records = []
+        ts_index = pd.DatetimeIndex(x.index).floor(self.frequency)  # type: ignore[union-abstract]
+        for (code, ts), group in x.groupby([x['code'], ts_index]):  # type: ignore[union-abstract]
+            val = _p_shape(group)
+            for idx in group.index:
+                records.append({'idx': idx, 'code': code, 'bucket': ts, 'val': val})
+
+        result_df = pd.DataFrame(records).set_index('idx')
+        arr: np.ndarray = result_df['val'].values  # type: ignore[assignment]
+        return pd.Series(arr, index=original_index, name=self.output_name)
+
+    def _nb(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Numba fallback: delegate to pandas implementation.
+        """
+        return self._pd(x)
+
+
+class BShapeTransform(SISOTransform):
+    """
+    QIML0413: Volume profile B-shape — high price level relative to min.
+
+    Computes the volume-weighted price level that accumulates 50% of total
+    volume (starting from the peak volume price), then returns the normalized
+    distance from the minimum close price to that high price level.
+
+    :param frequency: Resampling frequency (e.g. '5min', '15min', 'H', 'D').
+    :param input_col: Input column name (default 'amount').
+    :param output_col: Output column suffix (default 'vol_b_shape').
+
+    Example:
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> np.random.seed(42)
+        >>> df = pd.DataFrame({
+        ...     'code': ['A'] * 50,
+        ...     'close': np.random.rand(50) * 10 + 95,
+        ...     'amount': np.random.rand(50) * 100000,
+        ... })
+        >>> df.index = pd.date_range('2024-01-01', periods=50, freq='min')
+        >>> transform = BShapeTransform(frequency='H')
+        >>> result = transform(df)
+    """
+
+    def __init__(
+        self,
+        frequency: str = 'H',
+        input_col: str = 'amount',
+        output_col: str = 'vol_b_shape',
+    ):
+        super().__init__(input_col, output_col)
+        self.frequency = frequency
+
+    def get_params(self) -> dict:
+        """
+        Get the parameters of the transform.
+
+        :returns: Dictionary of current parameter values.
+        """
+        return {
+            'frequency': self.frequency,
+            'input_col': self.requires[0],
+            'output_col': self.produces[0],
+        }
+
+    def set_params(self, **params):
+        """
+        Set the parameters of the transform.
+
+        :param params: Keyword parameters to set.
+        :returns: self
+        """
+        if 'frequency' in params:
+            self.frequency = params['frequency']
+        if 'input_col' in params:
+            self.requires = [params['input_col']]
+        if 'output_col' in params:
+            self.produces = [params['output_col']]
+        return self
+
+    def _pd(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Compute B-shape factor using pandas.
+
+        :param x: DataFrame with 'code', 'close', and 'amount' columns.
+        :returns: pd.Series with B-shape values, index aligned to input DataFrame.
+        """
+        if isinstance(x, pd.Series):
+            raise ValueError("BShapeTransform requires a DataFrame with 'code' column.")
+        if 'code' not in x.columns:
+            raise ValueError("Input DataFrame must contain 'code' column for grouping.")
+        if 'close' not in x.columns:
+            raise ValueError("BShapeTransform requires 'close' column.")
+
+        def _b_shape(x_inner: pd.DataFrame) -> float:
+            """B-shape value for one resample window."""
+            vol_sum = x_inner.groupby('close')['amount'].sum()
+            if len(vol_sum) == 0 or vol_sum.sum() == 0:
+                return np.nan
+            vol_acc_sum = vol_sum.sum()
+            idx = np.argmax(vol_sum)
+            ratio = vol_sum.iloc[idx] / vol_acc_sum
+            num = 0
+            while ratio < 0.5 and idx + num < len(vol_sum):
+                num += 1
+                if idx + num >= len(vol_sum):
+                    break
+                window = vol_sum.iloc[idx: min(idx + num + 1, len(vol_sum))]
+                ratio = window.sum() / vol_acc_sum
+            try:
+                if idx + num < len(vol_sum):
+                    vsa_high = vol_sum.index[idx + num]
+                else:
+                    vsa_high = np.max(vol_sum.index)
+            except Exception:
+                vsa_high = np.max(vol_sum.index)
+            if vsa_high == 0:
+                return np.nan
+            return (vsa_high - x_inner['close'].min()) / vsa_high
+
+        original_index = x.index
+        records = []
+        ts_index = pd.DatetimeIndex(x.index).floor(self.frequency)  # type: ignore[union-abstract]
+        for (code, ts), group in x.groupby([x['code'], ts_index]):  # type: ignore[union-abstract]
+            val = _b_shape(group)
+            for idx in group.index:
+                records.append({'idx': idx, 'code': code, 'bucket': ts, 'val': val})
+
+        result_df = pd.DataFrame(records).set_index('idx')
+        arr: np.ndarray = result_df['val'].values  # type: ignore[assignment]
+        return pd.Series(arr, index=original_index, name=self.output_name)
+
+    def _nb(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Numba fallback: delegate to pandas implementation.
+        """
+        return self._pd(x)
+
+
+class PShapeDiffTransform(SISOTransform):
+    """
+    QIML0503: Volume profile P-shape — close relative to low price level.
+
+    Computes the volume-weighted price level that accumulates 50% of total
+    volume (starting from the peak volume price), then returns the normalized
+    distance from that low price level to the current close price.
+
+    :param frequency: Resampling frequency (e.g. '5min', '15min', 'H', 'D').
+    :param input_col: Input column name (default 'amount').
+    :param output_col: Output column suffix (default 'vol_p_shape_diff').
+
+    Example:
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> np.random.seed(42)
+        >>> df = pd.DataFrame({
+        ...     'code': ['A'] * 50,
+        ...     'close': np.random.rand(50) * 10 + 95,
+        ...     'amount': np.random.rand(50) * 100000,
+        ... })
+        >>> df.index = pd.date_range('2024-01-01', periods=50, freq='min')
+        >>> transform = PShapeDiffTransform(frequency='H')
+        >>> result = transform(df)
+    """
+
+    def __init__(
+        self,
+        frequency: str = 'H',
+        input_col: str = 'amount',
+        output_col: str = 'vol_p_shape_diff',
+    ):
+        super().__init__(input_col, output_col)
+        self.frequency = frequency
+
+    def get_params(self) -> dict:
+        """
+        Get the parameters of the transform.
+
+        :returns: Dictionary of current parameter values.
+        """
+        return {
+            'frequency': self.frequency,
+            'input_col': self.requires[0],
+            'output_col': self.produces[0],
+        }
+
+    def set_params(self, **params):
+        """
+        Set the parameters of the transform.
+
+        :param params: Keyword parameters to set.
+        :returns: self
+        """
+        if 'frequency' in params:
+            self.frequency = params['frequency']
+        if 'input_col' in params:
+            self.requires = [params['input_col']]
+        if 'output_col' in params:
+            self.produces = [params['output_col']]
+        return self
+
+    def _pd(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Compute P-shape diff factor using pandas.
+
+        :param x: DataFrame with 'code', 'close', and 'amount' columns.
+        :returns: pd.Series with P-shape diff values, index aligned to input DataFrame.
+        """
+        if isinstance(x, pd.Series):
+            raise ValueError("PShapeDiffTransform requires a DataFrame with 'code' column.")
+        if 'code' not in x.columns:
+            raise ValueError("Input DataFrame must contain 'code' column for grouping.")
+        if 'close' not in x.columns:
+            raise ValueError("PShapeDiffTransform requires 'close' column.")
+
+        def _p_shape_diff(x_inner: pd.DataFrame) -> float:
+            """P-shape diff value for one resample window."""
+            vol_sum = x_inner.groupby('close')['amount'].sum()
+            if len(vol_sum) == 0 or vol_sum.sum() == 0:
+                return np.nan
+            vol_acc_sum = vol_sum.sum()
+            idx = np.argmax(vol_sum)
+            ratio = vol_sum.iloc[idx] / vol_acc_sum
+            num = 0
+            while ratio < 0.5 and num <= idx:
+                num += 1
+                if idx - num < 0:
+                    break
+                window = vol_sum.iloc[max(0, idx - num): idx + num + 1]
+                ratio = window.sum() / vol_acc_sum
+            try:
+                if idx - num >= 0:
+                    vsa_low = vol_sum.index[idx - num]
+                else:
+                    vsa_low = np.min(vol_sum.index)
+            except Exception:
+                vsa_low = np.min(vol_sum.index)
+            if vsa_low == 0:
+                return np.nan
+            return (x_inner['close'] - vsa_low).mean() / vsa_low
+
+        original_index = x.index
+        records = []
+        ts_index = pd.DatetimeIndex(x.index).floor(self.frequency)  # type: ignore[union-abstract]
+        for (code, ts), group in x.groupby([x['code'], ts_index]):  # type: ignore[union-abstract]
+            val = _p_shape_diff(group)
+            for idx in group.index:
+                records.append({'idx': idx, 'code': code, 'bucket': ts, 'val': val})
+
+        result_df = pd.DataFrame(records).set_index('idx')
+        arr: np.ndarray = result_df['val'].values  # type: ignore[assignment]
+        return pd.Series(arr, index=original_index, name=self.output_name)
+
+    def _nb(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Numba fallback: delegate to pandas implementation.
+        """
+        return self._pd(x)
