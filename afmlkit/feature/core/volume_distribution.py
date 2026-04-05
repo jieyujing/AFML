@@ -1432,7 +1432,7 @@ class VolumeVarTransform(SISOTransform):
 
         def _vol_var(x_inner: pd.DataFrame) -> float:
             """Volume variance for one resample window."""
-            return x_inner['volume'].var()
+            return float(x_inner['volume'].var())
 
         original_index = x.index
         records = []
@@ -1641,7 +1641,7 @@ class TailVolumeRatioTransform(SISOTransform):
 
         def _tail_ratio(x_inner: pd.DataFrame) -> float:
             """Tail volume ratio for one resample window."""
-            minutes = pd.DatetimeIndex(x_inner.index).minute
+            minutes = pd.DatetimeIndex(x_inner.index).minute  # type: ignore[union-abstract]
             total_vol = x_inner['volume'].sum()
             if total_vol == 0:
                 return 0.0
@@ -1749,7 +1749,7 @@ class VolumeRatioTransform(SISOTransform):
 
         def _vol_ratio(x_inner: pd.DataFrame) -> float:
             """Volume ratio (open / close) for one resample window."""
-            minutes = pd.DatetimeIndex(x_inner.index).minute
+            minutes = pd.DatetimeIndex(x_inner.index).minute  # type: ignore[union-abstract]
             total_amt = x_inner['amount'].sum()
             if total_amt == 0:
                 return 0.0
@@ -1861,7 +1861,7 @@ class VolumeShareTransform(SISOTransform):
 
         def _vol_share(x_inner: pd.DataFrame) -> float:
             """Volume share (open + close) for one resample window."""
-            minutes = pd.DatetimeIndex(x_inner.index).minute
+            minutes = pd.DatetimeIndex(x_inner.index).minute  # type: ignore[union-abstract]
             total_amt = x_inner['amount'].sum()
             if total_amt == 0:
                 return 0.0
@@ -1991,6 +1991,326 @@ class AmountQuantileTransform(SISOTransform):
         ts_index = pd.DatetimeIndex(x.index).floor(self.frequency)  # type: ignore[union-abstract]
         for (code, ts), group in x.groupby([x['code'], ts_index]):  # type: ignore[union-abstract]
             val = _amt_quantile(group)
+            for idx in group.index:
+                records.append({'idx': idx, 'code': code, 'bucket': ts, 'val': val})
+
+        result_df = pd.DataFrame(records).set_index('idx')
+        arr: np.ndarray = result_df['val'].values  # type: ignore[assignment]
+        return pd.Series(arr, index=original_index, name=self.output_name)
+
+    def _nb(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Numba fallback: delegate to pandas implementation.
+        """
+        return self._pd(x)
+
+
+class TradingIntensityTransform(SISOTransform):
+    """
+    QIML1113: Trading intensity — Spearman correlation of price-per-unit vs volume.
+
+    Computes price-per-unit (volume / amount) and measures its Spearman rank
+    correlation with volume. Higher values indicate that larger trades tend
+    to have different price-per-unit characteristics.
+
+    The transform uses ``groupby('code').resample(frequency)`` semantics
+    to compute the correlation per instrument per time bucket.
+
+    :param frequency: Resampling frequency (e.g. '5min', '15min', 'H', 'D').
+    :param input_col: Input column name (default 'volume').
+    :param output_col: Output column suffix (default 'trading_intensity').
+
+    Example:
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> np.random.seed(42)
+        >>> df = pd.DataFrame({
+        ...     'code': ['A'] * 120,
+        ...     'amount': np.random.rand(120) * 100000,
+        ...     'volume': np.random.rand(120) * 1000,
+        ... })
+        >>> df.index = pd.date_range('2024-01-01', periods=120, freq='min')
+        >>> transform = TradingIntensityTransform(frequency='H')
+        >>> result = transform(df)
+    """
+
+    def __init__(
+        self,
+        frequency: str = 'H',
+        input_col: str = 'volume',
+        output_col: str = 'trading_intensity',
+    ):
+        super().__init__(input_col, output_col)
+        self.frequency = frequency
+
+    def get_params(self) -> dict:
+        """
+        Get the parameters of the transform.
+
+        :returns: Dictionary of current parameter values.
+        """
+        return {
+            'frequency': self.frequency,
+            'input_col': self.requires[0],
+            'output_col': self.produces[0],
+        }
+
+    def set_params(self, **params):
+        """
+        Set the parameters of the transform.
+
+        :param params: Keyword parameters to set.
+        :returns: self
+        """
+        if 'frequency' in params:
+            self.frequency = params['frequency']
+        if 'input_col' in params:
+            self.requires = [params['input_col']]
+        if 'output_col' in params:
+            self.produces = [params['output_col']]
+        return self
+
+    def _pd(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Compute trading intensity using pandas.
+
+        :param x: DataFrame with 'code', 'volume', and 'amount' columns.
+        :returns: pd.Series with trading intensity values, index aligned to input DataFrame.
+        """
+        if isinstance(x, pd.Series):
+            raise ValueError("TradingIntensityTransform requires a DataFrame with 'code' column.")
+        if 'code' not in x.columns:
+            raise ValueError("Input DataFrame must contain 'code' column for grouping.")
+        if 'volume' not in x.columns:
+            raise ValueError("TradingIntensityTransform requires 'volume' column.")
+        if 'amount' not in x.columns:
+            raise ValueError("TradingIntensityTransform requires 'amount' column.")
+
+        def _trading_intensity(x_inner: pd.DataFrame) -> float:
+            """Trading intensity for one resample window."""
+            price_per_unit = x_inner['volume'] / x_inner['amount'].replace(0, np.nan)
+            corr = price_per_unit.corr(x_inner['volume'], method='spearman')
+            return float(corr) if not pd.isna(corr) else 0.0
+
+        original_index = x.index
+        records = []
+        ts_index = pd.DatetimeIndex(x.index).floor(self.frequency)  # type: ignore[union-abstract]
+        for (code, ts), group in x.groupby([x['code'], ts_index]):  # type: ignore[union-abstract]
+            val = _trading_intensity(group)
+            for idx in group.index:
+                records.append({'idx': idx, 'code': code, 'bucket': ts, 'val': val})
+
+        result_df = pd.DataFrame(records).set_index('idx')
+        arr: np.ndarray = result_df['val'].values  # type: ignore[assignment]
+        return pd.Series(arr, index=original_index, name=self.output_name)
+
+    def _nb(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Numba fallback: delegate to pandas implementation.
+        """
+        return self._pd(x)
+
+
+class TailVolumeRatioVTransform(SISOTransform):
+    """
+    QIML1215: Tail volume ratio (value) — amount share in last 5 minutes of the hour.
+
+    Measures the proportion of total amount that occurs in the last 5 minutes
+    (minute >= 55) within each resample window. Higher values indicate
+    concentration of value near the close.
+
+    The transform uses ``groupby('code').resample(frequency)`` semantics
+    to compute the ratio per instrument per time bucket.
+
+    :param frequency: Resampling frequency (e.g. '5min', '15min', 'H', 'D').
+    :param input_col: Input column name (default 'amount').
+    :param output_col: Output column suffix (default 'tail_vol_ratio_v').
+
+    Example:
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> np.random.seed(42)
+        >>> df = pd.DataFrame({
+        ...     'code': ['A'] * 120,
+        ...     'amount': np.random.rand(120) * 100000,
+        ... })
+        >>> df.index = pd.date_range('2024-01-01', periods=120, freq='min')
+        >>> transform = TailVolumeRatioVTransform(frequency='H')
+        >>> result = transform(df)
+    """
+
+    def __init__(
+        self,
+        frequency: str = 'H',
+        input_col: str = 'amount',
+        output_col: str = 'tail_vol_ratio_v',
+    ):
+        super().__init__(input_col, output_col)
+        self.frequency = frequency
+
+    def get_params(self) -> dict:
+        """
+        Get the parameters of the transform.
+
+        :returns: Dictionary of current parameter values.
+        """
+        return {
+            'frequency': self.frequency,
+            'input_col': self.requires[0],
+            'output_col': self.produces[0],
+        }
+
+    def set_params(self, **params):
+        """
+        Set the parameters of the transform.
+
+        :param params: Keyword parameters to set.
+        :returns: self
+        """
+        if 'frequency' in params:
+            self.frequency = params['frequency']
+        if 'input_col' in params:
+            self.requires = [params['input_col']]
+        if 'output_col' in params:
+            self.produces = [params['output_col']]
+        return self
+
+    def _pd(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Compute tail volume ratio (value) using pandas.
+
+        :param x: DataFrame with 'code' and 'amount' columns.
+        :returns: pd.Series with tail volume ratio values, index aligned to input DataFrame.
+        """
+        if isinstance(x, pd.Series):
+            raise ValueError("TailVolumeRatioVTransform requires a DataFrame with 'code' column.")
+        if 'code' not in x.columns:
+            raise ValueError("Input DataFrame must contain 'code' column for grouping.")
+        if 'amount' not in x.columns:
+            raise ValueError("TailVolumeRatioVTransform requires 'amount' column.")
+
+        def _tail_ratio_v(x_inner: pd.DataFrame) -> float:
+            """Tail volume ratio (value) for one resample window."""
+            minutes = pd.DatetimeIndex(x_inner.index).minute  # type: ignore[union-abstract]
+            total_amt = x_inner['amount'].sum()
+            if total_amt == 0:
+                return 0.0
+            late_mask = minutes >= 55
+            ratio = x_inner.loc[late_mask, 'amount'].sum() / total_amt
+            return ratio if not pd.isna(ratio) else 0.0
+
+        original_index = x.index
+        records = []
+        ts_index = pd.DatetimeIndex(x.index).floor(self.frequency)  # type: ignore[union-abstract]
+        for (code, ts), group in x.groupby([x['code'], ts_index]):  # type: ignore[union-abstract]
+            val = _tail_ratio_v(group)
+            for idx in group.index:
+                records.append({'idx': idx, 'code': code, 'bucket': ts, 'val': val})
+
+        result_df = pd.DataFrame(records).set_index('idx')
+        arr: np.ndarray = result_df['val'].values  # type: ignore[assignment]
+        return pd.Series(arr, index=original_index, name=self.output_name)
+
+    def _nb(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Numba fallback: delegate to pandas implementation.
+        """
+        return self._pd(x)
+
+
+class TVDTransform(SISOTransform):
+    """
+    QIML1222: Total volume distribution — std of normalized amounts.
+
+    Normalizes amounts by their sum within the window, then takes the
+    standard deviation. Measures the dispersion of trading value across
+    the resample window. Higher values indicate more heterogeneous
+    distribution; lower values indicate more uniform distribution.
+
+    The transform uses ``groupby('code').resample(frequency)`` semantics
+    to compute the std per instrument per time bucket.
+
+    :param frequency: Resampling frequency (e.g. '5min', '15min', 'H', 'D').
+    :param input_col: Input column name (default 'amount').
+    :param output_col: Output column suffix (default 'tvd').
+
+    Example:
+        >>> import pandas as pd
+        >>> import numpy as np
+        >>> np.random.seed(42)
+        >>> df = pd.DataFrame({
+        ...     'code': ['A'] * 120,
+        ...     'amount': np.random.rand(120) * 100000,
+        ... })
+        >>> df.index = pd.date_range('2024-01-01', periods=120, freq='min')
+        >>> transform = TVDTransform(frequency='H')
+        >>> result = transform(df)
+    """
+
+    def __init__(
+        self,
+        frequency: str = 'H',
+        input_col: str = 'amount',
+        output_col: str = 'tvd',
+    ):
+        super().__init__(input_col, output_col)
+        self.frequency = frequency
+
+    def get_params(self) -> dict:
+        """
+        Get the parameters of the transform.
+
+        :returns: Dictionary of current parameter values.
+        """
+        return {
+            'frequency': self.frequency,
+            'input_col': self.requires[0],
+            'output_col': self.produces[0],
+        }
+
+    def set_params(self, **params):
+        """
+        Set the parameters of the transform.
+
+        :param params: Keyword parameters to set.
+        :returns: self
+        """
+        if 'frequency' in params:
+            self.frequency = params['frequency']
+        if 'input_col' in params:
+            self.requires = [params['input_col']]
+        if 'output_col' in params:
+            self.produces = [params['output_col']]
+        return self
+
+    def _pd(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
+        """
+        Compute TVD using pandas.
+
+        :param x: DataFrame with 'code' and 'amount' columns.
+        :returns: pd.Series with TVD values, index aligned to input DataFrame.
+        """
+        if isinstance(x, pd.Series):
+            raise ValueError("TVDTransform requires a DataFrame with 'code' column.")
+        if 'code' not in x.columns:
+            raise ValueError("Input DataFrame must contain 'code' column for grouping.")
+        if 'amount' not in x.columns:
+            raise ValueError("TVDTransform requires 'amount' column.")
+
+        def _tvd(x_inner: pd.DataFrame) -> float:
+            """TVD for one resample window."""
+            total = x_inner['amount'].sum()
+            if total == 0:
+                return 0.0
+            normalized = x_inner['amount'] / total
+            std_val = normalized.std()
+            return float(std_val) if not pd.isna(std_val) else 0.0
+
+        original_index = x.index
+        records = []
+        ts_index = pd.DatetimeIndex(x.index).floor(self.frequency)  # type: ignore[union-abstract]
+        for (code, ts), group in x.groupby([x['code'], ts_index]):  # type: ignore[union-abstract]
+            val = _tvd(group)
             for idx in group.index:
                 records.append({'idx': idx, 'code': code, 'bucket': ts, 'val': val})
 
