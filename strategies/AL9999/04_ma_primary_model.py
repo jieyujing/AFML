@@ -35,7 +35,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from strategies.AL9999.config import (
     BARS_DIR, FIGURES_DIR, FEATURES_DIR,
-    MA_PRIMARY_MODEL, TBM_CONFIG
+    MA_PRIMARY_MODEL, TBM_CONFIG, TARGET_DAILY_BARS, PRIMARY_MODEL_TYPE
 )
 
 from afmlkit.feature.core.ma import ewma, sma
@@ -142,6 +142,101 @@ def generate_ma_signals(
     print(f"   总信号数: {len(signals)}")
     print(f"   多头信号: {n_long} ({n_long/len(signals)*100:.1f}%)")
     print(f"   空头信号: {n_short} ({n_short/len(signals)*100:.1f}%)")
+
+    return signals
+
+
+def generate_cusum_direction_signals(
+    bars: pd.DataFrame,
+    events: pd.DataFrame,
+    config: dict
+) -> pd.DataFrame:
+    """
+    在 CUSUM 事件点生成 CUSUM Direction Primary Model 信号。
+
+    原理：CUSUM 事件发生时，g_up 和 g_down 分别记录了
+    累积正向/负向偏离强度。side = sign(g_up - |g_down|)。
+
+    可选增加 z_score 强度过滤：仅当 (g_up - |g_down|) / threshold > z_min 时开仓。
+
+    :param bars: Dollar Bars DataFrame
+    :param events: CUSUM 事件点 DataFrame (含 g_up/g_down 列)
+    :param config: 配置 dict
+    :returns: DataFrame with columns [timestamp, price, idx, side, g_up, g_down]
+    """
+    if 'g_up' not in events.columns or 'g_down' not in events.columns:
+        print("  ⚠️ events 未包含 g_up/g_down 列，回退 MA 信号")
+        return generate_ma_signals(bars, events, {'ma_type': 'ewma', 'span': 20})
+
+    z_min = config.get('cusum_z_min', 0.0)
+    print(f"\n[CUSUM Direction] 生成信号 (z_min={z_min:.2f})")
+
+    signals = events.copy()
+
+    # CUSUM 方向：g_up >= |g_down| → long, else → short
+    signals['side'] = (signals['g_up'] >= np.abs(signals['g_down'])).astype(int)
+    signals['side'] = signals['side'].replace(0, -1)
+
+    # Z-score 强度过滤
+    if z_min > 0:
+        avg_threshold = (signals['g_up'] + np.abs(signals['g_down'])).mean() * 0.5
+        if avg_threshold > 0:
+            signals['cusum_z'] = (signals['g_up'] - np.abs(signals['g_down'])) / avg_threshold
+            before = len(signals)
+            z_mask = signals['cusum_z'].abs() >= z_min
+            signals = signals[z_mask].copy()
+            print(f"  Z-score 过滤: {before} → {len(signals)} 信号")
+
+    # 获取事件索引
+    signals['idx'] = [bars.index.get_loc(ts) for ts in signals.index]
+
+    # 统计
+    n_long = int((signals['side'] == 1).sum())
+    n_short = int((signals['side'] == -1).sum())
+    total = len(signals)
+    print(f"\n[信号] 生成完成")
+    print(f"   类型: CUSUM Direction")
+    print(f"   总信号数: {total}")
+    print(f"   多头信号: {n_long} ({n_long/total*100:.1f}%)")
+    print(f"   空头信号: {n_short} ({n_short/total*100:.1f}%)")
+
+    return signals
+
+
+def generate_rf_signals(
+    bars: pd.DataFrame,
+    events: pd.DataFrame,
+    rf_signals_path: str
+) -> pd.DataFrame:
+    """
+    从 RF Primary 信号文件读取 side，并对齐到当前 events。
+
+    :param bars: Dollar Bars DataFrame
+    :param events: CUSUM 事件点 DataFrame
+    :param rf_signals_path: RF 信号 parquet 路径
+    :returns: DataFrame with columns [idx, side, ...]
+    :raises FileNotFoundError: 若 RF 信号文件不存在
+    """
+    if not os.path.exists(rf_signals_path):
+        raise FileNotFoundError(rf_signals_path)
+
+    rf_df = pd.read_parquet(rf_signals_path)
+    common_idx = events.index.intersection(rf_df.index)
+    signals = events.loc[common_idx].copy()
+    signals['side'] = rf_df.loc[common_idx, 'side'].astype(int).values
+    signals['idx'] = [bars.index.get_loc(ts) for ts in signals.index]
+
+    if 'y_prob' in rf_df.columns:
+        signals['rf_prob'] = rf_df.loc[common_idx, 'y_prob'].astype(float).values
+
+    n_long = int((signals['side'] == 1).sum())
+    n_short = int((signals['side'] == -1).sum())
+    total = len(signals)
+    print(f"\n[RF Primary] 信号生成完成")
+    print(f"   来源: {rf_signals_path}")
+    print(f"   总信号数: {total}")
+    print(f"   多头信号: {n_long} ({n_long/total*100:.1f}%)")
+    print(f"   空头信号: {n_short} ({n_short/total*100:.1f}%)")
 
     return signals
 
@@ -483,7 +578,7 @@ def main():
 
     # Step 1: 加载数据
     print("\n[Step 1] 加载数据...")
-    bars_path = os.path.join(BARS_DIR, 'dollar_bars_target4.parquet')
+    bars_path = os.path.join(BARS_DIR, f'dollar_bars_target{TARGET_DAILY_BARS}.parquet')
     bars = load_dollar_bars(bars_path)
 
     events_path = os.path.join(FEATURES_DIR, 'cusum_events.parquet')
@@ -493,8 +588,21 @@ def main():
     events_features = load_events_features(features_path)
 
     # Step 2: 生成信号
-    print("\n[Step 2] 生成 MA Primary Model 信号...")
-    signals = generate_ma_signals(bars, events, MA_PRIMARY_MODEL)
+    primary_model_type = PRIMARY_MODEL_TYPE
+    if primary_model_type == 'ma':
+        print("\n[Step 2] 生成 MA Primary Model 信号...")
+        signals = generate_ma_signals(bars, events, MA_PRIMARY_MODEL)
+    elif primary_model_type == 'rf':
+        print("\n[Step 2] 生成 RF Primary Model 信号...")
+        rf_path = os.path.join(FEATURES_DIR, 'rf_primary_signals.parquet')
+        signals = generate_rf_signals(bars, events, rf_path)
+    elif primary_model_type == 'cusum_direction':
+        print("\n[Step 2] 生成 CUSUM Direction Primary Model 信号...")
+        signals = generate_cusum_direction_signals(
+            bars, events, MA_PRIMARY_MODEL
+        )
+    else:
+        raise ValueError(f"Unknown PRIMARY_MODEL_TYPE: {primary_model_type}")
 
     # Step 3: TBM 计算
     print("\n[Step 3] TBM 计算...")

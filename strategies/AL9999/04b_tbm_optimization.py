@@ -32,7 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from strategies.AL9999.config import (
     BARS_DIR, FIGURES_DIR, FEATURES_DIR,
-    MA_PRIMARY_MODEL, TBM_CONFIG
+    MA_PRIMARY_MODEL, TBM_CONFIG, TARGET_DAILY_BARS
 )
 
 from afmlkit.feature.core.ma import ewma
@@ -48,7 +48,7 @@ def load_data():
     print("\n[Step 1] 加载数据...")
 
     # 加载 Dollar Bars
-    bars_path = os.path.join(BARS_DIR, 'dollar_bars_target4.parquet')
+    bars_path = os.path.join(BARS_DIR, f'dollar_bars_target{TARGET_DAILY_BARS}.parquet')
     bars = pd.read_parquet(bars_path)
     print(f"   Dollar Bars: {len(bars)} bars")
 

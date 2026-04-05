@@ -35,7 +35,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from strategies.IF9999.config import (
     DATA_PATH, CONTRACT_MULTIPLIER, TARGET_DAILY_BARS, EWMA_SPAN,
-    ACF_LAGS, BARS_DIR, FIGURES_DIR, OUTPUT_DIR
+    BARS_DIR, FIGURES_DIR, OUTPUT_DIR
 )
 
 from numba import njit
@@ -221,12 +221,11 @@ def compute_returns(bars: pd.DataFrame, log: bool = True) -> pd.Series:
 # 三刀验证
 # ============================================================
 
-def validate_independence(returns: pd.Series, acf_lags: list = [1, 5, 10]) -> dict:
+def validate_independence(returns: pd.Series) -> dict:
     """
     第一刀：独立性验证（序列相关性检验）。
 
     :param returns: 收益率序列
-    :param acf_lags: 自相关检验滞后阶数
     :returns: 验证结果字典
     """
     # AC1 计算
@@ -331,67 +330,89 @@ def run_three_knife_validation(time_returns: pd.Series, dollar_returns: pd.Serie
 # 参数优化
 # ============================================================
 
+def _compute_multi_acf_score(returns: pd.Series, max_lag: int = 10) -> float:
+    """
+    多阶相关强度: Σ_{k=1..max_lag} |ρ_k|
+    衡量累积自相关性，单一 AC1 不足以捕捉多阶相关模式。
+    """
+    from statsmodels.tsa.stattools import acf
+    acf_vals = acf(returns, nlags=max_lag, fft=True)
+    return float(np.sum(np.abs(acf_vals[1:])))  # 排除 lag 0
+
+
 def compute_weighted_score(
     ac1: float,
-    lb_p: float,
+    multi_acf_sum: float,
     vov_ratio: float,
     jb_stat: float,
     skew: float,
     kurt: float,
+    actual_bars_per_day: float,
 ) -> dict:
     """
-    计算加权评分（AFML 优先级：独立性 > 同分布 > 正态性）。
+    计算加权评分 v2（effect-size 独立性 + 可交易性）。
 
     权重分配：
-    - 第一刀（独立性）：50%
-        - AC1: 25%（目标 ≈ 0，归一化：min-max 到 0-1）
-        - Ljung-Box p: 25%（目标 > 0.05，归一化：1 - min(p, 0.05)/0.05）
-    - 第二刀（同分布）：30%
-        - VoV ratio: 30%（目标 → 0，归一化：min-max 到 0-1）
-    - 第三刀（正态性）：20%
-        - JB: 10%（目标最低，对数归一化）
-        - Skew: 5%（目标 ≈ 0，归一化：abs(skew)/2，上限 1）
-        - Kurt: 5%（目标 ≈ 3，归一化：abs(kurt-3)/50，上限 1）
+    - independence_effect  50%: AC1 35% + Multi-ACF Σ|ρ_k| 15%
+    - distribution_stability  25%: VoV ratio
+    - normality  10%: JB + Skew + Kurt
+    - trading_density  15%: bars/day 偏离惩罚
 
     :returns: 评分详情字典
     """
-    # 第一刀：独立性（50%）
-    # AC1 归一化：假设合理范围 [0, 0.05]，越小越好
-    ac1_score = min(abs(ac1) / 0.05, 1.0)  # 0-1，越小越好
-    # Ljung-Box p 归一化：目标 > 0.05，越大越好
-    lb_score = 1.0 - min(lb_p, 0.05) / 0.05  # 0-1，越小越好
+    # =============================================
+    # 1. independence_effect (50%)
+    # =============================================
+    ac1_score = min(abs(ac1) / 0.10, 1.0)
+    multi_acf_s = min(multi_acf_sum / 0.50, 1.0)
+    independence = 0.35 * ac1_score + 0.15 * multi_acf_s
 
-    independence_score = 0.25 * ac1_score + 0.25 * lb_score  # 权重 50%
-
-    # 第二刀：同分布（30%）
-    # VoV ratio 归一化：假设合理范围 [0, 0.1]，越小越好
+    # =============================================
+    # 2. distribution_stability (25%)
+    # =============================================
     vov_score = min(vov_ratio / 0.1, 1.0) if not np.isnan(vov_ratio) else 1.0
+    identically_dist = 0.25 * vov_score
 
-    identically_distributed_score = 0.30 * vov_score  # 权重 30%
-
-    # 第三刀：正态性（20%）
-    # JB 归一化：对数缩放，假设范围 [1e4, 1e9]
-    jb_score = min(np.log10(max(jb_stat, 1)) / 9, 1.0)  # log10(JB)/9，0-1
-    # Skew 归一化：假设合理范围 [0, 2]
+    # =============================================
+    # 3. normality (10%)
+    # =============================================
+    jb_score = min(np.log10(max(jb_stat, 1)) / 9, 1.0)
     skew_score = min(abs(skew) / 2, 1.0)
-    # Kurt 归一化：假设合理范围 [3, 50]，偏离 3 的程度
     kurt_score = min(abs(kurt - 3) / 47, 1.0)
+    normality = 0.10 * jb_score + 0.05 * skew_score + 0.05 * kurt_score
 
-    normality_score = 0.10 * jb_score + 0.05 * skew_score + 0.05 * kurt_score  # 权重 20%
+    # =============================================
+    # 4. trading_density (15%) — 新增
+    # =============================================
+    min_bpd = 15  # AFML 推荐 20-50, 15 为最低可交易阈值
+    if actual_bars_per_day >= min_bpd:
+        density_penalty = 0.0
+    elif actual_bars_per_day >= 10:
+        density_penalty = 0.3 * (min_bpd - actual_bars_per_day) / (min_bpd - 10)
+    elif actual_bars_per_day >= 5:
+        density_penalty = 0.3 + 0.4 * (10 - actual_bars_per_day) / 5
+    else:
+        density_penalty = 0.7 + 0.3 * max(5 - actual_bars_per_day, 0) / 5
+    density_penalty = min(max(density_penalty, 0.0), 1.0)
+    trading_density = 0.15 * density_penalty
 
-    # 综合评分（越低越好，范围 0-1）
-    total_score = independence_score + identically_distributed_score + normality_score
+    # =============================================
+    # 总分 (0-1, 越低越好)
+    # =============================================
+    total_score = independence + identically_dist + normality + trading_density
 
     return {
         'ac1_score': ac1_score,
-        'lb_score': lb_score,
+        'multi_acf_score': multi_acf_s,
         'vov_score': vov_score,
         'jb_score': jb_score,
         'skew_score': skew_score,
         'kurt_score': kurt_score,
-        'independence_score': independence_score,
-        'identically_distributed_score': identically_distributed_score,
-        'normality_score': normality_score,
+        'independence_score': independence,
+        'identically_distributed_score': identically_dist,
+        'normality_score': normality,
+        'trading_density_score': trading_density,
+        'density_penalty': density_penalty,
         'weighted_score': total_score,
     }
 
@@ -399,54 +420,45 @@ def compute_weighted_score(
 def evaluate_target_bars(df: pd.DataFrame, target_bars: int, ewma_span: int = 20) -> dict:
     """
     评估指定 TARGET_DAILY_BARS 参数的效果。
-
-    :param df: 1 分钟 OHLCV 数据
-    :param target_bars: 目标每日 Bar 数量
-    :param ewma_span: EWMA 窗口
-    :returns: 评估结果字典
     """
-    # 构建 Dollar Bars
     thresholds = compute_dynamic_thresholds(df, target_bars, ewma_span)
     bars = build_dollar_bars(df, thresholds)
     returns = compute_returns(bars)
 
-    # 计算验证指标
     ac1 = np.corrcoef(returns[:-1], returns[1:])[0, 1]
-    lb_result = acorr_ljungbox(returns, lags=[10], return_df=True)
-    lb_p = lb_result['lb_pvalue'].values[0]
+    multi_acf = _compute_multi_acf_score(returns, max_lag=10)
 
-    # VoV
     monthly_vars = returns.groupby(returns.index.to_period('M')).var()
     vov = monthly_vars.var()
     mean_var = monthly_vars.mean()
     vov_ratio = vov / mean_var if mean_var > 0 else np.nan
 
-    # JB 和分布统计
     jb_stat, _ = stats.jarque_bera(returns)
     skew = stats.skew(returns)
     kurt = stats.kurtosis(returns) + 3
 
-    # 计算实际每日 Bar 数
     daily_counts = bars.groupby(bars.index.date).size()
     actual_bars_per_day = daily_counts.mean()
 
-    # 计算加权评分
-    scores = compute_weighted_score(ac1, lb_p, vov_ratio, jb_stat, skew, kurt)
+    scores = compute_weighted_score(
+        ac1, multi_acf, vov_ratio, jb_stat, skew, kurt, actual_bars_per_day
+    )
 
     return {
         'target_bars': target_bars,
         'n_bars': len(bars),
         'actual_bars_per_day': actual_bars_per_day,
         'AC1': ac1,
-        'Ljung_Box_p': lb_p,
+        'Multi_ACF_sum': multi_acf,
         'VoV_ratio': vov_ratio,
         'JB_stat': jb_stat,
         'Skewness': skew,
         'Kurtosis': kurt,
-        # 加权评分详情
+        'density_penalty': scores['density_penalty'],
         'independence': scores['independence_score'],
         'identically_dist': scores['identically_distributed_score'],
         'normality': scores['normality_score'],
+        'trading_density': scores['trading_density_score'],
         'weighted_score': scores['weighted_score'],
     }
 
@@ -470,7 +482,8 @@ def run_parameter_optimization(df: pd.DataFrame, target_range: list) -> pd.DataF
         result = evaluate_target_bars(df, target, EWMA_SPAN)
         results.append(result)
         print(f"    实际日均: {result['actual_bars_per_day']:.1f} bars")
-        print(f"    AC1: {result['AC1']:.4f}, JB: {result['JB_stat']:.2e}, 加权评分: {result['weighted_score']:.4f}")
+        print(f"    实际日均: {result['actual_bars_per_day']:.1f} bars, AC1: {result['AC1']:.4f}, "
+              f"Multi_ACF: {result['Multi_ACF_sum']:.4f}, 评分: {result['weighted_score']:.4f}")
 
     results_df = pd.DataFrame(results)
     return results_df

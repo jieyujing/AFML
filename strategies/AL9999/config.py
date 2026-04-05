@@ -43,7 +43,7 @@ def map_to_trading_date(dt):
 # Dollar Bars 参数
 # ============================================================
 
-TARGET_DAILY_BARS = 4      # 目标每天 6 个 Bars（初始值，优化后调整）
+TARGET_DAILY_BARS = 15      # 目标每天 6 个 Bars（初始值，优化后调整）
 EWMA_SPAN = 20             # 动态阈值 EWMA 窗口
 
 # 验证参数
@@ -154,12 +154,43 @@ FEATURE_CONFIG = {
 # Phase 4: MA Primary Model 参数
 # ============================================================
 
+# PRIMARY_MODEL_TYPE: 'ma' | 'cusum_direction' | 'rf'
+# - 'ma': price > MA → long, price < MA → short
+# - 'cusum_direction': g_up >= |g_down| → long, else → short
+# - 'rf': load side from RF primary model output
+PRIMARY_MODEL_TYPE = 'cusum_direction'
+
 MA_PRIMARY_MODEL = {
+    # MA 参数（PRIMARY_MODEL_TYPE='ma' 时使用）
     'ma_type': 'ewma',
     'span': 20,
+    # CUSUM Direction 参数
+    'cusum_z_min': 0.0,  # Z-score 强度过滤阈值（0=不过滤）
 }
 
-PRIMARY_MODEL_TYPE = 'ma'
+# Phase 4: RF Primary Model 参数
+RF_PRIMARY_CONFIG = {
+    'n_estimators': 1000,
+    'n_jobs': -1,
+    'random_state': 42,
+    'cv_n_splits': 5,
+    'cv_embargo_pct': 0.01,
+    'holdout_months': 12,
+    'feature_prefixes': [
+        'feat_rsi_',
+        'feat_roc_',
+        'feat_stoch_',
+        'feat_adx_',
+        'feat_vwap_',
+        'feat_cross_ma_',
+        'feat_shannon_',
+        'feat_lz_entropy_',
+        'feat_hl_vol_',
+    ],
+    'min_t_value': 0.0,
+    'max_samples_method': 'avgU',
+    't1_col': 'exit_ts',
+}
 
 # ============================================================
 # Phase 4: TBM (Triple Barrier Method) 参数

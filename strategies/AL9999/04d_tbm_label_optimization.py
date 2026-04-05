@@ -32,7 +32,7 @@ from itertools import product
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from strategies.AL9999.config import BARS_DIR, FEATURES_DIR, FIGURES_DIR
+from strategies.AL9999.config import BARS_DIR, FEATURES_DIR, FIGURES_DIR, TARGET_DAILY_BARS
 from afmlkit.label.tbm import triple_barrier
 
 
@@ -90,7 +90,7 @@ TARGET_RET_COL = 'feat_ewm_vol_20'
 def load_data():
     """加载数据。"""
     # Dollar Bars
-    bars = pd.read_parquet(os.path.join(BARS_DIR, 'dollar_bars_target4.parquet'))
+    bars = pd.read_parquet(os.path.join(BARS_DIR, f'dollar_bars_target{TARGET_DAILY_BARS}.parquet'))
 
     # 事件特征
     events = pd.read_parquet(os.path.join(FEATURES_DIR, 'events_features.parquet'))

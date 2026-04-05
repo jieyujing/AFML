@@ -7,14 +7,14 @@ import os
 import numpy as np
 import pandas as pd
 
-from strategies.AL9999.config import BARS_DIR, COMMISSION_RATE, SLIPPAGE_POINTS
+from strategies.AL9999.config import BARS_DIR, TARGET_DAILY_BARS, COMMISSION_RATE, SLIPPAGE_POINTS
 
 
 def load_dollar_bars() -> pd.DataFrame:
     """
     Load AL9999 dollar bars used by the research backtest.
     """
-    return pd.read_parquet(os.path.join(BARS_DIR, "dollar_bars_target4.parquet"))
+    return pd.read_parquet(os.path.join(BARS_DIR, f"dollar_bars_target{TARGET_DAILY_BARS}.parquet"))
 
 
 def rolling_backtest(

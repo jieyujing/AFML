@@ -41,6 +41,20 @@ from afmlkit.importance.mda import clustered_mda
 sns.set_theme(style="whitegrid", context="paper")
 
 
+def merge_rf_probability(features: pd.DataFrame, rf_signals: pd.DataFrame) -> pd.DataFrame:
+    """
+    Merge RF primary probability into meta feature set.
+
+    :param features: Meta feature DataFrame.
+    :param rf_signals: RF signal DataFrame containing y_prob.
+    :returns: DataFrame with rf_prob column.
+    """
+    merged = features.copy()
+    merged['rf_prob'] = rf_signals.reindex(merged.index)['y_prob'].astype(float)
+    merged['rf_prob'] = merged['rf_prob'].fillna(0.5)
+    return merged
+
+
 def split_train_holdout(X, y, sample_weight, holdout_months=6):
     """
     划分训练集和 Holdout OOS 集。
@@ -109,6 +123,16 @@ def load_data():
 
     # 处理 sample_weight 中的 NaN
     sample_weight = sample_weight.fillna(sample_weight.mean())
+
+    # 注入 RF Primary 置信度特征
+    rf_path = os.path.join(FEATURES_DIR, 'rf_primary_signals.parquet')
+    if os.path.exists(rf_path):
+        rf_signals = pd.read_parquet(rf_path)
+        X = merge_rf_probability(X, rf_signals)
+        print(f"  RF 概率特征: 已注入 rf_prob (from {rf_path})")
+    else:
+        X['rf_prob'] = 0.5
+        print("  RF 概率特征: 未找到 rf_primary_signals.parquet，使用常数 0.5")
 
     # 若存在缺失结束时间，用“事件后 1 天”保守兜底，避免 PurgedKFold 漏清洗
     missing_t1 = int(t1.isna().sum())

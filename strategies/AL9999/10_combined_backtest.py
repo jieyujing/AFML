@@ -35,6 +35,7 @@ from strategies.AL9999.config import (
     FILTER_FIRST_CONFIG,
     COMMISSION_RATE,
     SLIPPAGE_POINTS,
+    TARGET_DAILY_BARS,
 )
 from strategies.AL9999.threshold_optimizer import build_threshold_report, select_best_threshold
 from strategies.AL9999.backtest_utils import rolling_backtest
@@ -214,6 +215,32 @@ def _perf_from_trades(trades_df: pd.DataFrame) -> dict:
     return calculate_performance(use_cols["net_pnl"], use_cols["net_ret"])
 
 
+def _resolve_bars_path() -> str:
+    """
+    Resolve dollar bars file path with fallback for test fixtures or custom runs.
+    """
+    preferred = os.path.join(BARS_DIR, f'dollar_bars_target{TARGET_DAILY_BARS}.parquet')
+    if os.path.exists(preferred):
+        return preferred
+
+    candidates = sorted(
+        [
+            os.path.join(BARS_DIR, name)
+            for name in os.listdir(BARS_DIR)
+            if name.startswith("dollar_bars_target") and name.endswith(".parquet")
+        ]
+    ) if os.path.isdir(BARS_DIR) else []
+
+    if not candidates:
+        raise FileNotFoundError(
+            f"无法找到 bars 文件: {preferred}，且 {BARS_DIR} 下不存在任何 dollar_bars_target*.parquet"
+        )
+
+    fallback = candidates[-1]
+    logger.warning("bars 文件缺失，回退使用: %s", fallback)
+    return fallback
+
+
 def _build_filter_first_threshold_report(
     signals: pd.DataFrame,
     bars: pd.DataFrame,
@@ -333,7 +360,7 @@ def main():
     guard_cfg = filter_cfg.get("execution_guard", {})
     threshold_report, best_threshold, baseline_oos_n = _build_filter_first_threshold_report(
         signals=tbm,
-        bars=pd.read_parquet(os.path.join(BARS_DIR, 'dollar_bars_target4.parquet')),
+        bars=pd.read_parquet(_resolve_bars_path()),
         oos_start=oos_start,
         threshold_grid=threshold_grid,
         side_mode=side_mode,
@@ -360,7 +387,7 @@ def main():
     
     # 3. 使用 guard-aware 单仓位回测主口径
     logger.info("[Step 2] 运行 guard-aware 单仓位回测...")
-    bars = pd.read_parquet(os.path.join(BARS_DIR, 'dollar_bars_target4.parquet'))
+    bars = pd.read_parquet(_resolve_bars_path())
 
     primary_trades = rolling_backtest(
         tbm,

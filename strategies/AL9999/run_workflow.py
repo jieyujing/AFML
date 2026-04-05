@@ -48,7 +48,7 @@ PHASES = {
     4: {
         'name': 'Primary Model + TBM',
         'script': '04_ma_primary_model.py',
-        'description': 'MA Primary Model 回测，TBM 标签',
+        'description': "Primary Model 回测（支持 ma/cusum_direction/rf），TBM 标签",
     },
     5: {
         'name': 'Meta Model',
