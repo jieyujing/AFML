@@ -1,36 +1,16 @@
 """
-Volume Distribution Factor Transforms.
+Volume distribution factor transforms — QIML series (0514/0607/0618/0124/0116).
 
-Implements volume distribution statistics transforms including Shannon entropy,
-skewness, kurtosis, peak ratio, and differential standard deviation.
-
-References
-----------
-    Marcos López de Prado. *Advances in Financial Machine Learning*.
-    Marcos López de Prado. *Machine Learning for Asset Managers*.
+These transforms operate on OHLCV DataFrames and use pandas groupby+resample
+semantics. They are intentionally NOT Numba-accelerated because their value
+lies in the cross-sectional aggregation pattern, not in element-wise loops.
 """
 
 import numpy as np
 import pandas as pd
+from typing import Union
 
 from afmlkit.feature.base import SISOTransform
-
-
-def _entropy_func(x: pd.DataFrame) -> float:
-    """
-    Compute Shannon entropy of volume distribution for a single resample window.
-
-    :param x: DataFrame with 'amount' column for the resample window.
-    :returns: Shannon entropy value.
-    """
-    amounts = x['amount'].values
-    if len(amounts) == 0 or amounts.sum() == 0:
-        return np.nan
-
-    binned = pd.cut(amounts, bins=5)
-    counts = pd.Series(binned).value_counts(normalize=True).values
-    counts = counts[counts > 0]
-    return - (counts * np.log(counts)).sum()
 
 
 class VolEntropyTransform(SISOTransform):
@@ -101,55 +81,43 @@ class VolEntropyTransform(SISOTransform):
             self.produces = [params['output_col']]
         return self
 
-    def _pd(self, x: pd.DataFrame) -> pd.Series:
+    def _pd(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
         """
         Compute Shannon entropy of volume distribution using pandas.
 
         :param x: DataFrame with 'code' and 'amount' columns.
         :returns: pd.Series with entropy values, index aligned to input DataFrame.
         """
+        if isinstance(x, pd.Series):
+            raise ValueError("VolEntropyTransform requires a DataFrame with 'code' column.")
         if 'code' not in x.columns:
             raise ValueError("Input DataFrame must contain 'code' column for grouping.")
 
-        def _entropy_func_inner(x_inner: pd.Series) -> float:
-            """Compute entropy from a Series of amounts."""
-            amounts = x_inner.values
-            if len(amounts) == 0 or amounts.sum() == 0:
+        def _entropy(x_inner: pd.DataFrame) -> float:
+            """Shannon entropy of volume distribution for one resample window."""
+            amounts_arr = np.asarray(x_inner['amount'].values, dtype=np.float64)
+            if len(amounts_arr) < 2 or amounts_arr.sum() == 0:
                 return np.nan
-            binned = pd.cut(amounts, bins=self.n_bins)
-            counts = pd.Series(binned).value_counts(normalize=True).values
+            binned = pd.cut(amounts_arr, bins=self.n_bins)
+            vc = pd.Series(binned).value_counts(normalize=True)
+            counts = np.asarray(vc.values, dtype=np.float64)
             counts = counts[counts > 0]
             return - (counts * np.log(counts)).sum()
 
-        # Reset index to get timestamp as column, preserving for later
         original_index = x.index
-        df_reset = x.reset_index()
-        timestamp_col = df_reset.columns[0]  # Typically 'timestamp' or 'index' for DatetimeIndex
-
-        # Compute entropy per (code, time_bucket) using explicit loop
-        # This works consistently for single or multiple codes
         records = []
-        for code, group in df_reset.groupby('code'):
-            group_indexed = group.set_index(timestamp_col)
-            for period_start, period_group in group_indexed.resample(self.frequency):
-                ent = _entropy_func_inner(period_group['amount'])
-                records.append({
-                    'code': code,
-                    'bucket': period_start,
-                    self.produces[0]: ent,
-                })
-        entropy_df = pd.DataFrame(records)
+        ts_index = pd.DatetimeIndex(x.index).floor(self.frequency)  # type: ignore[union-abstract]
+        for (code, ts), group in x.groupby([x['code'], ts_index]):  # type: ignore[union-abstract]
+            ent = _entropy(group)
+            for idx in group.index:
+                records.append({'idx': idx, 'code': code, 'bucket': ts, 'entropy': ent})
 
-        # Create time bucket column for merging
-        df_reset['bucket'] = df_reset[timestamp_col].dt.floor(self.frequency)
+        result_df = pd.DataFrame(records).set_index('idx')
+        entropy_val: np.ndarray = result_df['entropy'].values  # type: ignore[assignment]
+        out = pd.Series(entropy_val, index=original_index, name=self.output_name)
+        return out
 
-        # Merge entropy values back
-        merged = df_reset.merge(entropy_df, on=['code', 'bucket'], how='left')
-
-        result = merged[self.produces[0]].values
-        return pd.Series(result, index=original_index, name=self.output_name)
-
-    def _nb(self, x: pd.DataFrame) -> pd.Series:
+    def _nb(self, x: Union[pd.DataFrame, pd.Series]) -> pd.Series:
         """
         Numba fallback: delegate to pandas implementation.
 
