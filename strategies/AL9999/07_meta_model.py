@@ -33,7 +33,7 @@ from sklearn.metrics import (
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from strategies.AL9999.config import FEATURES_DIR, FIGURES_DIR, META_MODEL_CONFIG
+from strategies.AL9999.config import FEATURES_DIR, FIGURES_DIR, META_MODEL_CONFIG, TSFRESH_CONFIG
 from afmlkit.validation.purged_cv import PurgedKFold
 from afmlkit.importance.clustering import cluster_features
 from afmlkit.importance.mda import clustered_mda
@@ -87,14 +87,31 @@ def split_train_holdout(X, y, sample_weight, holdout_months=6):
     return (X_train, y_train, w_train), (X_holdout, y_holdout, w_holdout), holdout_start
 
 
-def load_data():
+def load_data(include_tsfresh: bool = True):
     """加载 Meta Features、Meta Labels 与真实事件结束时间 t1。"""
     print("\n[Step 1] 加载数据...")
 
-    # 加载事件特征（替代 meta_features）
+    # 加载事件特征（L1-L4 特征）
     features_path = os.path.join(FEATURES_DIR, 'events_features.parquet')
     features = pd.read_parquet(features_path)
-    print(f"  特征矩阵: {features.shape}")
+    print(f"  事件特征: {features.shape}")
+
+    # 可选：合并 tsfresh 特征（Phase 2b）
+    if include_tsfresh and TSFRESH_CONFIG.get('enabled', False):
+        tsfresh_path = os.path.join(FEATURES_DIR, 'tsfresh_features.parquet')
+        if os.path.exists(tsfresh_path):
+            tsfresh_df = pd.read_parquet(tsfresh_path)
+            # 移除 event_idx 和 timestamp 列，只保留特征
+            tsfresh_df = tsfresh_df.drop(columns=['event_idx'], errors='ignore')
+            tsfresh_df = tsfresh_df.drop(columns=['timestamp'], errors='ignore')
+            # 按索引对齐合并
+            common_idx = features.index.intersection(tsfresh_df.index)
+            features = features.loc[common_idx].join(
+                tsfresh_df.loc[common_idx], rsuffix='_tsfresh'
+            )
+            print(f"  + tsfresh 特征: {tsfresh_df.shape[1]} 列 → 合并后: {features.shape}")
+        else:
+            print(f"  ⚠️ tsfresh 特征未找到: {tsfresh_path}")
 
     # 加载修正后的 Meta Labels
     labels_path = os.path.join(FEATURES_DIR, 'meta_labels.parquet')
