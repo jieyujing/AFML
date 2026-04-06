@@ -291,3 +291,35 @@ FILTER_FIRST_CONFIG = {
 
 COMMISSION_RATE = 0.00005   # 约 5bp（商品期货高于股指）
 SLIPPAGE_POINTS = 1.0       # 单边滑点（点数）
+
+# ============================================================
+# Phase 5: Primary Model Factory 参数
+# ============================================================
+
+PRIMARY_FACTORY_CONFIG = {
+    # CUSUM 目标采样率（第一轮实验）
+    'cusum_rates': [0.05, 0.10, 0.15],
+    # 双均线窗口
+    'fast_windows': [5, 8, 10, 12, 15],
+    'slow_windows': [20, 30, 40, 50, 60],
+    # TBM vertical barrier（第一轮固定 pt=sl=1.0σ）
+    'pt_sl': 1.0,          # pt = sl = 1.0 sigma
+    'vertical_bars': [10, 20, 30],
+    # 筛选参数
+    'top_n_lightweight': 20,    # 轻量扫描后保留 Top-N
+    'top_n_final': 5,           # 最终输出 Top-N 给 Meta Model
+    # OOS 切分比例
+    'oos_test_ratio': 0.30,     # 30% 用于 OOS 测试
+    # 评分权重
+    'score_weights': {
+        'recall': 0.45,
+        'lift': 0.20,
+        'cpr': 0.15,
+        'turnover': -0.10,
+        'uniqueness': 0.10,
+    },
+    # CUSUM 校准范围
+    'k_search_min': 0.1,
+    'k_search_max': 10.0,
+    'k_tolerance': 1e-4,
+}
