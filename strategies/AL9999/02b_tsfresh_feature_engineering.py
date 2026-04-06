@@ -19,9 +19,12 @@
 """
 
 import os
+import sys
 import numpy as np
 import pandas as pd
 from scipy.stats import skew, kurtosis
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from strategies.AL9999.config import (
     BARS_DIR,
@@ -290,8 +293,9 @@ def extract_tsfresh_features(
             "cusum_events must have 'event_idx', 'idx', or 'timestamp' column"
         )
 
-    # 获取 fracdiff 的 d 值（使用前 80% 数据优化）
+    # 获取 fracdiff 的 d 值并预计算全量 fracdiff 序列（使用前 80% 数据优化）
     fracdiff_d_values = {}
+    fracdiff_series = {}
     split_idx = int(len(bars) * 0.8)
     for col in fracdiff_cols:
         if col in available_cols:
@@ -300,7 +304,12 @@ def extract_tsfresh_features(
                 series, thres=FRACDIFF_THRES, d_step=0.05, max_d=1.0, min_corr=0.9
             )
             fracdiff_d_values[col] = d
-            print(f"  FracDiff d for {col}: {d:.4f}")
+            if d > 0:
+                # 对全量序列计算 fracdiff，避免小窗口问题
+                fracdiff_series[col] = frac_diff_ffd(bars[col], d=d, thres=FRACDIFF_THRES)
+            else:
+                fracdiff_series[col] = bars[col].copy()
+            print(f"  FracDiff d for {col}: {d:.4f}, fracdiff precomputed")
 
     # 计算特征数量
     n_features = (
@@ -376,19 +385,8 @@ def extract_tsfresh_features(
         for col in fracdiff_cols:
             if col not in available_cols:
                 continue
-            d = fracdiff_d_values.get(col, 0.0)
-            if d == 0.0:
-                transformed = slice_df[col].values
-            else:
-                fd_series = frac_diff_ffd(
-                    slice_df[col], d=d, thres=FRACDIFF_THRES
-                )
-                # 对齐到原始索引
-                aligned = slice_df[col].copy()
-                aligned.iloc[:] = np.nan
-                common_idx = aligned.index.intersection(fd_series.index)
-                aligned.loc[common_idx] = fd_series.loc[common_idx].values
-                transformed = aligned.values
+            # 从预计算的 fracdiff 全量序列中取当前事件对应的窗口
+            transformed = fracdiff_series[col].iloc[start_idx:end_idx].values
             feat_dict = extract_features_from_slice(transformed, func_names)
             for fn, val in feat_dict.items():
                 features[build_feature_name(col, "fracdiff", fn)] = val

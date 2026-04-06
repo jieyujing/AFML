@@ -87,7 +87,7 @@ TSFRESH_CONFIG = {
     "enabled": True,
     "lookback": 20,                           # 回看 bars 数量
     "fracdiff_cols": ["close", "log_close"],  # 只对这些列做 fracdiff
-    "zscore_windows": [10, 20, 40],
+    "zscore_windows": [5, 10],  # 需 < lookback(20)，window 20 仅最后1点有效
     "features": [
         "mean",
         "median",
