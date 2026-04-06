@@ -80,6 +80,35 @@ TREND_WINDOWS = [5, 10, 15, 20]  # 趋势窗口: 5/10/15/20 bars ≈ 0.3/0.7/1.0
 MIN_T_VALUE = 1.5            # t-value 显著性门槛（过滤纯噪音事件）
 
 # ============================================================
+# Phase 2b: tsfresh 特征参数
+# ============================================================
+
+TSFRESH_CONFIG = {
+    "enabled": True,
+    "lookback": 20,                           # 回看 bars 数量
+    "fracdiff_cols": ["close", "log_close"],  # 只对这些列做 fracdiff
+    "zscore_windows": [10, 20, 40],
+    "features": [
+        "mean",
+        "median",
+        "standard_deviation",
+        "skewness",
+        "kurtosis",
+        "minimum",
+        "maximum",
+        "abs_energy",
+        "mean_change",
+        "mean_abs_change",
+        "count_above_mean",
+        "count_below_mean",
+        "first_location_of_maximum",
+        "first_location_of_minimum",
+        "last_location_of_maximum",
+        "last_location_of_minimum",
+    ],
+}
+
+# ============================================================
 # Feature Engineering 配置
 # ============================================================
 
@@ -142,6 +171,13 @@ FEATURE_CONFIG = {
         "adf_window": 100,
         "sadf_min_window": 10,
         "sadf_max_window": 60,
+    },
+
+    # L4: 成交量分布特征
+    "volume_distribution": {
+        "enabled": True,
+        "frequency": "h",
+        "n_bins": 5,
     },
 
     # Trend Scan 标签（含未来信息，仅用于分析）
