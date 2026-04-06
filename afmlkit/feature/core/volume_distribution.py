@@ -1137,6 +1137,56 @@ class BShapeTransform(SISOTransform):
         return self._pd(x)
 
 
+class PShapeDiffTransform(SISOTransform):
+    """
+    QIML0503: Volume profile P-shape — distance from low price level to close.
+    """
+    def __init__(self, frequency: str = 'H', input_col: str = 'amount', output_col: str = 'vol_p_shape_diff'):
+        super().__init__(input_col, output_col)
+        self.frequency = frequency
+
+    def get_params(self) -> dict:
+        return {'frequency': self.frequency, 'input_col': self.requires[0], 'output_col': self.produces[0]}
+
+    def set_params(self, **params):
+        if 'frequency' in params: self.frequency = params['frequency']
+        if 'input_col' in params: self.requires = [params['input_col']]
+        if 'output_col' in params: self.produces = [params['output_col']]
+        return self
+
+    def _pd(self, x):
+        if 'code' not in x.columns: raise ValueError("Requires 'code' column.")
+        if 'close' not in x.columns: raise ValueError("PShapeDiffTransform requires 'close' column.")
+        def _inner(xi):
+            vs = xi.groupby('close')['amount'].sum()
+            if len(vs) < 2 or vs.sum() == 0: return float('nan')
+            vc = vs.sum()
+            i = int(np.argmax(vs.values))
+            r = float(vs.iloc[i]) / vc
+            n = 0
+            while r < 0.5 and n < len(vs):
+                n += 1
+                r = float(vs.iloc[max(0,i-n):min(len(vs),i+n+1)].sum()) / vc
+            try:
+                low = vs.index[max(0,i-n)]
+            except:
+                low = vs.index.min()
+            close_last = xi['close'].iloc[-1]
+            return float(close_last - low) / float(low) if low != 0 else float('nan')
+        idx = x.index
+        recs = []
+        ts_idx = pd.DatetimeIndex(x.index).floor(self.frequency)
+        for (_, _ts), g in x.groupby([x['code'], ts_idx]):
+            v = _inner(g)
+            for i in g.index: recs.append({'idx': i, 'val': v})
+        df = pd.DataFrame(recs).set_index('idx')
+        return pd.Series(df['val'].values, index=idx, name=self.output_name)
+
+    def _nb(self, x):
+        return self._pd(x)
+
+
+
 class UnanimousBuyingTransform(SISOTransform):
     """
     QIML0629: Unanimous buying pressure — up/down volume ratio.
