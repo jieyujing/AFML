@@ -34,7 +34,8 @@ def test_calibrate_cusum_rates():
     close.index = pd.date_range('2020-01-01', periods=1000, freq='h')
     bars = pd.DataFrame({'close': close})
 
-    result = calibrate_cusum_rates(bars, target_rates=[0.05, 0.10], tol=1e-3)
+    # Use k_min=0.001 since synthetic data needs lower threshold to achieve 5%/10% rates
+    result = calibrate_cusum_rates(bars, target_rates=[0.05, 0.10], k_min=0.001, tol=1e-3)
 
     assert len(result) == 2
     assert result['rate'].tolist() == [0.05, 0.10]
@@ -51,7 +52,7 @@ def test_calibrate_cusum_rates_single_rate():
     close.index = pd.date_range('2020-01-01', periods=500, freq='h')
     bars = pd.DataFrame({'close': close})
 
-    result = calibrate_cusum_rates(bars, target_rates=[0.15], tol=1e-3)
+    result = calibrate_cusum_rates(bars, target_rates=[0.15], k_min=0.001, tol=1e-3)
 
     assert len(result) == 1
     assert result['rate'].iloc[0] == 0.15
@@ -67,7 +68,7 @@ def test_calibrate_cusum_rates_output_columns():
     close.index = pd.date_range('2020-01-01', periods=500, freq='h')
     bars = pd.DataFrame({'close': close})
 
-    result = calibrate_cusum_rates(bars, target_rates=[0.05, 0.10, 0.15])
+    result = calibrate_cusum_rates(bars, target_rates=[0.05, 0.10, 0.15], k_min=0.001)
 
     expected_columns = ['rate', 'k', 'actual_rate', 'n_events']
     assert list(result.columns) == expected_columns

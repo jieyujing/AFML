@@ -8,7 +8,7 @@ from afmlkit.sampling import cusum_filter
 def calibrate_cusum_rates(
     bars: pd.DataFrame,
     target_rates: list[float],
-    k_min: float = 0.001,
+    k_min: float = 0.1,
     k_max: float = 10.0,
     tol: float = 1e-4,
     max_iter: int = 50,
