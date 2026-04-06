@@ -8,6 +8,7 @@ run_workflow.py - AL9999 AFML 工作流统一入口
     # 运行指定阶段
     python run_workflow.py --phase 1    # Dollar Bars 构建
     python run_workflow.py --phase 2    # 特征工程
+    python run_workflow.py --phase 2b   # tsfresh 特征工程
     python run_workflow.py --phase 3    # Trend Scanning
     python run_workflow.py --phase 4    # Primary Model + TBM
     python run_workflow.py --phase 5    # Meta Model
@@ -39,6 +40,11 @@ PHASES = {
         'name': '特征工程',
         'script': '02_feature_engineering.py',
         'description': 'FracDiff 平稳化，CUSUM 事件采样，特征计算',
+    },
+    "2b": {
+        'name': 'tsfresh 特征工程',
+        'script': '02b_tsfresh_feature_engineering.py',
+        'description': 'tsfresh 风格统计特征（CUSUM 事件切片，16 统计函数）',
     },
     3: {
         'name': 'Trend Scanning',
