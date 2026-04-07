@@ -193,6 +193,8 @@ from sklearn.metrics import (
 import joblib
 import json
 import openpyxl
+import shap
+import matplotlib.pyplot as plt
 
 META_MODEL_DIR = "strategies/AL9999/output/meta_model"
 
@@ -686,6 +688,108 @@ def run_inference():
     print(f"  SKIP decisions: {len(output) - n_take} ({(len(output)-n_take)/len(output)*100:.1f}%)")
 
 
+# ============================================================
+# SHAP Explainability Section
+# ============================================================
+
+FEATURE_TAG_MAP = {
+    'n_fired': 'high_ensemble_signal',
+    'agreement_ratio': 'strong_consensus',
+    'ewm_vol': 'high_vol_regime',
+    'ma_gap_pct': 'strong_trend',
+    'fast_slope': 'fast_ma_momentum',
+    'slow_slope': 'slow_ma_momentum',
+    'conflict_flag': 'intra_event_conflict',
+    'vol_jump': 'volatility_jump',
+    'ret_1': 'strong_return_bar',
+    'price_to_slow': 'far_from_slow_ma',
+    'candidate_id': 'top_recall_candidate',
+    'cusum_rate': 'high_freq_candidate',
+}
+
+
+def compute_shap_for_sample(model, X_sample: pd.DataFrame, feature_cols: list) -> np.ndarray:
+    """Compute SHAP values for a sample using TreeExplainer."""
+    # Handle CalibratedClassifierCV - extract the underlying estimator
+    if hasattr(model, 'estimator_'):
+        # CalibratedClassifierCV with ensemble=False
+        base_model = model.estimator_
+    elif hasattr(model, 'calibrated_classifiers_'):
+        # CalibratedClassifierCV with ensemble=True - take first one
+        base_model = model.calibrated_classifiers_[0].estimator
+    else:
+        base_model = model
+
+    explainer = shap.TreeExplainer(base_model)
+    shap_values = explainer.shap_values(X_sample[feature_cols])
+    # shap_values shape: (n_samples, n_features) for binary classification
+    if isinstance(shap_values, list):
+        shap_values = shap_values[1]  # take positive class
+    return shap_values
+
+
+def generate_reason_tags(shap_values: np.ndarray, feature_cols: list, top_k: int = 3) -> list:
+    """Generate human-readable reason tags from top SHAP contributions."""
+    tags = []
+    for i in range(len(shap_values)):
+        row = shap_values[i]
+        top_indices = np.argsort(np.abs(row))[-top_k:][::-1]
+        row_tags = []
+        for idx in top_indices:
+            feat_name = feature_cols[idx]
+            tag = FEATURE_TAG_MAP.get(feat_name, feat_name)
+            direction = 'positive' if row[idx] > 0 else 'negative'
+            row_tags.append(f"{tag}({direction})")
+        tags.append('; '.join(row_tags))
+    return tags
+
+
+def save_shap_summary(model, X_sample: pd.DataFrame, feature_cols: list, output_dir: str):
+    """Save SHAP summary plot."""
+    shap_values = compute_shap_for_sample(model, X_sample, feature_cols)
+    plt.figure(figsize=(12, 8))
+    shap.summary_plot(shap_values, X_sample[feature_cols], show=False, max_display=20)
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "meta_shap_summary.png"), dpi=150, bbox_inches='tight')
+    plt.close()
+    print("  SHAP summary saved")
+
+    # Importance from mean |SHAP|
+    imp = pd.DataFrame({
+        'feature': feature_cols,
+        'shap_importance': np.abs(shap_values).mean(axis=0),
+    }).sort_values('shap_importance', ascending=False)
+    imp.to_csv(os.path.join(output_dir, "meta_feature_importance_shap.csv"), index=False)
+    return imp
+
+
+def run_shap_analysis():
+    """Run SHAP analysis on the trained model."""
+    print("=" * 70)
+    print("  AL9999 Unified Meta Model SHAP Analysis")
+    print("=" * 70)
+
+    # Load model and data
+    print("\n[Step 1] Loading model and data...")
+    cal_model = joblib.load(os.path.join(META_MODEL_DIR, "meta_calibrator_v1.pkl"))
+    df = pd.read_parquet(os.path.join(META_MODEL_DIR, "meta_training_table.parquet"))
+    feature_cols = get_feature_columns(df)
+    print(f"  Loaded {len(df)} rows, {len(feature_cols)} features")
+
+    # Sample for SHAP
+    print("\n[Step 2] Computing SHAP values...")
+    X_sample = df[feature_cols].fillna(0).astype(np.float32).sample(min(2000, len(df)), random_state=42)
+    shap_imp = save_shap_summary(cal_model, X_sample, feature_cols, META_MODEL_DIR)
+
+    print("\n  SHAP Top 10 Features:")
+    for _, row in shap_imp.head(10).iterrows():
+        print(f"    {row['feature']}: {row['shap_importance']:.4f}")
+
+    print("\n" + "=" * 70)
+    print("  SHAP Analysis Complete")
+    print("=" * 70)
+
+
 if __name__ == "__main__":
     # If run directly, execute main training or inference
     import sys
@@ -694,9 +798,11 @@ if __name__ == "__main__":
             main()
         elif sys.argv[1] == "--inference":
             run_inference()
+        elif sys.argv[1] == "--shap":
+            run_shap_analysis()
         else:
             print(f"Unknown option: {sys.argv[1]}")
-            print("Usage: python unified_meta_model.py [--train|--inference]")
+            print("Usage: python unified_meta_model.py [--train|--inference|--shap]")
     else:
         # Default: run quick tests
         print("Testing purging and embargo functions...")
