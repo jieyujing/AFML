@@ -56,6 +56,9 @@ def compute_deep_metrics(
     # ============ 2. Turnover ============
     turnover = _compute_turnover(bars_index, cusum_events_ts)
 
+    # ============ 2b. Avg Inter-Event Time ============
+    avg_inter_event_time = _compute_avg_inter_event_time(cusum_events_ts)
+
     # ============ 3. Regime Stability ============
     regime_stability = _compute_regime_stability(
         bars, trend_labels, cusum_events_ts, fast_ma, slow_ma
@@ -70,6 +73,7 @@ def compute_deep_metrics(
         'combo_id': combo_id,
         'uniqueness': uniqueness,
         'turnover': turnover,
+        'avg_inter_event_time': avg_inter_event_time,
         'regime_stability': regime_stability,
         'oos_recall': oos_recall,
         'oos_unreliable': oos_unreliable,
@@ -144,6 +148,38 @@ def _compute_turnover(
     turnover = annual_candidates * avg_concurrency
 
     return turnover
+
+
+def _compute_avg_inter_event_time(
+    cusum_events_ts: pd.DatetimeIndex,
+) -> float:
+    """
+    Compute average time between consecutive events.
+
+    Important for understanding signal frequency:
+    - Low avg_inter_event_time: signals cluster together (may indicate noisy periods)
+    - High avg_inter_event_time: signals spread out (more independent)
+
+    :param cusum_events_ts: CUSUM event timestamps.
+    :returns: Average inter-event time in hours.
+    """
+    if len(cusum_events_ts) < 2:
+        return 0.0
+
+    # Sort events by time
+    sorted_events = cusum_events_ts.sort_values()
+
+    # Compute time differences in nanoseconds (int64)
+    time_diffs_ns = np.diff(sorted_events.astype(np.int64))
+
+    if len(time_diffs_ns) == 0:
+        return 0.0
+
+    # Return average in hours (ns → hours = / 1e9 / 3600)
+    avg_ns = float(np.mean(time_diffs_ns))
+    avg_hours = avg_ns / 1e9 / 3600.0
+
+    return avg_hours
 
 
 def _compute_regime_stability(
