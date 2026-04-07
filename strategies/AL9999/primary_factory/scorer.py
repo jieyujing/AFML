@@ -33,9 +33,12 @@ def compute_composite_score(
     merged = lightweight_df.copy()
 
     # Add deep metric columns if not present
-    for col in ['uniqueness', 'turnover', 'regime_stability', 'oos_recall', 'oos_unreliable', 'low_info']:
+    for col in ['uniqueness', 'turnover', 'regime_stability', 'oos_recall']:
         if col not in merged.columns:
             merged[col] = np.nan
+    for col in ['oos_unreliable', 'low_info']:
+        if col not in merged.columns:
+            merged[col] = False
 
     # Fill deep metrics from deep_df
     for _, deep_row in deep_df.iterrows():
