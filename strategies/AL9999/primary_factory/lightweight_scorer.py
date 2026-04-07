@@ -100,10 +100,17 @@ def compute_lightweight_metrics(
     # Coverage = candidates / all events
     coverage = n_candidates / n_events if n_events > 0 else 0.0
 
-    # Base rate = proportion of trend events with non-zero side
-    base_rate = len(trend_events) / len(trend_labels) if len(trend_labels) > 0 else 0.0
+    # Base rate = max(class imbalance)
+    # This is the accuracy of always predicting the majority class
+    # If data is 50/50, base_rate = 0.5 (random baseline)
+    # If data is 70% positive, base_rate = 0.7
+    n_positive = (trend_events['side'] == 1).sum()
+    n_negative = (trend_events['side'] == -1).sum()
+    base_rate = max(n_positive, n_negative) / len(trend_events) if len(trend_events) > 0 else 0.5
 
     # Lift = CPR / base_rate
+    # Lift > 1 means our candidates are better than random majority guessing
+    # Lift < 1 means we're worse than random
     lift = cpr / base_rate if base_rate > 0 else 0.0
 
     return {
