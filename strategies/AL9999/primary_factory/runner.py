@@ -137,9 +137,32 @@ def run_primary_factory(
     scored_df.to_csv(final_path, index=False)
     print(f"  Saved: {final_path}")
 
-    # Step 7: Get top candidates
-    print(f"\n[Step 7] Selecting Top-{top_n_final} candidates...")
+    # Step 7: Get top candidates with stratified constraint
+    print(f"\n[Step 7] Selecting Top-{top_n_final} candidates (stratified by CUSUM rate)...")
+
+    # Extract cusum_rate from combo_id for stratification
+    scored_df['cusum_rate'] = scored_df['combo_id'].str.extract(r'rate=([0-9.]+)').astype(float)
+
+    # Get initial top-N by score
     top_candidates = get_top_candidates(scored_df, top_n=top_n_final)
+
+    # Stratified constraint: ensure each CUSUM rate has at least 1 candidate
+    covered_rates = set(top_candidates['cusum_rate'].unique())
+    all_rates = set(cusum_rates)
+
+    missing_rates = all_rates - covered_rates
+    if missing_rates:
+        print(f"  Warning: Missing rates in Top-{top_n_final}: {missing_rates}")
+        # Add best candidate from each missing rate
+        for rate in sorted(missing_rates):
+            rate_best = scored_df[scored_df['cusum_rate'] == rate].head(1)
+            if len(rate_best) > 0:
+                top_candidates = pd.concat([top_candidates, rate_best], ignore_index=True)
+        print(f"  Added {len(missing_rates)} candidates to satisfy stratified constraint")
+
+    # Re-sort and re-rank
+    top_candidates = top_candidates.sort_values('score', ascending=False).reset_index(drop=True)
+    top_candidates['rank'] = range(1, len(top_candidates) + 1)
 
     # Save top candidates
     candidates_path = os.path.join(output_path, 'top_candidates.parquet')
@@ -151,8 +174,8 @@ def run_primary_factory(
     print("  Primary Model Factory Complete")
     print("=" * 60)
     print(f"  Output directory: {output_path}")
-    print(f"  Top-{top_n_final} candidates:")
-    for i, row in top_candidates.iterrows():
+    print(f"  Top candidates ({len(top_candidates)} total, stratified by rate):")
+    for _, row in top_candidates.iterrows():
         print(f"    {row['rank']}. {row['combo_id']}")
         print(f"       Score={row['score']:.4f}, Recall={row['recall']:.4f}, Lift={row['lift']:.4f}")
 
