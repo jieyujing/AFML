@@ -542,11 +542,161 @@ def main():
         print(f"  Fold {r['fold_id']}: Meta Prec={r['meta_event_precision']:.4f} vs Primary(realistic)={r['primary_event_majority_precision']:.4f} | Lift(vs realistic)={r['precision_lift_vs_event']:.4f}")
 
 
+# ============================================================
+# Inference Section
+# ============================================================
+
+def select_threshold_by_precision(
+    val_df: pd.DataFrame,
+    target_precision: float = 0.65,
+    dedupe_mode: str = 'per_event_max_p',
+) -> tuple:
+    """
+    Select threshold that achieves target precision on validation set.
+
+    :returns: (threshold, actual_precision, n_take_events)
+    """
+    val_df = val_df.copy().reset_index(drop=True)
+    idx_best = val_df.groupby('event_time')['p_meta'].idxmax()
+    deduped = val_df.loc[idx_best]
+    y_true = deduped['meta_y']
+    p_vals = deduped['p_meta']
+
+    best_thresh, best_prec, best_n = 0.5, 0.0, 0
+    for thresh in np.arange(0.50, 0.91, 0.01):
+        pred = (p_vals >= thresh).astype(int)
+        n_take = pred.sum()
+        if n_take == 0:
+            continue
+        prec = precision_score(y_true, pred, zero_division=0)
+        if prec >= target_precision and n_take > best_n:
+            best_thresh, best_prec, best_n = thresh, prec, n_take
+
+    # Fallback: use 0.5 if target not achievable
+    if best_thresh == 0.5 and best_prec < target_precision:
+        pred = (p_vals >= 0.5).astype(int)
+        best_thresh = 0.5
+        best_prec = precision_score(y_true, pred, zero_division=0)
+        best_n = pred.sum()
+
+    return best_thresh, best_prec, best_n
+
+
+def deduplicate_per_event(
+    df: pd.DataFrame,
+    p_col: str = 'p_meta',
+    mode: str = 'per_event_max_p',
+) -> pd.DataFrame:
+    """
+    Deduplicate to one row per event.
+
+    :param df: DataFrame with event-candidate rows
+    :param p_col: probability column
+    :param mode: 'per_event_max_p' — take candidate with highest meta probability
+                 'per_event_first' — take first candidate (deterministic)
+    """
+    if mode == 'per_event_max_p':
+        idx_best = df.groupby('event_time')[p_col].idxmax()
+        return df.loc[idx_best].copy()
+    elif mode == 'per_event_first':
+        return df.groupby('event_time').first().reset_index()
+    else:
+        raise ValueError(f"Unknown mode: {mode}")
+
+
+def build_inference_output(
+    inference_df: pd.DataFrame,  # meta_inference_table.parquet, NOT meta_training_table
+    oof_df: pd.DataFrame,         # used for threshold calibration only
+    threshold: float,
+    model,                         # fitted CalibratedClassifierCV
+    dedupe_mode: str = 'per_event_max_p',
+) -> pd.DataFrame:
+    """
+    Build inference output from the inference-only feature table.
+
+    CRITICAL: inference_df must come from meta_inference_table.parquet.
+    It contains only event-time-visible features. It must NOT contain
+    meta_y, label_end_time, ret, touch_type, tbm_outcome.
+    """
+    if 'meta_y' in inference_df.columns:
+        raise ValueError("FATAL: inference_df contains meta_y! Use meta_inference_table.parquet only.")
+
+    inference_df = inference_df.copy().reset_index(drop=True)
+    feature_cols = get_feature_columns(inference_df)
+    X = inference_df[feature_cols].fillna(0).astype(np.float32)
+
+    # Predict
+    p_meta = model.predict_proba(X)[:, 1]
+    inference_df['p_meta'] = p_meta
+    inference_df['threshold'] = threshold
+
+    # Deduplicate
+    deduped = deduplicate_per_event(inference_df, p_col='p_meta', mode=dedupe_mode)
+
+    # Build output schema
+    output = pd.DataFrame({
+        'event_time': deduped['event_time'],
+        'event_id': deduped['event_id'],
+        'chosen_combo_id': deduped['combo_id'],
+        'side': deduped['primary_side'],
+        'p_meta': deduped['p_meta'].astype(np.float32),
+        'threshold': threshold,
+        'decision': np.where(deduped['p_meta'] >= threshold, 'TAKE', 'SKIP'),
+    })
+    output['model_version'] = 'meta_model_v1'
+    return output
+
+
+def run_inference():
+    """Run inference on the inference table and save output."""
+    print("=" * 70)
+    print("  AL9999 Unified Meta Model Inference")
+    print("=" * 70)
+
+    # Load artifacts
+    print("\n[Step 1] Loading artifacts...")
+    cal_model = joblib.load(os.path.join(META_MODEL_DIR, "meta_calibrator_v1.pkl"))
+    inf_df = pd.read_parquet(os.path.join(META_MODEL_DIR, "meta_inference_table.parquet"))
+    oof_df = pd.read_parquet(os.path.join(META_MODEL_DIR, "meta_oof_signals.parquet"))
+    print(f"  Inference table: {len(inf_df)} rows")
+    print(f"  OOF signals: {len(oof_df)} rows")
+
+    # Verify no label columns leak into inference table
+    assert 'meta_y' not in inf_df.columns, "FATAL: meta_y in inference table!"
+    assert 'label_end_time' not in inf_df.columns, "FATAL: label_end_time in inference table!"
+
+    # Select threshold on OOF
+    print("\n[Step 2] Selecting threshold on OOF...")
+    threshold, prec, n = select_threshold_by_precision(oof_df, target_precision=0.65)
+    print(f"  Selected threshold={threshold:.2f} → precision={prec:.4f} on {n} OOS events")
+
+    # Build inference output
+    print("\n[Step 3] Building inference output...")
+    output = build_inference_output(inf_df, oof_df, threshold, cal_model)
+    output.to_parquet(os.path.join(META_MODEL_DIR, "meta_inference_output.parquet"), index=False)
+    n_take = (output['decision'] == 'TAKE').sum()
+    print(f"  Inference output: {len(output)} events, {n_take} TAKE")
+
+    print("\n" + "=" * 70)
+    print("  Inference Complete")
+    print("=" * 70)
+    print(f"\nOutput saved to: {META_MODEL_DIR}/meta_inference_output.parquet")
+    print(f"  Total events: {len(output)}")
+    print(f"  TAKE decisions: {n_take} ({n_take/len(output)*100:.1f}%)")
+    print(f"  SKIP decisions: {len(output) - n_take} ({(len(output)-n_take)/len(output)*100:.1f}%)")
+
+
 if __name__ == "__main__":
-    # If run directly, execute main training
+    # If run directly, execute main training or inference
     import sys
-    if len(sys.argv) > 1 and sys.argv[1] == "--train":
-        main()
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "--train":
+            main()
+        elif sys.argv[1] == "--inference":
+            run_inference()
+        else:
+            print(f"Unknown option: {sys.argv[1]}")
+            print("Usage: python unified_meta_model.py [--train|--inference]")
     else:
         # Default: run quick tests
         print("Testing purging and embargo functions...")
