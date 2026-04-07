@@ -311,15 +311,16 @@ PRIMARY_FACTORY_CONFIG = {
     # OOS 切分比例
     'oos_test_ratio': 0.30,     # 30% 用于 OOS 测试
     # 评分权重
+    # EffectiveRecall = Recall × Lift
+    # Score = 0.45·EffectiveRecall_z + 0.15·Lift_z - 0.10·Turnover_z + 0.10·Uniqueness_z
     'score_weights': {
-        'recall': 0.45,
-        'lift': 0.20,
-        'cpr': 0.15,
+        'effective_recall': 0.45,
+        'lift': 0.15,
         'turnover': -0.10,
         'uniqueness': 0.10,
     },
     # CUSUM 校准范围
-    'k_search_min': 0.1,
+    'k_search_min': 0.001,  # 需要足够低才能校准到 5%-15% 采样率
     'k_search_max': 10.0,
     'k_tolerance': 1e-4,
 }

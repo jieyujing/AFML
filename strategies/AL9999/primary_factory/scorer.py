@@ -14,16 +14,15 @@ def compute_composite_score(
 
     :param lightweight_df: All combos with lightweight metrics.
     :param deep_df: Top-N combos with deep metrics.
-    :param weights: Score component weights (default: recall=0.45, lift=0.20, cpr=0.15,
+    :param weights: Score component weights (default: effective_recall=0.45, lift=0.15,
                    turnover=-0.10, uniqueness=0.10).
     :returns: DataFrame with all combos scored and ranked.
               Columns include: combo_id, score, rank, and all metric columns.
     """
     if weights is None:
         weights = {
-            'recall': 0.45,
-            'lift': 0.20,
-            'cpr': 0.15,
+            'effective_recall': 0.45,
+            'lift': 0.15,
             'turnover': -0.10,
             'uniqueness': 0.10,
         }
@@ -58,6 +57,10 @@ def compute_composite_score(
     # If CPR = 0, set Lift = 0
     merged.loc[merged['cpr'] == 0, 'lift'] = 0.0
 
+    # Compute EffectiveRecall = Recall × Lift
+    # This combines recall quality with signal strength
+    merged['effective_recall'] = merged['recall'] * merged['lift']
+
     # Compute rank-percentile z-scores for each metric
     n = len(merged)
     if n <= 1:
@@ -67,7 +70,7 @@ def compute_composite_score(
 
     # Compute z-scores using rank percentile: z = (rank - 1) / (n - 1)
     # For turnover, higher is worse, so we invert (lower z = better)
-    metrics_for_score = ['recall', 'lift', 'cpr', 'turnover', 'uniqueness']
+    metrics_for_score = ['effective_recall', 'lift', 'turnover', 'uniqueness']
 
     z_scores = {}
     for metric in metrics_for_score:
@@ -80,12 +83,12 @@ def compute_composite_score(
             z_scores[metric] = np.zeros(n)
             continue
 
-        # Rank (1 = best for recall/lift/cpr/uniqueness, 1 = worst for turnover)
+        # Rank (1 = best for effective_recall/lift/uniqueness, 1 = worst for turnover)
         if metric == 'turnover':
             # Lower turnover is better, so rank ascending (lowest = rank 1)
             ranks = pd.Series(values).rank(ascending=True, method='average').values
         else:
-            # Higher is better for recall/lift/cpr/uniqueness
+            # Higher is better for effective_recall/lift/uniqueness
             ranks = pd.Series(values).rank(ascending=False, method='average').values
 
         # z-score: invert so higher z = better performance
