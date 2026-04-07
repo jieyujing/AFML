@@ -260,11 +260,27 @@ TBM_CONFIG = {
 # ============================================================
 
 META_MODEL_CONFIG = {
-    'precision_threshold': 0.51,
-    'n_estimators': 1000,
-    'cv_n_splits': 5,
-    'cv_embargo_pct': 0.05,
-    'holdout_months': 6,  # 保留最后 6 个月不参与训练，用于 OOS 验证
+    'n_folds': 6,
+    'val_horizon_days': 90,
+    'embargo_days': 30,   # conservative: max(vertical_bars) * bar_duration ≈ 30 days
+    'min_train_events': 50,
+    'lgbm_params': {
+        'objective': 'binary',
+        'learning_rate': 0.05,
+        'num_leaves': 63,
+        'min_data_in_leaf': 100,
+        'feature_fraction': 0.8,
+        'bagging_fraction': 0.8,
+        'bagging_freq': 1,
+        'lambda_l1': 0.1,
+        'lambda_l2': 0.1,
+        'verbose': -1,
+        'n_jobs': -1,
+        'random_state': 42,
+    },
+    'early_stopping_rounds': 200,
+    'precision_threshold': 0.65,
+    'calibration_method': 'sigmoid',  # or 'isotonic' when sample_size > 1000
 }
 
 # ============================================================
