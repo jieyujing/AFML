@@ -1,4 +1,4 @@
-"""Composite scorer for Primary Model Factory - weighted score with rank-percentile z."""
+"""Composite scorer for Primary Model Factory - weighted score with rate-normalized z."""
 
 import numpy as np
 import pandas as pd
@@ -14,7 +14,7 @@ def compute_composite_score(
 
     :param lightweight_df: All combos with lightweight metrics.
     :param deep_df: Top-N combos with deep metrics.
-    :param weights: Score component weights (default: effective_recall=0.45, lift=0.15,
+    :param weights: Score component weights (default: effective_recall=0.45,
                    turnover=-0.10, uniqueness=0.10).
     :returns: DataFrame with all combos scored and ranked.
               Columns include: combo_id, score, rank, and all metric columns.
@@ -22,7 +22,6 @@ def compute_composite_score(
     if weights is None:
         weights = {
             'effective_recall': 0.45,
-            'lift': 0.15,
             'turnover': -0.10,
             'uniqueness': 0.10,
         }
@@ -61,48 +60,101 @@ def compute_composite_score(
     # This combines recall quality with signal strength
     merged['effective_recall'] = merged['recall'] * merged['lift']
 
-    # Compute rank-percentile z-scores for each metric
+    # Extract cusum_rate from combo_id for rate-normalization
+    merged['cusum_rate'] = merged['combo_id'].str.extract(r'rate=([0-9.]+)')[0].astype(float)
+
     n = len(merged)
     if n <= 1:
         merged['score'] = 0.0
         merged['rank'] = 1
         return merged
 
-    # Compute z-scores using rank percentile: z = (rank - 1) / (n - 1)
-    # For turnover, higher is worse, so we invert (lower z = better)
-    metrics_for_score = ['effective_recall', 'lift', 'turnover', 'uniqueness']
+    # ========================================
+    # Rate-normalized z-score for EffectiveRecall
+    # ========================================
+    # Within each rate, compute rank percentile z-score
+    # This compares "who does best within the same sampling regime"
+    merged['effective_recall_rate_z'] = 0.0
 
-    z_scores = {}
-    for metric in metrics_for_score:
-        if metric not in merged.columns:
-            z_scores[metric] = np.zeros(n)
-            continue
+    # Check if we have valid rate information
+    has_rates = merged['cusum_rate'].notna().any()
 
-        values = merged[metric].values
-        if np.isnan(values).all() or np.std(values) == 0:
-            z_scores[metric] = np.zeros(n)
-            continue
+    if has_rates:
+        # Rate-normalized scoring
+        for rate in merged['cusum_rate'].dropna().unique():
+            rate_mask = merged['cusum_rate'] == rate
+            rate_indices = merged[rate_mask].index.tolist()
+            rate_values = merged.loc[rate_indices, 'effective_recall'].values
 
-        # Rank (1 = best for effective_recall/lift/uniqueness, 1 = worst for turnover)
-        if metric == 'turnover':
-            # Lower turnover is better, so rank ascending (lowest = rank 1)
-            ranks = pd.Series(values).rank(ascending=True, method='average').values
+            n_rate = len(rate_values)
+            if n_rate <= 1:
+                merged.loc[rate_indices, 'effective_recall_rate_z'] = 0.5
+                continue
+
+            # Check if all values are the same
+            if np.std(rate_values) == 0:
+                merged.loc[rate_indices, 'effective_recall_rate_z'] = 0.5
+                continue
+
+            # Rank within rate (higher is better)
+            ranks = pd.Series(rate_values).rank(ascending=False, method='average').values
+
+            # z-score: rank 1 → z = 1 (best), rank n → z = 0 (worst)
+            z = 1.0 - (ranks - 1) / (n_rate - 1)
+            merged.loc[rate_indices, 'effective_recall_rate_z'] = z
+
+        # Fill NaN rates with global median z
+        nan_mask = merged['cusum_rate'].isna()
+        if nan_mask.any():
+            merged.loc[nan_mask, 'effective_recall_rate_z'] = merged.loc[~nan_mask, 'effective_recall_rate_z'].median()
+    else:
+        # No rate info: use global z-score
+        values = merged['effective_recall'].values
+        if np.std(values) == 0:
+            merged['effective_recall_rate_z'] = 0.5
         else:
-            # Higher is better for effective_recall/lift/uniqueness
             ranks = pd.Series(values).rank(ascending=False, method='average').values
+            z = 1.0 - (ranks - 1) / (n - 1)
+            merged['effective_recall_rate_z'] = z
 
-        # z-score: invert so higher z = better performance
-        # rank 1 → z = 1 (best), rank n → z = 0 (worst)
+    # ========================================
+    # Global z-scores for Turnover and Uniqueness
+    # ========================================
+    z_scores = {}
+
+    # Turnover: lower is better
+    values = merged['turnover'].values
+    if np.isnan(values).all() or np.std(values) == 0:
+        z_scores['turnover'] = np.full(n, 0.5)
+    else:
+        ranks = pd.Series(values).rank(ascending=True, method='average').values
         z = 1.0 - (ranks - 1) / (n - 1)
-        z_scores[metric] = z
+        z_scores['turnover'] = z
 
+    # Uniqueness: higher is better
+    values = merged['uniqueness'].values
+    if np.isnan(values).all() or np.std(values) == 0:
+        z_scores['uniqueness'] = np.full(n, 0.5)
+    else:
+        ranks = pd.Series(values).rank(ascending=False, method='average').values
+        z = 1.0 - (ranks - 1) / (n - 1)
+        z_scores['uniqueness'] = z
+
+    # ========================================
     # Compute composite score
+    # ========================================
     scores = np.zeros(n)
-    for metric, weight in weights.items():
-        if metric in z_scores:
-            scores += weight * z_scores[metric]
 
-    # Handle case where all metrics have zero variance
+    # EffectiveRecall (rate-normalized)
+    scores += weights.get('effective_recall', 0.45) * merged['effective_recall_rate_z'].values
+
+    # Turnover (global)
+    scores += weights.get('turnover', -0.10) * z_scores['turnover']
+
+    # Uniqueness (global)
+    scores += weights.get('uniqueness', 0.10) * z_scores['uniqueness']
+
+    # Handle case where all scores are the same
     if np.std(scores) == 0:
         scores = np.zeros(n)
 
