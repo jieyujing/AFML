@@ -141,7 +141,7 @@ def run_primary_factory(
     print(f"\n[Step 7] Selecting Top-{top_n_final} candidates (stratified by CUSUM rate)...")
 
     # Extract cusum_rate from combo_id for stratification
-    scored_df['cusum_rate'] = scored_df['combo_id'].str.extract(r'rate=([0-9.]+)').astype(float)
+    scored_df['cusum_rate'] = scored_df['combo_id'].str.extract(r'rate=([0-9.]+)')[0].astype(float)
 
     # Get initial top-N by score
     top_candidates = get_top_candidates(scored_df, top_n=top_n_final)
@@ -151,14 +151,57 @@ def run_primary_factory(
     all_rates = set(cusum_rates)
 
     missing_rates = all_rates - covered_rates
+    additional_combos = []
     if missing_rates:
-        print(f"  Warning: Missing rates in Top-{top_n_final}: {missing_rates}")
-        # Add best candidate from each missing rate
+        print(f"  Missing rates in Top-{top_n_final}: {missing_rates}")
+        # Collect best candidate from each missing rate
+        for rate in sorted(missing_rates):
+            rate_best = scored_df[scored_df['cusum_rate'] == rate].head(1)
+            if len(rate_best) > 0:
+                combo_id = rate_best['combo_id'].iloc[0]
+                additional_combos.append(combo_id)
+
+        # Compute deep metrics for additional candidates
+        if additional_combos:
+            print(f"  Computing deep metrics for {len(additional_combos)} additional candidates...")
+            additional_combos_df = combos_df[combos_df['combo_id'].isin(additional_combos)]
+            additional_deep = compute_all_deep_metrics(
+                bars=bars,
+                trend_labels=trend_labels,
+                k_lookup=calibration_df,
+                combos=additional_combos_df,
+                pt_sl=pt_sl,
+                test_ratio=test_ratio,
+            )
+            # Merge into deep_df and save updated version
+            deep_df = pd.concat([deep_df, additional_deep], ignore_index=True)
+
+            # Save updated deep results
+            deep_df.to_csv(deep_path, index=False)
+            print(f"  Updated deep metrics saved: {len(deep_df)} total candidates")
+
+            # Re-compute composite score with updated deep metrics
+            scored_df = compute_composite_score(
+                lightweight_df=lightweight_df,
+                deep_df=deep_df,
+                weights=score_weights,
+            )
+            scored_df['cusum_rate'] = scored_df['combo_id'].str.extract(r'rate=([0-9.]+)')[0].astype(float)
+
+            # Save updated final scoring
+            scored_df.to_csv(final_path, index=False)
+
+            # Re-select top candidates
+            top_candidates = get_top_candidates(scored_df, top_n=top_n_final)
+
+    # Final stratification check and add missing rates
+    covered_rates = set(top_candidates['cusum_rate'].unique())
+    missing_rates = all_rates - covered_rates
+    if missing_rates:
         for rate in sorted(missing_rates):
             rate_best = scored_df[scored_df['cusum_rate'] == rate].head(1)
             if len(rate_best) > 0:
                 top_candidates = pd.concat([top_candidates, rate_best], ignore_index=True)
-        print(f"  Added {len(missing_rates)} candidates to satisfy stratified constraint")
 
     # Re-sort and re-rank
     top_candidates = top_candidates.sort_values('score', ascending=False).reset_index(drop=True)
