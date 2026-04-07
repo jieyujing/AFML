@@ -100,11 +100,11 @@ def run_script(script_name: str, extra_args: list = None):
     return result.returncode == 0
 
 
-def run_phase(phase_num: int, extra_args: list = None):
+def run_phase(phase_num: str, extra_args: list = None):
     """
     运行指定阶段。
 
-    :param phase_num: 阶段编号
+    :param phase_num: 阶段编号（如 '1', '2', '2b'）
     :param extra_args: 额外命令行参数
     """
     if phase_num not in PHASES:
@@ -158,7 +158,7 @@ def main():
         print("="*60)
 
     elif args.phase:
-        phases = [int(p.strip()) for p in args.phase.split(',')]
+        phases = [p.strip() for p in args.phase.split(',')]
         for phase_num in phases:
             if not run_phase(phase_num, extra_args):
                 print(f"\n❌ Phase {phase_num} 失败")

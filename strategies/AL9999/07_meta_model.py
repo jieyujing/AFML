@@ -87,8 +87,12 @@ def split_train_holdout(X, y, sample_weight, holdout_months=6):
     return (X_train, y_train, w_train), (X_holdout, y_holdout, w_holdout), holdout_start
 
 
-def load_data(include_tsfresh: bool = True):
-    """加载 Meta Features、Meta Labels 与真实事件结束时间 t1。"""
+def load_data(include_tsfresh: bool = True, mda_filter: bool = True):
+    """加载 Meta Features、Meta Labels 与真实事件结束时间 t1。
+
+    :param include_tsfresh: 是否合并 tsfresh 特征
+    :param mda_filter: 是否仅保留 MDA 正 importance cluster 的特征
+    """
     print("\n[Step 1] 加载数据...")
 
     # 加载事件特征（L1-L4 特征）
@@ -112,6 +116,26 @@ def load_data(include_tsfresh: bool = True):
             print(f"  + tsfresh 特征: {tsfresh_df.shape[1]} 列 → 合并后: {features.shape}")
         else:
             print(f"  ⚠️ tsfresh 特征未找到: {tsfresh_path}")
+
+    # 可选：基于 MDA importance 过滤特征（仅保留正 importance cluster 的特征）
+    if mda_filter:
+        mda_path = os.path.join(FEATURES_DIR, 'meta_mda_importance.parquet')
+        if os.path.exists(mda_path):
+            mda_df = pd.read_parquet(mda_path)
+            # 只保留正 importance 的 cluster
+            positive_clusters = mda_df[mda_df['mean_importance'] > 0]['cluster_id'].values
+            positive_features = set()
+            for _, row in mda_df[mda_df['mean_importance'] > 0].iterrows():
+                positive_features.update(row['features'])
+            # 过滤特征列
+            feat_cols = [c for c in features.columns if c.startswith('feat_') or c == 'rf_prob']
+            filtered_cols = [c for c in feat_cols if c in positive_features]
+            dropped = len(feat_cols) - len(filtered_cols)
+            features = features[filtered_cols]
+            print(f"  MDA 过滤: {len(feat_cols)} → {len(filtered_cols)} (移除 {dropped} 个低/负 importance 特征)")
+            print(f"    正 importance clusters: {list(positive_clusters)}")
+        else:
+            print(f"  ⚠️ MDA 结果未找到: {mda_path}，跳过过滤")
 
     # 加载修正后的 Meta Labels
     labels_path = os.path.join(FEATURES_DIR, 'meta_labels.parquet')

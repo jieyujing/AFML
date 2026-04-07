@@ -366,6 +366,14 @@ def main():
     common_idx = dma_signals.index.intersection(meta_signals.index)
     combined = dma_signals.loc[common_idx].copy()
     combined[['meta_pred', 'meta_prob']] = meta_signals.loc[common_idx, ['meta_pred', 'meta_prob']]
+    # 仓位乘数（基于 OOF 分位数，非绝对阈值）
+    p90 = float(combined["meta_prob"].quantile(0.90))
+    p80 = float(combined["meta_prob"].quantile(0.80))
+    combined["meta_mult"] = 1.0
+    combined.loc[combined["meta_prob"] >= p90, "meta_mult"] = 1.25
+    combined.loc[(combined["meta_prob"] >= p80) & (combined["meta_prob"] < p90), "meta_mult"] = 1.10
+    logger.info(f"[仓位乘数] p80={p80:.4f} p90={p90:.4f}")
+
 
     # Step 2.5: TBM 出场计算（替代纯时间屏障）
     logger.info("[Step 2.5] 计算 TBM 三重屏障 touch_idx...")
@@ -526,10 +534,35 @@ def main():
         )
         combined_trades["net_ret"] = combined_trades["net_pnl"] / combined_trades["entry_price"]
 
+    # Reversed Meta Strategy (DMA + Meta 过滤，但 meta=0 反向下单)
+    # 使用原始 combined 的 meta_pred（来自 OOF/OOS stitched）
+    reversed_signals = combined.copy()
+    # _apply_threshold_to_signals 会覆盖 meta_pred，所以用原始的
+    # reversed_signals['meta_pred'] 保持不变（来自 load_honest_meta_signals）
+    reversed_trades = rolling_backtest(
+        reversed_signals,
+        bars,
+        use_meta_filter=False,
+        side_mode="both",
+        guard_enabled=False,
+        min_hold_bars=0,
+        cooldown_bars=0,
+        reverse_confirmation_delta=0.0,
+        entry_threshold=0.5,
+        reversed_meta_filter=True,
+    )
+    if len(reversed_trades) > 0:
+        reversed_trades["net_pnl"] = (
+            reversed_trades["pnl"] - (reversed_trades["entry_price"] + reversed_trades["exit_price"]) * COMMISSION_RATE - SLIPPAGE_POINTS * 2
+        )
+        reversed_trades["net_ret"] = reversed_trades["net_pnl"] / reversed_trades["entry_price"]
+
     primary_trades.to_parquet(os.path.join(FEATURES_DIR, "filter_first_primary_trades.parquet"), index=False)
     combined_trades.to_parquet(os.path.join(FEATURES_DIR, "filter_first_combined_trades.parquet"), index=False)
+    reversed_trades.to_parquet(os.path.join(FEATURES_DIR, "filter_first_reversed_trades.parquet"), index=False)
     logger.info(f"Filter-First 交易明细已保存至: {FEATURES_DIR}/filter_first_primary_trades.parquet")
     logger.info(f"Filter-First 交易明细已保存至: {FEATURES_DIR}/filter_first_combined_trades.parquet")
+    logger.info(f"Reversed Meta 交易明细已保存至: {FEATURES_DIR}/filter_first_reversed_trades.parquet")
 
     # 4. 绩效统计 (IS / OOS 分开)
     logger.info("[Step 3] 计算绩效指标 (全样本 & IS/OOS 分解)...")
@@ -537,12 +570,18 @@ def main():
     # 全样本
     primary_perf = _perf_from_trades(primary_trades)
     combined_perf = _perf_from_trades(combined_trades)
+    reversed_perf = _perf_from_trades(reversed_trades)
 
     # IS / OOS 分解
     combined_is_trades = combined_trades[pd.to_datetime(combined_trades["exit_time"]) < oos_start].copy() if len(combined_trades) > 0 else pd.DataFrame()
     combined_oos_trades = combined_trades[pd.to_datetime(combined_trades["exit_time"]) >= oos_start].copy() if len(combined_trades) > 0 else pd.DataFrame()
     combined_is_perf = _perf_from_trades(combined_is_trades)
     combined_oos_perf = _perf_from_trades(combined_oos_trades)
+
+    reversed_is_trades = reversed_trades[pd.to_datetime(reversed_trades["exit_time"]) < oos_start].copy() if len(reversed_trades) > 0 else pd.DataFrame()
+    reversed_oos_trades = reversed_trades[pd.to_datetime(reversed_trades["exit_time"]) >= oos_start].copy() if len(reversed_trades) > 0 else pd.DataFrame()
+    reversed_is_perf = _perf_from_trades(reversed_is_trades)
+    reversed_oos_perf = _perf_from_trades(reversed_oos_trades)
 
     # 输出报表
     report = pd.DataFrame({
@@ -555,6 +594,10 @@ def main():
             combined_perf['n_trades'], combined_perf['total_pnl'], combined_perf['annual_pnl'],
             combined_perf['sharpe'], combined_perf['mdd'], combined_perf['win_rate'], combined_perf['profit_factor'], combined_perf['dsr']
         ],
+        'Reversed (Full)': [
+            reversed_perf['n_trades'], reversed_perf['total_pnl'], reversed_perf['annual_pnl'],
+            reversed_perf['sharpe'], reversed_perf['mdd'], reversed_perf['win_rate'], reversed_perf['profit_factor'], reversed_perf['dsr']
+        ],
         'Combined (IS)': [
             combined_is_perf['n_trades'], combined_is_perf['total_pnl'], combined_is_perf['annual_pnl'],
             combined_is_perf['sharpe'], combined_is_perf['mdd'], combined_is_perf['win_rate'], combined_is_perf['profit_factor'], combined_is_perf['dsr']
@@ -562,6 +605,14 @@ def main():
         'Combined (OOS)': [
             combined_oos_perf['n_trades'], combined_oos_perf['total_pnl'], combined_oos_perf['annual_pnl'],
             combined_oos_perf['sharpe'], combined_oos_perf['mdd'], combined_oos_perf['win_rate'], combined_oos_perf['profit_factor'], combined_oos_perf['dsr']
+        ],
+        'Reversed (IS)': [
+            reversed_is_perf['n_trades'], reversed_is_perf['total_pnl'], reversed_is_perf['annual_pnl'],
+            reversed_is_perf['sharpe'], reversed_is_perf['mdd'], reversed_is_perf['win_rate'], reversed_is_perf['profit_factor'], reversed_is_perf['dsr']
+        ],
+        'Reversed (OOS)': [
+            reversed_oos_perf['n_trades'], reversed_oos_perf['total_pnl'], reversed_oos_perf['annual_pnl'],
+            reversed_oos_perf['sharpe'], reversed_oos_perf['mdd'], reversed_oos_perf['win_rate'], reversed_oos_perf['profit_factor'], reversed_oos_perf['dsr']
         ]
     })
 
@@ -612,6 +663,11 @@ def main():
         c["exit_time"] = pd.to_datetime(c["exit_time"])
         c = c.sort_values("exit_time")
         plt.plot(c["exit_time"], c['net_pnl'].cumsum(), label='Combined Strategy (Net PnL)', color='#e67e22', lw=2.5)
+    if len(reversed_trades) > 0:
+        r = reversed_trades.copy()
+        r["exit_time"] = pd.to_datetime(r["exit_time"])
+        r = r.sort_values("exit_time")
+        plt.plot(r["exit_time"], r['net_pnl'].cumsum(), label='Reversed Meta Strategy (Net PnL)', color='#2ecc71', lw=2.5)
 
     plt.title("AL9999 DMA + Meta Strategy: In-Sample vs Out-of-Sample", fontsize=15, fontweight='bold')
     plt.ylabel("Net PnL Marks (Points)", fontsize=12)
@@ -621,7 +677,7 @@ def main():
 
     # 标记 OOS 夏普
     plt.text(pd.to_datetime(oos_start) + pd.Timedelta(days=30), combined_perf['total_pnl'] * 0.1,
-             f"OOS Sharpe: {combined_oos_perf['sharpe']:.2f}\nDSR: {combined_oos_perf['dsr']:.4f}",
+             f"Combined OOS Sharpe: {combined_oos_perf['sharpe']:.2f}\nReversed OOS Sharpe: {reversed_oos_perf['sharpe']:.2f}",
              bbox=dict(facecolor='white', alpha=0.8, edgecolor='green'), fontweight='bold', color='green')
 
     plt.tight_layout()

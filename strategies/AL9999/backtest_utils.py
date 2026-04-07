@@ -27,10 +27,29 @@ def rolling_backtest(
     cooldown_bars: int = 0,
     reverse_confirmation_delta: float = 0.0,
     entry_threshold: float = 0.5,
+    reversed_meta_filter: bool = False,
+    position_multiplier_col: str = None,
 ) -> pd.DataFrame:
     """
     Run the single-position rolling backtest with optional meta filter.
+
+    :param reversed_meta_filter: If True, meta_pred=0 signals are REVERSED (direction flipped)
+        instead of being filtered. This implements the "trade the meta=0 signals in reverse"
+        strategy discovered in the PnL analysis.
+    :param position_multiplier_col: Column name in signals DataFrame containing position
+        multiplier values (float). Multiplier is applied at entry. Default None (multiplier=1.0).
     """
+    # 保存原始信号（用于 reversed_meta_filter 判断）
+    if reversed_meta_filter and "meta_pred" in signals.columns:
+        # 对 meta=0 的信号方向取反
+        signals = signals.copy()
+        # 记录原始方向用于分析
+        signals["_orig_side"] = signals["side"]
+        meta0_mask = signals["meta_pred"] == 0
+        signals.loc[meta0_mask, "side"] = -signals.loc[meta0_mask, "side"]
+        # 移除过滤，让所有信号参与（因为已被反向处理）
+        use_meta_filter = False
+
     if use_meta_filter:
         signals = signals[signals["meta_pred"] == 1].copy()
 
@@ -45,6 +64,7 @@ def rolling_backtest(
     entry_idx = None
     entry_price = None
     position_touch_idx = None
+    entry_multiplier = 1.0
     last_exit_idx = None
     trades = []
 
@@ -76,8 +96,8 @@ def rolling_backtest(
         if position != 0 and position_touch_idx is not None and position_touch_idx < event_idx:
             closed_idx = position_touch_idx
             exit_price = bars.iloc[closed_idx]["close"]
-            pnl = (exit_price - entry_price) * position
-            ret = np.log(exit_price / entry_price) * position
+            pnl = (exit_price - entry_price) * position * entry_multiplier
+            ret = np.log(exit_price / entry_price) * entry_multiplier
 
             trades.append(
                 {
@@ -89,10 +109,12 @@ def rolling_backtest(
                     "pnl": pnl,
                     "ret": ret,
                     "exit_reason": "TBM_trigger",
+                    "multiplier": entry_multiplier,
                 }
             )
 
             position = 0
+            entry_multiplier = 1.0
             entry_idx = None
             entry_price = None
             position_touch_idx = None
@@ -108,6 +130,11 @@ def rolling_backtest(
             entry_idx = fill_idx
             entry_price = fill_price
             position_touch_idx = signal_touch_idx
+            # 读取仓位乘数（默认 1.0）
+            if position_multiplier_col and position_multiplier_col in signal.index:
+                entry_multiplier = float(signal[position_multiplier_col])
+            else:
+                entry_multiplier = 1.0
         elif position != signal_side:
             if guard_enabled:
                 if entry_idx is not None and min_hold_bars > 0:
@@ -121,8 +148,8 @@ def rolling_backtest(
                         continue
 
             exit_price = fill_price
-            pnl = (exit_price - entry_price) * position
-            ret = np.log(exit_price / entry_price) * position
+            pnl = (exit_price - entry_price) * position * entry_multiplier
+            ret = np.log(exit_price / entry_price) * entry_multiplier
 
             trades.append(
                 {
@@ -134,6 +161,7 @@ def rolling_backtest(
                     "pnl": pnl,
                     "ret": ret,
                     "exit_reason": "reverse_signal",
+                    "multiplier": entry_multiplier,
                 }
             )
 
@@ -142,6 +170,10 @@ def rolling_backtest(
             entry_price = fill_price
             position_touch_idx = signal_touch_idx
             last_exit_idx = fill_idx
+            if position_multiplier_col and position_multiplier_col in signal.index:
+                entry_multiplier = float(signal[position_multiplier_col])
+            else:
+                entry_multiplier = 1.0
 
     if position != 0 and entry_idx is not None:
         touch_idx = position_touch_idx
@@ -151,8 +183,8 @@ def rolling_backtest(
             exit_price = bars.iloc[-1]["close"]
             touch_idx = len(bars) - 1
 
-        pnl = (exit_price - entry_price) * position
-        ret = np.log(exit_price / entry_price) * position
+        pnl = (exit_price - entry_price) * position * entry_multiplier
+        ret = np.log(exit_price / entry_price) * entry_multiplier
 
         trades.append(
             {
@@ -164,6 +196,7 @@ def rolling_backtest(
                 "pnl": pnl,
                 "ret": ret,
                 "exit_reason": "final_close",
+                "multiplier": entry_multiplier,
             }
         )
         last_exit_idx = touch_idx

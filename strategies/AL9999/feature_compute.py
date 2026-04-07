@@ -5,6 +5,7 @@ feature_compute.py - AL9999 特征计算函数集合
 - L1: 基础特征（动量、波动率、趋势、均值回复、时间、持仓量）
 - L2: 高级特征（微观结构、均线交叉、熵）
 - L3: 结构特征（序列相关、结构突变）
+- L4: 成交量分布特征（Volume Distribution, QIML 系列）
 - Trend Scan: 标签特征（含未来信息）
 """
 
@@ -34,6 +35,24 @@ from afmlkit.feature.core.structural_break import (
     sadf_test,
 )
 from afmlkit.feature.core.trend_scan import trend_scan_labels
+from afmlkit.feature.core.volume_distribution import (
+    VolEntropyTransform,
+    VolSkewTransform,
+    VolKurtTransform,
+    VolPeakTransform,
+    VolDiffStdTransform,
+    AmbiguityTransform,
+    AmbiguityVolTransform,
+    AmbiguityCountTransform,
+    PShapeTransform,
+    BShapeTransform,
+    PShapeDiffTransform,
+    UnanimousBuyingTransform,
+    VolStdTransform,
+    UnanimousTradingTransform,
+    TradingIntensityTransform,
+    TVDTransform,
+)
 from afmlkit.feature.core.theil_imbalance import (
     clv_split,
     bvc_split,
@@ -417,6 +436,103 @@ def compute_structural_break_features(
 
 
 # ============================================================
+# L4: 成交量分布特征
+# ============================================================
+
+def compute_volume_distribution_features(
+    bars: pd.DataFrame,
+    features: pd.DataFrame,
+    config: Dict[str, Any]
+) -> pd.DataFrame:
+    """
+    计算成交量分布特征（Volume Distribution, QIML 系列）。
+
+    使用 afmlkit.feature.core.volume_distribution 中的 Transform 计算。
+    需要 bars 包含 'dollar_volume' 和 'n_ticks' 列。
+
+    注意：TailVolumeRatioVTransform (QIML1215) 被排除，
+    因为它用 minutes >= 55 判断尾盘，在 dollar bar 的不规则时间戳上不适用。
+    """
+    if not config.get('enabled', False):
+        return features
+
+    # 准备数据：添加 code 列（单品种）和 count 列（用 n_ticks 近似）
+    df = bars.copy()
+    df['code'] = 'AL9999'
+    df['count'] = df['n_ticks'].astype(int)
+    df['amount'] = df['dollar_volume']
+
+    frequency = config.get('frequency', 'h')
+
+    # VolEntropy — Shannon 熵 (QIML0514)
+    n_bins = config.get('n_bins', 5)
+    t = VolEntropyTransform(n_bins=n_bins, frequency=frequency)
+    features[f'feat_vol_entropy_{n_bins}bins'] = t(df, backend='pd')
+
+    # VolSkew — 成交量偏度 (QIML0607)
+    t = VolSkewTransform(frequency=frequency)
+    features['feat_vol_skew'] = t(df, backend='pd')
+
+    # VolKurt — 成交量峰度 (QIML0618)
+    t = VolKurtTransform(frequency=frequency)
+    features['feat_vol_kurt'] = t(df, backend='pd')
+
+    # VolPeak — 放量比例 (QIML0124)
+    t = VolPeakTransform(frequency=frequency)
+    features['feat_vol_peak'] = t(df, backend='pd')
+
+    # VolDiffStd — 差分标准差 (QIML0116)
+    t = VolDiffStdTransform(frequency=frequency)
+    features['feat_vol_diff_std'] = t(df, backend='pd')
+
+    # Ambiguity — 模糊厌恶 (QIML0212)
+    t = AmbiguityTransform(frequency=frequency)
+    features['feat_vol_ambiguity'] = t(df, backend='pd')
+
+    # AmbiguityVol — 模糊厌恶（成交量版）(QIML0301)
+    t = AmbiguityVolTransform(frequency=frequency)
+    features['feat_vol_ambiguity_vol'] = t(df, backend='pd')
+
+    # AmbiguityCount — 模糊厌恶（交易次数版）(QIML0331)
+    t = AmbiguityCountTransform(frequency=frequency)
+    features['feat_vol_ambiguity_count'] = t(df, backend='pd')
+
+    # PShape — Volume Profile P-shape (QIML0401)
+    t = PShapeTransform(frequency=frequency)
+    features['feat_vol_pshape'] = t(df, backend='pd')
+
+    # BShape — Volume Profile B-shape (QIML0413)
+    t = BShapeTransform(frequency=frequency)
+    features['feat_vol_bshape'] = t(df, backend='pd')
+
+    # PShapeDiff — P-shape 与 close 差异 (QIML0503)
+    t = PShapeDiffTransform(frequency=frequency)
+    features['feat_vol_pshape_diff'] = t(df, backend='pd')
+
+    # UnanimousBuying — 一致买入 (QIML0629)
+    t = UnanimousBuyingTransform(frequency=frequency)
+    features['feat_vol_unanimous_buying'] = t(df, backend='pd')
+
+    # VolStd — 成交量占比标准差 (QIML0722)
+    t = VolStdTransform(frequency=frequency)
+    features['feat_vol_std'] = t(df, backend='pd')
+
+    # UnanimousTrading — 一致交易 (QIML0827)
+    t = UnanimousTradingTransform(frequency=frequency)
+    features['feat_vol_unanimous_trading'] = t(df, backend='pd')
+
+    # TradingIntensity — 主交易强度 (QIML1113)
+    t = TradingIntensityTransform(frequency=frequency)
+    features['feat_vol_trading_intensity'] = t(df, backend='pd')
+
+    # TVD — 换手率分布均匀度 (QIML1222)
+    t = TVDTransform(frequency=frequency)
+    features['feat_vol_tvd'] = t(df, backend='pd')
+
+    return features
+
+
+# ============================================================
 # Trend Scan 标签（含未来信息）
 # ============================================================
 
@@ -491,6 +607,10 @@ def compute_all_features(
 
     if config.get('structural_break', {}).get('enabled', False):
         features = compute_structural_break_features(bars, features, config['structural_break'])
+
+    # L4: 成交量分布特征
+    if config.get('volume_distribution', {}).get('enabled', False):
+        features = compute_volume_distribution_features(bars, features, config['volume_distribution'])
 
     return features
 
