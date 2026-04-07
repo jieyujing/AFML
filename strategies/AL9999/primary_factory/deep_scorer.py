@@ -82,21 +82,35 @@ def _compute_uniqueness(
     event_indices: np.ndarray,
     vertical_bars: int,
 ) -> tuple[float, bool]:
-    """Compute average uniqueness of events."""
+    """Compute average uniqueness of events.
+
+    Uniqueness measures how independent events are from each other.
+    When events overlap (same vertical window), uniqueness is low.
+
+    :param bars_index: Bars datetime index.
+    :param event_indices: CUSUM event positions in bars array.
+    :param vertical_bars: TBM vertical barrier bar count.
+    :returns: (avg_uniqueness, low_info_flag)
+    """
     if len(event_indices) == 0:
         return 0.0, True  # low_info = True
 
-    # Compute event ends (touch positions)
-    event_starts = np.arange(len(event_indices), dtype=np.int64)
-    event_ends = event_indices + vertical_bars
-    event_ends = np.minimum(event_ends, len(bars_index) - 1)
+    # event_starts: position where each event starts on the bars time grid
+    event_starts = event_indices.astype(np.int64)
+
+    # event_ends: position where each event ends (start + vertical_bars)
+    # Clip to bars length to avoid out-of-bounds
+    event_ends = np.minimum(event_starts + vertical_bars, len(bars_index) - 1).astype(np.int64)
+
+    # sampled_indices: all events are "sampled" for uniqueness calculation
+    sampled_indices = np.arange(len(event_indices), dtype=np.int64)
 
     # Use avg_uniqueness_of_sample to compute average uniqueness
     try:
         avg_u = avg_uniqueness_of_sample(
             event_starts=event_starts,
             event_ends=event_ends,
-            sampled_indices=event_starts,  # All events
+            sampled_indices=sampled_indices,
         )
         uniqueness = float(avg_u) if np.isfinite(avg_u) else 0.0
         low_info = uniqueness == 0
