@@ -9,7 +9,11 @@ Two-stage parameter search:
 """
 
 from .cusum_calibrator import calibrate_cusum_rates
-from .param_grid import generate_param_grid
+from .param_grid import (
+    expand_deep_param_grid,
+    generate_lightweight_param_grid,
+    generate_param_grid,
+)
 from .lightweight_scorer import compute_lightweight_metrics, compute_all_lightweight_metrics
 from .deep_scorer import compute_deep_metrics, compute_all_deep_metrics
 from .scorer import compute_composite_score, get_top_candidates
@@ -17,6 +21,8 @@ from .runner import run_primary_factory
 
 __all__ = [
     "calibrate_cusum_rates",
+    "generate_lightweight_param_grid",
+    "expand_deep_param_grid",
     "generate_param_grid",
     "compute_lightweight_metrics",
     "compute_all_lightweight_metrics",

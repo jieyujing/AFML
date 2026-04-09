@@ -1,0 +1,31 @@
+{
+  "n_folds": 6,
+  "val_horizon_days": 90,
+  "embargo_days": 30,
+  "min_train_events": 50,
+  "feature_cols": [
+    "candidate_id",
+    "cusum_rate",
+    "fast_window",
+    "slow_window",
+    "vertical_bars",
+    "shock_size",
+    "ret_1",
+    "vol_jump",
+    "ewm_vol",
+    "vol_percentile",
+    "time_since_prev_event_h",
+    "ma_gap_pct",
+    "fast_slope",
+    "slow_slope",
+    "price_to_slow",
+    "session_bucket",
+    "dow",
+    "n_fired",
+    "n_long",
+    "n_short",
+    "conflict_flag",
+    "agreement_ratio",
+    "is_majority_side"
+  ]
+}

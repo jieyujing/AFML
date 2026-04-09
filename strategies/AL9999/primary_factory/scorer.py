@@ -4,169 +4,217 @@ import numpy as np
 import pandas as pd
 
 
+MIN_OOS_RECALL = 0.01
+MIN_TRADE_COUNT = 10
+UNVERIFIED_PENALTY = 1.0
+UNRELIABLE_PENALTY = 0.75
+LOW_INFO_PENALTY = 0.50
+LOW_TRADE_COUNT_PENALTY = 0.50
+LOW_OOS_PENALTY = 0.50
+
+
+def _collapse_deep_metrics(deep_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Collapse expanded deep metrics to one representative row per base combo.
+
+    Preference order prioritizes OOS quality and reliability before IS trade quality.
+    """
+    if 'base_combo_id' not in deep_df.columns:
+        return deep_df.copy()
+
+    collapsed = deep_df.copy()
+    collapsed['selected_deep_combo_id'] = collapsed['combo_id']
+
+    if 'oos_unreliable' not in collapsed.columns:
+        collapsed['oos_unreliable'] = False
+    if 'low_info' not in collapsed.columns:
+        collapsed['low_info'] = False
+    if 'trade_count' not in collapsed.columns:
+        collapsed['trade_count'] = 0
+    if 'oos_recall' not in collapsed.columns:
+        collapsed['oos_recall'] = 0.0
+
+    collapsed = collapsed.sort_values(
+        [
+            'base_combo_id',
+            'oos_unreliable',
+            'low_info',
+            'oos_recall',
+            'trade_count',
+            'sharpe',
+            'net_pnl',
+            'mdd',
+            'uniqueness',
+        ],
+        ascending=[True, True, True, False, False, False, False, False, False],
+    )
+    collapsed = collapsed.drop_duplicates(subset=['base_combo_id'], keep='first').reset_index(drop=True)
+    return collapsed
+
+
+def _rank_to_unit_interval(values: np.ndarray, higher_is_better: bool) -> np.ndarray:
+    """Convert a vector into rank-based [0, 1] scores."""
+    n = len(values)
+    if n <= 1:
+        return np.full(n, 0.5)
+    if np.isnan(values).all() or np.nanstd(values) == 0:
+        return np.full(n, 0.5)
+
+    ranks = pd.Series(values).rank(ascending=not higher_is_better, method='average').values
+    z = 1.0 - (ranks - 1) / (n - 1)
+    return z
+
+
+
 def compute_composite_score(
     lightweight_df: pd.DataFrame,
     deep_df: pd.DataFrame,
     weights: dict = None,
 ) -> pd.DataFrame:
     """
-    Compute weighted composite score for all combos.
+    Compute weighted composite score for scored combos.
 
-    :param lightweight_df: All combos with lightweight metrics.
-    :param deep_df: Top-N combos with deep metrics.
-    :param weights: Score component weights (default: effective_recall=0.45,
-                   turnover=-0.10, uniqueness=0.10).
-    :returns: DataFrame with all combos scored and ranked.
-              Columns include: combo_id, score, rank, and all metric columns.
+    Only combos with deep metrics are considered verified and eligible for final
+    ranking. Reliability and minimum-information checks are applied as penalties.
     """
     if weights is None:
         weights = {
             'effective_recall': 0.45,
-            'turnover': -0.10,
+            'turnover': 0.10,
             'uniqueness': 0.10,
+            'sharpe': 0.20,
+            'net_pnl': 0.10,
+            'mdd': 0.05,
         }
 
-    # Merge lightweight and deep metrics
-    # Deep metrics only exist for Top-N combos
-    merged = lightweight_df.copy()
+    if 'base_combo_id' in deep_df.columns:
+        deep_collapsed = _collapse_deep_metrics(deep_df)
+        lightweight_base = lightweight_df.rename(columns={'combo_id': 'base_combo_id'}).copy()
+        merged = deep_collapsed.merge(
+            lightweight_base,
+            on='base_combo_id',
+            how='left',
+            suffixes=('', '_light'),
+        )
+        merged['combo_id'] = merged['base_combo_id']
 
-    # Add deep metric columns if not present
-    for col in ['uniqueness', 'turnover', 'regime_stability', 'oos_recall']:
-        if col not in merged.columns:
-            merged[col] = np.nan
-    for col in ['oos_unreliable', 'low_info']:
-        if col not in merged.columns:
-            merged[col] = False
+        for col in [
+            'recall', 'cpr', 'coverage', 'lift', 'n_candidates',
+            'n_true_positives', 'n_events', 'base_rate', 'effective_recall'
+        ]:
+            light_col = f'{col}_light'
+            if col not in merged.columns and light_col in merged.columns:
+                merged[col] = merged[light_col]
 
-    # Fill deep metrics from deep_df
-    for _, deep_row in deep_df.iterrows():
-        combo_id = deep_row['combo_id']
-        mask = merged['combo_id'] == combo_id
-        for col in ['uniqueness', 'turnover', 'regime_stability', 'oos_recall', 'oos_unreliable', 'low_info']:
-            if col in deep_row:
-                merged.loc[mask, col] = deep_row[col]
+        drop_cols = [
+            col for col in merged.columns
+            if col.endswith('_light') and col != 'base_combo_id_light'
+        ]
+        if drop_cols:
+            merged = merged.drop(columns=drop_cols)
+    else:
+        merged = lightweight_df.merge(deep_df, on='combo_id', how='left', suffixes=('', '_deep'))
 
-    # For non-Top-N combos, fill deep metrics with median
-    for col in ['uniqueness', 'turnover', 'regime_stability', 'oos_recall']:
-        if col in deep_df.columns:
-            median_val = deep_df[col].median()
-            merged[col] = merged[col].fillna(median_val)
+    if 'cpr' in merged.columns:
+        merged.loc[merged['cpr'] == 0, 'lift'] = 0.0
 
-    # Handle edge cases
-    # If CPR = 0, set Lift = 0
-    merged.loc[merged['cpr'] == 0, 'lift'] = 0.0
+    if 'effective_recall' not in merged.columns:
+        merged['effective_recall'] = merged['recall'] * merged['lift']
 
-    # Compute EffectiveRecall = Recall × Lift
-    # This combines recall quality with signal strength
-    merged['effective_recall'] = merged['recall'] * merged['lift']
-
-    # Extract cusum_rate from combo_id for rate-normalization
     merged['cusum_rate'] = merged['combo_id'].str.extract(r'rate=([0-9.]+)')[0].astype(float)
+    merged['is_verified'] = merged['sharpe'].notna()
 
-    n = len(merged)
-    if n <= 1:
-        merged['score'] = 0.0
-        merged['rank'] = 1
+    for col, default in [
+        ('oos_unreliable', False),
+        ('low_info', False),
+        ('trade_count', 0),
+        ('oos_recall', 0.0),
+        ('uniqueness', np.nan),
+        ('turnover', np.nan),
+        ('net_pnl', np.nan),
+        ('sharpe', np.nan),
+        ('mdd', np.nan),
+    ]:
+        if col not in merged.columns:
+            merged[col] = default
+
+    verified = merged[merged['is_verified']].copy()
+    unverified = merged[~merged['is_verified']].copy()
+
+    if len(verified) == 0:
+        merged['score'] = -UNVERIFIED_PENALTY
+        merged['rank'] = merged['score'].rank(ascending=False, method='min').astype(int)
+        merged = merged.sort_values('rank').reset_index(drop=True)
         return merged
 
-    # ========================================
-    # Rate-normalized z-score for EffectiveRecall
-    # ========================================
-    # Within each rate, compute rank percentile z-score
-    # This compares "who does best within the same sampling regime"
-    merged['effective_recall_rate_z'] = 0.0
-
-    # Check if we have valid rate information
-    has_rates = merged['cusum_rate'].notna().any()
+    verified['effective_recall_rate_z'] = 0.0
+    has_rates = verified['cusum_rate'].notna().any()
 
     if has_rates:
-        # Rate-normalized scoring
-        for rate in merged['cusum_rate'].dropna().unique():
-            rate_mask = merged['cusum_rate'] == rate
-            rate_indices = merged[rate_mask].index.tolist()
-            rate_values = merged.loc[rate_indices, 'effective_recall'].values
+        for rate in verified['cusum_rate'].dropna().unique():
+            rate_mask = verified['cusum_rate'] == rate
+            rate_indices = verified[rate_mask].index.tolist()
+            rate_values = verified.loc[rate_indices, 'effective_recall'].values
+            verified.loc[rate_indices, 'effective_recall_rate_z'] = _rank_to_unit_interval(
+                rate_values, higher_is_better=True
+            )
 
-            n_rate = len(rate_values)
-            if n_rate <= 1:
-                merged.loc[rate_indices, 'effective_recall_rate_z'] = 0.5
-                continue
-
-            # Check if all values are the same
-            if np.std(rate_values) == 0:
-                merged.loc[rate_indices, 'effective_recall_rate_z'] = 0.5
-                continue
-
-            # Rank within rate (higher is better)
-            ranks = pd.Series(rate_values).rank(ascending=False, method='average').values
-
-            # z-score: rank 1 → z = 1 (best), rank n → z = 0 (worst)
-            z = 1.0 - (ranks - 1) / (n_rate - 1)
-            merged.loc[rate_indices, 'effective_recall_rate_z'] = z
-
-        # Fill NaN rates with global median z
-        nan_mask = merged['cusum_rate'].isna()
+        nan_mask = verified['cusum_rate'].isna()
         if nan_mask.any():
-            merged.loc[nan_mask, 'effective_recall_rate_z'] = merged.loc[~nan_mask, 'effective_recall_rate_z'].median()
+            verified.loc[nan_mask, 'effective_recall_rate_z'] = verified.loc[
+                ~nan_mask, 'effective_recall_rate_z'
+            ].median()
     else:
-        # No rate info: use global z-score
-        values = merged['effective_recall'].values
-        if np.std(values) == 0:
-            merged['effective_recall_rate_z'] = 0.5
-        else:
-            ranks = pd.Series(values).rank(ascending=False, method='average').values
-            z = 1.0 - (ranks - 1) / (n - 1)
-            merged['effective_recall_rate_z'] = z
+        verified['effective_recall_rate_z'] = _rank_to_unit_interval(
+            verified['effective_recall'].values, higher_is_better=True
+        )
 
-    # ========================================
-    # Global z-scores for Turnover and Uniqueness
-    # ========================================
-    z_scores = {}
+    z_scores = {
+        'turnover': _rank_to_unit_interval(verified['turnover'].values, higher_is_better=False),
+        'uniqueness': _rank_to_unit_interval(verified['uniqueness'].values, higher_is_better=True),
+        'sharpe': _rank_to_unit_interval(verified['sharpe'].values, higher_is_better=True),
+        'net_pnl': _rank_to_unit_interval(verified['net_pnl'].values, higher_is_better=True),
+        'mdd': _rank_to_unit_interval(verified['mdd'].values, higher_is_better=True),
+    }
 
-    # Turnover: lower is better
-    values = merged['turnover'].values
-    if np.isnan(values).all() or np.std(values) == 0:
-        z_scores['turnover'] = np.full(n, 0.5)
-    else:
-        ranks = pd.Series(values).rank(ascending=True, method='average').values
-        z = 1.0 - (ranks - 1) / (n - 1)
-        z_scores['turnover'] = z
-
-    # Uniqueness: higher is better
-    values = merged['uniqueness'].values
-    if np.isnan(values).all() or np.std(values) == 0:
-        z_scores['uniqueness'] = np.full(n, 0.5)
-    else:
-        ranks = pd.Series(values).rank(ascending=False, method='average').values
-        z = 1.0 - (ranks - 1) / (n - 1)
-        z_scores['uniqueness'] = z
-
-    # ========================================
-    # Compute composite score
-    # ========================================
-    scores = np.zeros(n)
-
-    # EffectiveRecall (rate-normalized)
-    scores += weights.get('effective_recall', 0.45) * merged['effective_recall_rate_z'].values
-
-    # Turnover (global)
-    scores += weights.get('turnover', -0.10) * z_scores['turnover']
-
-    # Uniqueness (global)
+    scores = np.zeros(len(verified))
+    scores += weights.get('effective_recall', 0.45) * verified['effective_recall_rate_z'].values
+    scores += weights.get('turnover', 0.10) * z_scores['turnover']
     scores += weights.get('uniqueness', 0.10) * z_scores['uniqueness']
+    scores += weights.get('sharpe', 0.20) * z_scores['sharpe']
+    scores += weights.get('net_pnl', 0.10) * z_scores['net_pnl']
+    scores += weights.get('mdd', 0.05) * z_scores['mdd']
 
-    # Handle case where all scores are the same
-    if np.std(scores) == 0:
-        scores = np.zeros(n)
+    penalties = np.zeros(len(verified))
+    oos_unreliable_mask = verified['oos_unreliable'].astype(bool).values
+    low_info_mask = verified['low_info'].astype(bool).values
+    low_trade_count_mask = verified['trade_count'].fillna(0).values < MIN_TRADE_COUNT
+    low_oos_mask = verified['oos_recall'].fillna(0.0).values < MIN_OOS_RECALL
 
-    merged['score'] = scores
+    penalties += np.where(oos_unreliable_mask, UNRELIABLE_PENALTY, 0.0)
+    penalties += np.where(low_info_mask, LOW_INFO_PENALTY, 0.0)
+    penalties += np.where(low_trade_count_mask, LOW_TRADE_COUNT_PENALTY, 0.0)
+    penalties += np.where(low_oos_mask, LOW_OOS_PENALTY, 0.0)
 
-    # Assign rank (higher score = better = rank 1)
+    verified['score'] = scores - penalties
+    verified['eligibility_reason'] = 'verified'
+    verified.loc[oos_unreliable_mask, 'eligibility_reason'] = 'oos_unreliable'
+    verified.loc[low_info_mask, 'eligibility_reason'] = 'low_info'
+    verified.loc[low_trade_count_mask, 'eligibility_reason'] = 'low_trade_count'
+    verified.loc[low_oos_mask, 'eligibility_reason'] = 'low_oos_recall'
+
+    if len(unverified) > 0:
+        unverified = unverified.copy()
+        unverified['effective_recall_rate_z'] = np.nan
+        unverified['score'] = -UNVERIFIED_PENALTY
+        unverified['eligibility_reason'] = 'unverified_no_deep_metrics'
+
+    merged = pd.concat([verified, unverified], ignore_index=True, sort=False)
     merged['rank'] = merged['score'].rank(ascending=False, method='min').astype(int)
-
-    # Sort by rank
-    merged = merged.sort_values('rank').reset_index(drop=True)
-
+    merged = merged.sort_values(['is_verified', 'score'], ascending=[False, False]).reset_index(drop=True)
+    merged['rank'] = range(1, len(merged) + 1)
     return merged
+
 
 
 def get_top_candidates(
@@ -174,10 +222,12 @@ def get_top_candidates(
     top_n: int = 5,
 ) -> pd.DataFrame:
     """
-    Get top-N candidates from scored DataFrame.
-
-    :param scored_df: DataFrame with composite scores.
-    :param top_n: Number of top candidates to return.
-    :returns: DataFrame with top-N candidates.
+    Get top-N verified candidates from scored DataFrame.
     """
-    return scored_df.head(top_n).copy()
+    if 'is_verified' not in scored_df.columns:
+        return scored_df.head(top_n).copy()
+
+    eligible = scored_df[scored_df['is_verified']].copy()
+    if len(eligible) == 0:
+        return scored_df.head(top_n).copy()
+    return eligible.head(top_n).copy()

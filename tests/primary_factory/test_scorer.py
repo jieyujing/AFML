@@ -45,6 +45,10 @@ def test_composite_score():
     deep['turnover'] = np.random.rand(5) * 50 + 10
     deep['oos_recall'] = np.random.rand(5) * 0.5 + 0.2
     deep['regime_stability'] = np.random.rand(5) * 0.3 + 0.5
+    deep['net_pnl'] = np.random.randn(5) * 10
+    deep['sharpe'] = np.random.rand(5)
+    deep['mdd'] = -np.random.rand(5)
+    deep['trade_count'] = np.random.randint(5, 20, size=5)
 
     result = compute_composite_score(lightweight, deep)
 
@@ -71,6 +75,10 @@ def test_composite_score_single_row():
     deep['turnover'] = [20.0]
     deep['oos_recall'] = [0.3]
     deep['regime_stability'] = [0.6]
+    deep['net_pnl'] = [1.0]
+    deep['sharpe'] = [0.5]
+    deep['mdd'] = [-0.1]
+    deep['trade_count'] = [4]
 
     result = compute_composite_score(lightweight, deep)
 
@@ -108,9 +116,150 @@ def test_composite_score_weights():
     deep['turnover'] = [20.0, 20.0]
     deep['oos_recall'] = [0.5, 0.5]
     deep['regime_stability'] = [0.5, 0.5]
+    deep['net_pnl'] = [1.0, 1.0]
+    deep['sharpe'] = [0.3, 0.3]
+    deep['mdd'] = [-0.1, -0.1]
+    deep['trade_count'] = [10, 10]
 
-    # With default weights (recall=0.45, lift=0.20), high_recall should win
+    # With default effective_recall scoring, high_recall should win
     result = compute_composite_score(lightweight, deep)
 
     assert result['rank'].iloc[0] == 1  # high_recall should be rank 1
     assert result['combo_id'].iloc[0] == 'high_recall'
+
+
+def test_composite_score_prefers_better_trade_quality_when_signal_quality_ties():
+    """Trade quality should break ties when signal quality is the same."""
+    lightweight = pd.DataFrame({
+        'combo_id': ['weaker_trade', 'better_trade'],
+        'recall': [0.6, 0.6],
+        'cpr': [0.5, 0.5],
+        'coverage': [0.5, 0.5],
+        'lift': [1.2, 1.2],
+    })
+
+    deep = pd.DataFrame({
+        'combo_id': ['weaker_trade', 'better_trade'],
+        'uniqueness': [0.5, 0.5],
+        'turnover': [20.0, 20.0],
+        'oos_recall': [0.4, 0.4],
+        'regime_stability': [0.6, 0.6],
+        'net_pnl': [1.0, 5.0],
+        'sharpe': [0.1, 0.8],
+        'mdd': [-2.0, -0.5],
+        'trade_count': [12, 12],
+    })
+
+    result = compute_composite_score(lightweight, deep)
+
+    assert result.iloc[0]['combo_id'] == 'better_trade'
+
+
+def test_composite_score_penalizes_unverified_combos():
+    """Combos without deep metrics should rank below verified combos."""
+    lightweight = pd.DataFrame({
+        'combo_id': ['verified_combo', 'unverified_combo'],
+        'recall': [0.4, 0.9],
+        'cpr': [0.5, 0.9],
+        'coverage': [0.4, 0.9],
+        'lift': [1.5, 3.0],
+    })
+
+    deep = pd.DataFrame({
+        'combo_id': ['verified_combo'],
+        'uniqueness': [0.6],
+        'turnover': [15.0],
+        'oos_recall': [0.3],
+        'regime_stability': [0.7],
+        'net_pnl': [2.0],
+        'sharpe': [0.8],
+        'mdd': [-0.2],
+        'trade_count': [20],
+        'oos_unreliable': [False],
+        'low_info': [False],
+    })
+
+    result = compute_composite_score(lightweight, deep)
+    verified = result[result['combo_id'] == 'verified_combo'].iloc[0]
+    unverified = result[result['combo_id'] == 'unverified_combo'].iloc[0]
+
+    assert bool(verified['is_verified']) is True
+    assert bool(unverified['is_verified']) is False
+    assert verified['score'] > unverified['score']
+    assert unverified['eligibility_reason'] == 'unverified_no_deep_metrics'
+
+
+def test_composite_score_prefers_lower_turnover_when_other_metrics_tie():
+    """Lower turnover should now help, not hurt, score."""
+    lightweight = pd.DataFrame({
+        'combo_id': ['high_turnover', 'low_turnover'],
+        'recall': [0.6, 0.6],
+        'cpr': [0.5, 0.5],
+        'coverage': [0.5, 0.5],
+        'lift': [1.5, 1.5],
+    })
+
+    deep = pd.DataFrame({
+        'combo_id': ['high_turnover', 'low_turnover'],
+        'uniqueness': [0.5, 0.5],
+        'turnover': [50.0, 10.0],
+        'oos_recall': [0.3, 0.3],
+        'regime_stability': [0.7, 0.7],
+        'net_pnl': [1.0, 1.0],
+        'sharpe': [0.4, 0.4],
+        'mdd': [-0.2, -0.2],
+        'trade_count': [20, 20],
+        'oos_unreliable': [False, False],
+        'low_info': [False, False],
+    })
+
+    result = compute_composite_score(lightweight, deep)
+    assert result.iloc[0]['combo_id'] == 'low_turnover'
+
+
+def test_composite_score_applies_reliability_penalties():
+    """Poor OOS reliability and low info should trigger explicit penalties."""
+    lightweight = pd.DataFrame({
+        'combo_id': ['clean_combo', 'penalized_combo'],
+        'recall': [0.6, 0.6],
+        'cpr': [0.5, 0.5],
+        'coverage': [0.5, 0.5],
+        'lift': [1.5, 1.5],
+    })
+
+    deep = pd.DataFrame({
+        'combo_id': ['clean_combo', 'penalized_combo'],
+        'uniqueness': [0.5, 0.5],
+        'turnover': [20.0, 20.0],
+        'oos_recall': [0.3, 0.0],
+        'regime_stability': [0.7, 0.7],
+        'net_pnl': [1.0, 1.0],
+        'sharpe': [0.4, 0.4],
+        'mdd': [-0.2, -0.2],
+        'trade_count': [20, 5],
+        'oos_unreliable': [False, True],
+        'low_info': [False, True],
+    })
+
+    result = compute_composite_score(lightweight, deep)
+    clean = result[result['combo_id'] == 'clean_combo'].iloc[0]
+    penalized = result[result['combo_id'] == 'penalized_combo'].iloc[0]
+
+    assert clean['score'] > penalized['score']
+    assert penalized['eligibility_reason'] in {
+        'oos_unreliable', 'low_info', 'low_trade_count', 'low_oos_recall'
+    }
+
+
+def test_get_top_candidates_prefers_verified_rows():
+    """Top candidates should only include verified rows when available."""
+    scored = pd.DataFrame({
+        'combo_id': ['verified_a', 'verified_b', 'unverified_x'],
+        'score': [0.8, 0.7, 10.0],
+        'rank': [1, 2, 3],
+        'is_verified': [True, True, False],
+    })
+
+    top2 = get_top_candidates(scored, top_n=2)
+
+    assert top2['combo_id'].tolist() == ['verified_a', 'verified_b']

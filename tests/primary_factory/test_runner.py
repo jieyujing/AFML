@@ -59,6 +59,8 @@ def test_runner_smoke():
         assert len(top5) == 2
         assert len(scoring) > 0
         assert len(calib) == 1
+        assert scoring['combo_id'].nunique() == len(scoring)
+        assert 'selected_deep_combo_id' in scoring.columns
         assert os.path.exists(os.path.join(tmpdir, 'primary_search'))
         assert os.path.exists(os.path.join(tmpdir, 'primary_search', 'top_candidates.parquet'))
 

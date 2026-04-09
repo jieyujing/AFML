@@ -44,6 +44,7 @@ def test_deep_scorer():
     k_lookup = pd.DataFrame({'rate': [0.05], 'k': [1.0]})
     combo = pd.Series({
         'combo_id': 'test_combo',
+        'base_combo_id': 'test_base',
         'cusum_rate': 0.05,
         'fast': 10,
         'slow': 30,
@@ -53,10 +54,15 @@ def test_deep_scorer():
     result = compute_deep_metrics(close.to_frame(), trend_events, k_lookup, combo)
 
     assert 'combo_id' in result
+    assert result['base_combo_id'] == 'test_base'
     assert 'uniqueness' in result
     assert 'turnover' in result
     assert 'regime_stability' in result
     assert 'oos_recall' in result
+    assert 'net_pnl' in result
+    assert 'sharpe' in result
+    assert 'mdd' in result
+    assert 'trade_count' in result
     assert 0 <= result['uniqueness'] <= 1
     assert result['oos_recall'] is not None
     assert isinstance(result['oos_unreliable'], bool)
@@ -114,14 +120,19 @@ def test_compute_all_deep_metrics():
     })
 
     combos = pd.DataFrame([
-        {'combo_id': 'combo_1', 'cusum_rate': 0.05, 'fast': 5, 'slow': 20, 'vertical_bars': 10},
-        {'combo_id': 'combo_2', 'cusum_rate': 0.10, 'fast': 10, 'slow': 30, 'vertical_bars': 20},
+        {'combo_id': 'combo_1_vb=10', 'base_combo_id': 'combo_1', 'cusum_rate': 0.05, 'fast': 5, 'slow': 20, 'vertical_bars': 10},
+        {'combo_id': 'combo_2_vb=20', 'base_combo_id': 'combo_2', 'cusum_rate': 0.10, 'fast': 10, 'slow': 30, 'vertical_bars': 20},
     ])
 
     result = compute_all_deep_metrics(bars, trend_events, k_lookup, combos)
 
     assert len(result) == 2
     assert 'combo_id' in result.columns
+    assert 'base_combo_id' in result.columns
     assert 'uniqueness' in result.columns
     assert 'turnover' in result.columns
     assert 'oos_recall' in result.columns
+    assert 'net_pnl' in result.columns
+    assert 'sharpe' in result.columns
+    assert 'mdd' in result.columns
+    assert 'trade_count' in result.columns
